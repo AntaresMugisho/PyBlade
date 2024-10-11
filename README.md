@@ -11,6 +11,19 @@
 - **Security-Focused**: PyBlade will prioritize security by providing automatic escaping of variables and safe handling of user-generated content to protect against XSS and other common web vulnerabilities.
 - **Ideal for Laravel Developers**: PyBlade is designed to help Laravel developers easily understand and adapt to Django’s ecosystem.
 
+## Custom Template Extension
+
+PyBlade will use a custom template file extension (`.pyblade`) to facilitate the development of extensions for text editors. This allows for enhanced features such as:
+
+- **Snippets**: Quickly insert common patterns in your templates.
+- **IntelliSense**: Get suggestions and completions as you type.
+- **Syntax Highlighting**: Color-coded syntax for better readability.
+- **Auto-Completion**: Automatically complete directives and component names.
+- **Additional Extensions**: The ability for developers to create their own extensions for various text editors.
+
+We aim to provide support for popular text editors such as Visual Studio Code, Sublime Text, Atom and JetBrains IDEs.
+Extensions will be developed to improve usability in these environments.
+
 ## Status
 
 **PyBlade** is currently in development and not ready for production use. Key features are still being built, but the project will soon allow developers to experiment with Blade-like templating in Django.

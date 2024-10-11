@@ -1,0 +1,1 @@
+# Custom Exception classes for the template engine (e.g: TemplateNotFoundException, SyntaxErrorException)
