@@ -10,14 +10,15 @@ setup(
     packages=['pyblade'],
     version='0.1.0',
     license='MIT',
-    description="PyBlade is a lightweight and efficient template engine for Python, inspired by Laravel's Blade syntax,"
-                " designed primarily for use with Django. It simplifies template development by offering "
-                "intuitive @-based directives.",
+    description="PyBlade is a powerful template engine for Python, initially designed for Django. Inspired by "
+                "Laravel's Blade and Livewire, it simplifies dynamic template creation with developer-friendly "
+                "@-based directives and component support, all while prioritizing security.",
+    url='https://github.com/antaresmugisho/pyblade',
+    download_url='https://github.com/antaresmugisho/pyblade/archive/refs/tags/v0.1.0-alpha.tar.gz',
     long_description=long_description,
     long_description_content_type='text/markdown',
     author='Antares Mugisho',
     author_email='antaresmugisho@gmail.com',
-    url='https://antaresmugisho.vercel.app/',
     keywords=['python', 'django', 'laravel', 'blade', 'template'],
     classifiers=[
         "Development Status :: 3 - Alpha",
@@ -34,3 +35,4 @@ setup(
         "Security :: Security",
     ],
 )
+

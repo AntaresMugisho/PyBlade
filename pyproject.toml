@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "PyBlade"
 version = "0.1.0"
-description = "PyBlade is a lightweight and efficient template engine for Python, inspired by Laravel's Blade syntax, designed primarily for use with Django. It simplifies template development by offering intuitive @-based directives."
+description = "PyBlade is a powerful template engine for Python, initially designed for Django. Inspired by Laravel's Blade and Livewire, it simplifies dynamic template creation with developer-friendly @-based directives and component support, all while prioritizing security."
 authors = ["AntaresMugisho <antaresmugisho@gmail.com>"]
 license = "MIT"
 readme = "README.md"
