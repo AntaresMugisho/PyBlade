@@ -66,3 +66,6 @@ This project is licensed under the **MIT License** – see the [LICENSE](LICENSE
 
 - Inspired by Laravel's Blade template engine and Livewire components.
 - Thanks to the Python, Django, and Laravel communities for their ongoing support of open-source projects.
+
+---
+Let's bring the power of Blade-like templating and Livewire-like interactivity to Django ! 🚀
