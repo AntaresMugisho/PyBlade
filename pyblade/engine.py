@@ -30,7 +30,6 @@ class PyBlade:
         result = re.sub(pattern, replace_placeholder, template)
         return result
 
-
     def escape(self, text: str) -> str:
         """
         Escape HTML characters to prevent XSS attacks.

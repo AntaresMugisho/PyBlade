@@ -50,7 +50,7 @@ Contributions are welcome! PyBlade is an open-source project, and we invite deve
 
 ## Roadmap
 
-- [ ] Basic template rendering with variable interpolation
+- [x] Basic template rendering with variable interpolation
 - [ ] Support for conditionals and loops
 - [ ] Components similar to Laravel Livewire
 - [ ] Security measures like automatic output escaping
