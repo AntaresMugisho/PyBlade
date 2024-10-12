@@ -13,7 +13,7 @@
 
 ## Custom Template Extension
 
-PyBlade will use a custom template file extension (`.pyblade`) to facilitate the development of extensions for text editors. This allows for enhanced features such as:
+PyBlade will use a custom template file extension (`.py.html`) to facilitate the development of extensions for text editors. This allows for enhanced features such as:
 
 - **Snippets**: Quickly insert common patterns in your templates.
 - **IntelliSense**: Get suggestions and completions as you type.
@@ -54,7 +54,7 @@ Contributions are welcome! PyBlade is an open-source project, and we invite deve
 - [ ] Support for conditionals and loops
 - [ ] Template inheritance, partials, and slots
 - [ ] Components similar to Laravel Livewire
-- [ ] Security measures like automatic output escaping
+- [ ] Security measures
 - [ ] Integration with Django
 - [ ] Full documentation
 
@@ -66,7 +66,6 @@ This project is licensed under the **MIT License** – see the [LICENSE](LICENSE
 
 - Inspired by Laravel's Blade template engine and Livewire components.
 - Thanks to the Python, Django, and Laravel communities for their ongoing support of open-source projects.
-That's a great idea! Here’s a suggestion for how you might word the credit in your README file:
 - Special thanks to [Michael Dimchuk](https://github.com/michaeldimchuk) for graciously releasing the 
 name **PyBlade** on PyPI for this project. Your kindness and support for the open-source community are truly appreciated!
 
