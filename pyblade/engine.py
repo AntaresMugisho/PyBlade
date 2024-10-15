@@ -26,6 +26,9 @@ class PyBlade:
 
         # Regular expression to match placeholders like {{ variable }} or {{variable}}
         pattern = r'\{\{\s*(\w+)\s*\}\}'
+        unescaped_pattern = r'\{\{\!\!\s*(\w+)\s*\!\!\}\}'
+
+        template = self.load_template(template)
 
         result = re.sub(pattern, replace_placeholder, template)
         return result
@@ -35,3 +38,16 @@ class PyBlade:
         Escape HTML characters to prevent XSS attacks.
         """
         return html.escape(text)
+
+    def load_template(self, template_name):
+        """
+        Load the template text content
+        :param template_name: The template file name to load
+        :return: The template file text content
+        """
+
+        with open(f"{template_name}", "r") as file:
+            text = file.read()
+
+        return text
+
