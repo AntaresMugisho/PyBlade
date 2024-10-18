@@ -2,7 +2,7 @@ import re
 import html
 
 
-from pyblade.exceptions import UndefinedVariableError
+from .exceptions import UndefinedVariableError
 
 
 class Pattern:
