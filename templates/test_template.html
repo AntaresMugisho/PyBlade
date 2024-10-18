@@ -5,7 +5,14 @@
     <title>Test Template</title>
 </head>
 <body>
-    <h1>Hello, {{ name }} !</h1>
+    <h1>Hello, {{ name }} {{ last_name }} !</h1>
     <p>{{ script }}</p>
+    @if(true)
+        <p>If true, display this.</p>
+    @elif(true)
+        <p>Else if true, display this.</p>
+    @else
+        <p>Else, display this.</p>
+    @endif
 </body>
 </html>

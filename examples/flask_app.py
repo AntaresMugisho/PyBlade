@@ -20,6 +20,7 @@ def home():
             "email": "antaresmugisho@gmail.com"
         },
         "name": "Antares",
+        "last_name": "Mugisho",
         "script": "<script>alert('XSS Attack')</script>"
     }
     rendered_html = pyblade.render(template=str(TEMPLATES_DIR.joinpath("test_template.html")), context=context)
