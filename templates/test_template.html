@@ -5,8 +5,22 @@
     <title>Test Template</title>
 </head>
 <body>
-    <h1>Hello, {{ name }} {{ last_name }} !</h1>
-    <p>{{ script }}</p>
+    <h1>PyBlade</h1>
+
+    <h2>Variable binding</h2>
+
+    <p>Hello, {{ name }} !</p>
+
+    <p>Escaped html: {{ html }}</p>
+
+    <p>Unescaped html : {!! html !!}</p>
+
+    <h2>Conditional statements</h2>
+
+    @if(age > 18)
+        <p>You are eligible to vote.</p>
+    @endif
+
     @if(true)
         <p>If true, display this.</p>
     @elif(true)
@@ -14,5 +28,14 @@
     @else
         <p>Else, display this.</p>
     @endif
+
+    <h2>For loops</h2>
+
+    <ul>
+    @for(item in items)
+        <li>Item: {{ item }}</li>
+    @endfor
+    </ul>
+
 </body>
 </html>

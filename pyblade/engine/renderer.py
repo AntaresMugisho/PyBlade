@@ -103,13 +103,3 @@ class PyBlade:
                     output.append(line)
 
         return "\n".join(output)
-
-
-if __name__ == '__main__':
-    text = """
-    Line One
-    Line Two
-    Line Three
-    """
-
-    print(text.stripline())

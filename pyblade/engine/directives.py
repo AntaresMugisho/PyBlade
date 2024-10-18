@@ -25,7 +25,7 @@ class PyBladeDirectives:
         """
         
         template = self._parse_if(template, context)
-        template = self._parse_for(template, context)
+        # template = self._parse_for(template, context)
         return template
 
     def _parse_if(self, template, context):

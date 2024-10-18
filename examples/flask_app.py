@@ -21,8 +21,9 @@ def home():
         },
         "name": "Antares",
         "last_name": "Mugisho",
-        "script": "<script>alert('XSS Attack')</script>"
+        "html": "<strong>This is a HTML code</strong>"
     }
+
     rendered_html = pyblade.render(template=str(TEMPLATES_DIR.joinpath("test_template.html")), context=context)
 
     return render_template_string(rendered_html)
