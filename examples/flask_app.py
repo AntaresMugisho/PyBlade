@@ -3,7 +3,6 @@ from pathlib import Path
 from flask import Flask, render_template_string
 from pyblade import PyBlade
 
-pyblade = PyBlade()
 
 app = Flask(__name__)
 
@@ -21,12 +20,15 @@ def home():
         },
         "name": "Antares",
         "last_name": "Mugisho",
+        "age": 20,
+        "items": ["apple", "banana", "cherry"],
         "html": "<strong>This is a HTML code</strong>"
     }
 
-    rendered_html = pyblade.render(template=str(TEMPLATES_DIR.joinpath("test_template.html")), context=context)
-
-    return render_template_string(rendered_html)
+    pyblade = PyBlade()
+    output = pyblade.render(template=str(TEMPLATES_DIR.joinpath("test_template.html")), context=context)
+    print(output)
+    return render_template_string(output)
 
 
 if __name__ == "__main__":
