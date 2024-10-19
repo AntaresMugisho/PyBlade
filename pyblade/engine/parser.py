@@ -1,4 +1,6 @@
 import re
+import html
+from .exceptions import UndefinedVariableError
 
 
 class LoopContext:
@@ -11,6 +13,10 @@ class LoopContext:
     @property
     def index(self):
         return self._current_index
+
+    @index.setter
+    def index(self, value):
+        self._current_index = value
 
     @property
     def iteration(self):
@@ -48,16 +54,14 @@ class LoopContext:
         """Should return the parent's loop variable, when in a nested loop."""
         pass
 
-    def advance(self):
-        self._current_index += 1
 
-
-class PyBladeDirectives:
+class Parser:
 
     def __init__(self):
         self.directives = {
             "if": self._parse_if,
             "for": self._parse_for
+            # "empty": self._parse_empty
         }
 
     def parse_directives(self, template: str, context: dict):
@@ -72,6 +76,33 @@ class PyBladeDirectives:
         template = self._parse_if(template, context)
         template = self._parse_for(template, context)
         return template
+
+    def _render_escaped_variables(self, template: str, context: dict) -> str:
+        """Match variables in {{ }} and replace them with the escaped values"""
+
+        return re.sub(r"{{\s*(\w+)\s*}}", lambda match: self._replace_variable(match, context, escape=True),
+                      template)
+
+    def _render_unescaped_variables(self, template: str, context: dict) -> str:
+        """Match variables in {!! !!} and replace them with the unescaped values"""
+
+        return re.sub(r'{!!\s*(\w+)\s*!!}', lambda match: self._replace_variable(match, context, escape=False),
+                      template)
+
+    def _replace_variable(self, match, context, escape: bool) -> str:
+        var_name = match.group(1)
+        if var_name not in context:
+            raise UndefinedVariableError(
+                f"Undefined variable '{var_name}' on line {self._get_line_number(match)}")
+        var_value = context[var_name]
+        if escape:
+            return html.escape(str(var_value))
+        return str(var_value)
+
+    def _get_line_number(self, match):
+        """Get the line number where a variable is located in the template"""
+
+        return match.string.count('\n', 0, match.start()) + 1
 
     def _parse_if(self, template, context):
         """
@@ -90,9 +121,9 @@ class PyBladeDirectives:
         
         :param template: 
         :param context: 
-        :return: 
+        :return:
         """
-        pattern = re.compile(r"@for\s*\((.*?)\s+in\s+(.*?)\)\s*(.*?)@endfor", re.DOTALL)
+        pattern = re.compile(r"@for\s*\((.*?)\s+in\s+(.*?)\)\s*(.*?)(@empty\s*(.*?))?@endfor", re.DOTALL)
         return pattern.sub(lambda match: self._handle_for(match, context), template)
 
     def _handle_for(self, match, context):
@@ -100,36 +131,26 @@ class PyBladeDirectives:
 
         variable = match.group(1)
         iterable = eval(match.group(2), {}, context)
+        block = match.group(3)
+        # empty_directive = match.group(4)
+        empty_block = match.group(5)
 
         # Empty handling if iterable is None or empty
         if iterable is None or len(iterable) == 0:
-            empty_content = re.search(r'@empty(.*?)@endfor', content, re.DOTALL)
-            return empty_content.group(1).strip() if empty_content else ''
-
-        block = match.group(3)
-
-
-
-
-        print(iterable)
-        print(variable)
-        print(block)
+            return empty_block if empty_block else ""
 
         result = []
-        for item in iterable:
+        loop = LoopContext(iterable)
+        for index, item, in enumerate(iterable):
+            loop.index = index
+
             local_context = {
-                variable: item
+                variable: item,
+                "loop": loop,
             }
 
-            # Create extra helpful variables in the loop
+            r_block = self._render_escaped_variables(block, local_context)
+            r_block = self._render_unescaped_variables(r_block, local_context)
 
-            result.append(self._render_block(block, local_context))
-
-        # print(result)
+            result.append(r_block)
         return ''.join(result)
-
-    def _render_block(self, block, context):
-        """Render the inner block of each loop iteration."""
-        print("###")
-        print(context)
-        return block.format(**context)

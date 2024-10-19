@@ -22,12 +22,12 @@ def home():
         "last_name": "Mugisho",
         "age": 20,
         "items": ["apple", "banana", "cherry"],
+        "favorites": [],
         "html": "<strong>This is a HTML code</strong>"
     }
 
     pyblade = PyBlade()
     output = pyblade.render(template=str(TEMPLATES_DIR.joinpath("test_template.html")), context=context)
-    print(output)
     return render_template_string(output)
 
 

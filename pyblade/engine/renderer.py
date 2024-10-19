@@ -1,13 +1,13 @@
 import re
 import html
 
-from .directives import PyBladeDirectives
+from .parser import Parser
 from .exceptions import UndefinedVariableError
 
 
 class PyBlade:
     def __init__(self):
-        self.parser = PyBladeDirectives()
+        self.parser = Parser()
         self.directives = self.parser.directives
 
     def render(self, template: str, context: dict) -> str:
