@@ -66,7 +66,7 @@ This project is licensed under the **MIT License** – see the [LICENSE](LICENSE
 
 - Inspired by Laravel's Blade template engine and Livewire components.
 - Thanks to the Python, Django, and Laravel communities for their ongoing support of open-source projects.
-- Special thanks to [Michael Dimchuk](https://github.com/michaeldimchuk) for graciously releasing the 
+- Special thanks to [Michael Dimchuk](https://github.com/michaeldimchuk) for graciously releasing the
 name **PyBlade** on PyPI for this project. Your kindness and support for the open-source community are truly appreciated!
 
 ---

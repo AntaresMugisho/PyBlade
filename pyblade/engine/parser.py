@@ -1,19 +1,14 @@
-import re
 import html
+import re
 
 from .contexts import LoopContext
-from .exceptions import UndefinedVariableError
-from .sandbox import safe_eval, safe_exec
 
 
 class Parser:
 
     def __init__(self):
 
-        self.directives = {
-            "if": self._parse_if,
-            "for": self._parse_for
-        }
+        self.directives = {"if": self._parse_if, "for": self._parse_for}
 
     def parse(self, template: str, context: dict) -> str:
         """
@@ -47,10 +42,10 @@ class Parser:
     def parse_directives(self, template: str, context: dict) -> str:
         """
         Process all directives within a template.
-        
-        :param template: 
-        :param context: 
-        :return: 
+
+        :param template:
+        :param context:
+        :return:
         """
 
         for directive, func in self.directives.items():
@@ -61,19 +56,19 @@ class Parser:
     def _render_escaped_variables(self, template: str, context: dict) -> str:
         """Match variables in {{ }} and replace them with the escaped values"""
 
-        return re.sub(r"{{\s*(\w+)\s*}}", lambda match: self._replace_variable(match, context, escape=True),
-                      template)
+        return re.sub(r"{{\s*(\w+)\s*}}", lambda match: self._replace_variable(match, context, escape=True), template)
 
     def _render_unescaped_variables(self, template: str, context: dict) -> str:
         """Match variables in {!! !!} and replace them with the unescaped values"""
 
-        return re.sub(r'{!!\s*(\w+)\s*!!}', lambda match: self._replace_variable(match, context, escape=False),
-                      template)
+        return re.sub(
+            r"{!!\s*(\w+)\s*!!}", lambda match: self._replace_variable(match, context, escape=False), template
+        )
 
     def _replace_variable(self, match, context, escape: bool) -> str:
         var_name = match.group(1)
         if var_name not in context:
-            context[var_name] = "Undefined" # Just to pass the test
+            context[var_name] = "Undefined"  # Just to pass the test
             # raise UndefinedVariableError(
             #     f"Undefined variable '{var_name}' on line {self._get_line_number(match)}")
         var_value = context[var_name]
@@ -87,19 +82,18 @@ class Parser:
         Useful for debug.
         """
 
-        return match.string.count('\n', 0, match.start()) + 1
+        return match.string.count("\n", 0, match.start()) + 1
 
     def _parse_if(self, template, context):
         """
         Handle @if, @elif, @else and @endif directives.
-        
-        :param template: 
-        :param context: 
-        :return: 
+
+        :param template:
+        :param context:
+        :return:
         """
         pattern = re.compile(
-            r"@(if)\s*\((.*?)\)\s*(.*?)\s*(?:@(elif)\s*\((.*?)\)\s*(.*?))*(?:@(else)\s*(.*?))?@(endif)",
-            re.DOTALL
+            r"@(if)\s*\((.*?)\)\s*(.*?)\s*(?:@(elif)\s*\((.*?)\)\s*(.*?))*(?:@(else)\s*(.*?))?@(endif)", re.DOTALL
         )
         return pattern.sub(lambda match: self._handle_if(match, context), template)
 
@@ -118,9 +112,9 @@ class Parser:
     def _parse_for(self, template, context):
         """
         Handle @for, @empty and @endfor directives.
-        
-        :param template: 
-        :param context: 
+
+        :param template:
+        :param context:
         :return:
         """
         pattern = re.compile(r"@for\s*\((.*?)\s+in\s+(.*?)\)\s*(.*?)(?:@empty\s*(.*?))?@endfor", re.DOTALL)
@@ -140,7 +134,10 @@ class Parser:
 
         result = []
         loop = LoopContext(iterable)
-        for index, item, in enumerate(iterable):
+        for (
+            index,
+            item,
+        ) in enumerate(iterable):
             loop.index = index
 
             local_context = {
@@ -153,4 +150,3 @@ class Parser:
 
             result.append(r_block)
         return "".join(result)
-

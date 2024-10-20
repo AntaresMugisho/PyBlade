@@ -56,10 +56,24 @@ def _is_safe_node(node):
     :return: Tha AST node obtained after parsing
     """
     safe_nodes = (
-        ast.Expression, ast.Num, ast.Str, ast.BinOp, ast.UnaryOp, ast.Compare,
-        ast.Name, ast.Load, ast.Call, ast.List, ast.Dict, ast.Tuple,
-        ast.BoolOp, ast.ListComp, ast.DictComp, ast.SetComp, ast.GeneratorExp,
-        ast.Constant
+        ast.Expression,
+        ast.Num,
+        ast.Str,
+        ast.BinOp,
+        ast.UnaryOp,
+        ast.Compare,
+        ast.Name,
+        ast.Load,
+        ast.Call,
+        ast.List,
+        ast.Dict,
+        ast.Tuple,
+        ast.BoolOp,
+        ast.ListComp,
+        ast.DictComp,
+        ast.SetComp,
+        ast.GeneratorExp,
+        ast.Constant,
     )
 
     if not isinstance(node, safe_nodes):

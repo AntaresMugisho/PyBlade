@@ -33,10 +33,7 @@ class TestPyBlade(unittest.TestCase):
         self.assertEqual(str(cm.exception), "Undefined variable 'name'")
 
     def test_render_with_html_escape(self):
-        context = {
-            "name": "Alice",
-            "message": "<script>alert('XSS');</script>"
-        }
+        context = {"name": "Alice", "message": "<script>alert('XSS');</script>"}
         template = "Hello, {{ name }}! Your message: {{ message }}."
         result = self.engine.render(template, context)
         expected = "Hello, Alice! Your message: &lt;script&gt;alert(&#x27;XSS&#x27;);&lt;/script&gt;."
