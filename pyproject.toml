@@ -13,6 +13,12 @@ python = "^3.10"
 twine = "^5.1.1"
 flask = "^3.0.3"
 
+[tool.black]
+line_length = 120
+
+[tool.isort]
+profile = "black"
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
