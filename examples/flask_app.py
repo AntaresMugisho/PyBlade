@@ -20,7 +20,7 @@ def home():
         },
         "name": "Antares",
         "last_name": "Mugisho",
-        "age": 20,
+        "age": 18,
         "items": ["Apple", "Banana", "Cherry"],
         "favorites": [],
         "html": "<strong>This is a HTML code</strong>"

@@ -21,15 +21,6 @@
         <p>You are young !</p>
     @endif
 
-    <h2>For loops</h2>
-
-    <h3>With no-empty iterable</h3>
-    <ul>
-        @for(item in items)
-            <li>Item: {{ item }}</li>
-        @endfor
-    </ul>
-
     @if(age <= 18)
         <p>If block.</p>
     @elif(age < 50)
@@ -38,6 +29,14 @@
         <p>Else block.</p>
     @endif
 
+    <h2>For loops</h2>
+
+    <h3>With no-empty iterable</h3>
+    <ul>
+        @for(item in items)
+            <li>Item: {{ item }}</li>
+        @endfor
+    </ul>
 
     <h3>With empty iterable and the @empty directive</h3>
     <ul>

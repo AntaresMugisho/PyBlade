@@ -3,7 +3,7 @@ import html
 
 from .contexts import LoopContext
 from .exceptions import UndefinedVariableError
-from .sandbox import safe_eval
+from .sandbox import safe_eval, safe_exec
 
 
 class Parser:
@@ -104,22 +104,16 @@ class Parser:
         return pattern.sub(lambda match: self._handle_if(match, context), template)
 
     def _handle_if(self, match, context):
-        result = []
-        matches = [group for group in match.groups() if group not in (None, "")]
 
-        statement = ""
+        captures = [group for group in match.groups() if group not in (None, "")]
 
-        for i, element in enumerate(matches[:-1]):
-            if element in ("if", "elif", "else"):
-                if element in ("if", "elif"):
-                    statement += f"""\n{element} {matches[i+1]}:\n\t{matches[i+2]}"""
+        for i, capture in enumerate(captures[:-1]):
+            if capture in ("if", "elif", "else"):
+                if capture in ("if", "elif"):
+                    if eval(captures[i + 1], {}, context):
+                        return captures[i + 2]
                 else:
-                    statement += f"""\r{element}:\n\t{matches[i + 1]}"""
-
-        print(statement)
-
-
-        return "".join(result)
+                    return captures[i + 1]
 
     def _parse_for(self, template, context):
         """
