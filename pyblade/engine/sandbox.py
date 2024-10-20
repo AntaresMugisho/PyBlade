@@ -1,7 +1,7 @@
 import ast
 
 
-def safe_eval(expression, allowed_globals=None, allowed_locals=None):
+def safe_eval(expression, allowed_globals=None, allowed_locals=None, mode: str = "eval"):
     """
     Function to evaluate safe expressions like numbers, lists, tuples, dicts...
 
@@ -14,21 +14,38 @@ def safe_eval(expression, allowed_globals=None, allowed_locals=None):
     if allowed_globals is None:
         allowed_globals = {
             "__builtins__": None,
-            "len": len,
-            "range": range
         }
 
     if allowed_locals is None:
         allowed_locals = {}
+
+    allowed_builtins = {
+        "len": len,
+        "range": range,
+        "min": min,
+        "max": max,
+        "True": True,
+        "False": False,
+        "None": None,
+    }
+
     try:
-        node = ast.parse(expression, mode='eval')
+        node = ast.parse(expression, mode=mode)
         if not _is_safe_node(node):
             raise ValueError("Unsafe expression detected !")
 
-        return eval(compile(node, filename="", mode="eval"), allowed_globals, allowed_locals)
+        compiled_node = compile(node, filename="", mode=mode)
+
+        if mode == "exec":
+            return exec(compiled_node, allowed_globals, {**allowed_builtins, **allowed_locals})
+        return eval(compiled_node, allowed_globals, {**allowed_builtins, **allowed_locals})
 
     except Exception as e:
         raise ValueError(f"Error evaluating expression: {e}")
+
+
+def safe_exec(expression, allowed_globals=None, allowed_locals=None):
+    safe_eval(expression, allowed_globals, allowed_locals, mode="exec")
 
 
 def _is_safe_node(node):

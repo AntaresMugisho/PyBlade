@@ -103,11 +103,21 @@ class Parser:
         )
         return pattern.sub(lambda match: self._handle_if(match, context), template)
 
-    def _handle_if(self, match, contex):
+    def _handle_if(self, match, context):
         result = []
-
         matches = [group for group in match.groups() if group not in (None, "")]
-        print(matches)
+
+        statement = ""
+
+        for i, element in enumerate(matches[:-1]):
+            if element in ("if", "elif", "else"):
+                if element in ("if", "elif"):
+                    statement += f"""\n{element} {matches[i+1]}:\n\t{matches[i+2]}"""
+                else:
+                    statement += f"""\r{element}:\n\t{matches[i + 1]}"""
+
+        print(statement)
+
 
         return "".join(result)
 
@@ -149,3 +159,4 @@ class Parser:
 
             result.append(r_block)
         return "".join(result)
+
