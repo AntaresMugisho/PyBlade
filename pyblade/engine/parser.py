@@ -8,8 +8,10 @@ from .exceptions import UndefinedVariableError
 class Parser:
 
     def __init__(self):
-
-        self.directives = {"if": self._parse_if, "for": self._parse_for}
+        self.directives = {
+            "for": self._parse_for,
+            "if": self._parse_if,
+        }
 
     def parse(self, template: str, context: dict) -> str:
         """
@@ -45,13 +47,17 @@ class Parser:
     def _render_escaped_variables(self, template: str, context: dict) -> str:
         """Match variables in {{ }} and replace them with the escaped values"""
 
-        return re.sub(r"{{\s*(.*?)\s*}}", lambda match: self._replace_variable(match, context, escape=True), template)
+        return re.sub(
+            r"{{\s*(.*?(?:\.?.*?)*)\s*}}", lambda match: self._replace_variable(match, context, escape=True), template
+        )
 
     def _render_unescaped_variables(self, template: str, context: dict) -> str:
         """Match variables in {!! !!} and replace them with the unescaped values"""
 
         return re.sub(
-            r"{!!\s*(.*?)\s*!!}", lambda match: self._replace_variable(match, context, escape=False), template
+            r"{!!\s*(.*?(?:\.?.*?)*)\s*!!}",
+            lambda match: self._replace_variable(match, context, escape=False),
+            template,
         )
 
     def _replace_variable(self, match, context, escape: bool) -> str:
@@ -131,7 +137,8 @@ class Parser:
                 "loop": loop,
             }
 
-            r_block = self._render_escaped_variables(block, local_context)
+            r_block = self._parse_if(block, local_context)
+            r_block = self._render_escaped_variables(r_block, local_context)
             r_block = self._render_unescaped_variables(r_block, local_context)
 
             result.append(r_block)

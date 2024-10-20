@@ -34,8 +34,10 @@
     <h3>With no-empty iterable</h3>
     <ul>
         @for(item in items)
-            <li>Item: {{ item.upper() }}</li>
-            <li>{!! loop.iteration !!}</li>
+            @if( loop.first )
+                <p>This is the first iteration</p>
+            @endif
+            <li>Item: {{ item }}</li>
         @endfor
     </ul>
 
