@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from .parser import Parser
 
 
@@ -28,8 +30,16 @@ class PyBlade:
         :return: The template content as string.
         """
 
+        BASE_DIR = Path(__file__).parent.parent.parent
+        TEMPLATES_DIR = BASE_DIR.joinpath("templates")
+
+        folders = [a for a in template_name.split(".")]
+        file_path = TEMPLATES_DIR
+        for folder in folders:
+            file_path = file_path.joinpath(folder)
+
         try:
-            with open(template_name, "r") as file:
+            with open(f"{file_path}.html", "r") as file:
                 return file.read()
         except FileNotFoundError as e:
             raise e

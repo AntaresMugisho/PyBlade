@@ -1,0 +1,25 @@
+@extends("base")
+
+<div>
+    <h2>Hello again, {{ name }} !</h2>
+    This must be in the slot
+</div>
+
+@section("header")
+
+    @include("partials.navigation")
+
+    <div class="hero">
+        This is the hero section
+    </div>
+@endsection
+
+
+@section("main")
+    <div>
+        This is the main content.
+    </div>
+@endsection
+<div>
+    And this too must be in the slot variable.
+</div>

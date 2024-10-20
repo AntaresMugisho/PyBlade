@@ -3,6 +3,7 @@ import re
 
 from .contexts import LoopContext
 from .exceptions import UndefinedVariableError
+from .loader import load_template
 
 
 class Parser:
@@ -11,6 +12,9 @@ class Parser:
         self.directives = {
             "for": self._parse_for,
             "if": self._parse_if,
+            "include": self._parse_include,
+            "yield": self._parse_yield,
+            "extends": self._parse_extends,
         }
 
     def parse(self, template: str, context: dict) -> str:
@@ -137,9 +141,28 @@ class Parser:
                 "loop": loop,
             }
 
-            r_block = self._parse_if(block, local_context)
-            r_block = self._render_escaped_variables(r_block, local_context)
-            r_block = self._render_unescaped_variables(r_block, local_context)
+            # Reparse block for possible nested directives consideration
+            parsed_block = self.parse(block, local_context)
 
-            result.append(r_block)
+            result.append(parsed_block)
         return "".join(result)
+
+    def _parse_include(self, template, context):
+        pattern = re.compile(r"@include\s*\(\s*[\"']?(.*?(?:\.?\.*?)*)[\"']?\s*\)", re.DOTALL)
+        match = re.search(pattern, template)
+
+        file_name = match.group(1) if match else None
+        partial_template = load_template(file_name) if file_name else None
+
+        if partial_template:
+            # Parse the content to include before replacement
+            partial_template = self.parse(partial_template, context)
+            return re.sub(pattern, partial_template, template)
+
+        return template
+
+    def _parse_yield(self, template, context):
+        return template
+
+    def _parse_extends(self, template, context):
+        return template
