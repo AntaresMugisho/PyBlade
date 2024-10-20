@@ -2,6 +2,7 @@ import html
 import re
 
 from .contexts import LoopContext
+from .exceptions import UndefinedVariableError
 
 
 class Parser:
@@ -12,7 +13,7 @@ class Parser:
 
     def parse(self, template: str, context: dict) -> str:
         """
-        Parse template
+        Parse template to replace directives by the real values
 
         :param template:
         :param context:
@@ -27,26 +28,14 @@ class Parser:
         return template
 
     def parse_variables(self, template: str, context: dict) -> str:
-        """
-        Parse all variables within a template
-
-        :param template:
-        :param context:
-        :return:
-        """
+        """Parse all variables within a template"""
 
         template = self._render_escaped_variables(template, context)
         template = self._render_unescaped_variables(template, context)
         return template
 
     def parse_directives(self, template: str, context: dict) -> str:
-        """
-        Process all directives within a template.
-
-        :param template:
-        :param context:
-        :return:
-        """
+        """Process all directives within a template."""
 
         for directive, func in self.directives.items():
             template = func(template, context)
@@ -56,25 +45,31 @@ class Parser:
     def _render_escaped_variables(self, template: str, context: dict) -> str:
         """Match variables in {{ }} and replace them with the escaped values"""
 
-        return re.sub(r"{{\s*(\w+)\s*}}", lambda match: self._replace_variable(match, context, escape=True), template)
+        return re.sub(r"{{\s*(.*?)\s*}}", lambda match: self._replace_variable(match, context, escape=True), template)
 
     def _render_unescaped_variables(self, template: str, context: dict) -> str:
         """Match variables in {!! !!} and replace them with the unescaped values"""
 
         return re.sub(
-            r"{!!\s*(\w+)\s*!!}", lambda match: self._replace_variable(match, context, escape=False), template
+            r"{!!\s*(.*?)\s*!!}", lambda match: self._replace_variable(match, context, escape=False), template
         )
 
     def _replace_variable(self, match, context, escape: bool) -> str:
-        var_name = match.group(1)
-        if var_name not in context:
-            context[var_name] = "Undefined"  # Just to pass the test
-            # raise UndefinedVariableError(
-            #     f"Undefined variable '{var_name}' on line {self._get_line_number(match)}")
-        var_value = context[var_name]
+        expression = match.group(1).split(".")
+        variable_name = expression[0]
+
+        if variable_name not in context:
+            raise UndefinedVariableError(f"Undefined variable '{variable_name}' on line {self._get_line_number(match)}")
+
+        # If expression contains dots (e.g.: var.upper() or loop.index, ...), evaluate it
+        if len(expression) > 1:
+            variable_value = eval(".".join(expression), {}, context)
+        else:
+            variable_value = context[variable_name]
+
         if escape:
-            return html.escape(str(var_value))
-        return str(var_value)
+            return html.escape(str(variable_value))
+        return str(variable_value)
 
     def _get_line_number(self, match) -> int:
         """
@@ -85,13 +80,8 @@ class Parser:
         return match.string.count("\n", 0, match.start()) + 1
 
     def _parse_if(self, template, context):
-        """
-        Handle @if, @elif, @else and @endif directives.
+        """Handle @if, @elif, @else and @endif directives."""
 
-        :param template:
-        :param context:
-        :return:
-        """
         pattern = re.compile(
             r"@(if)\s*\((.*?)\)\s*(.*?)\s*(?:@(elif)\s*\((.*?)\)\s*(.*?))*(?:@(else)\s*(.*?))?@(endif)", re.DOTALL
         )
@@ -110,18 +100,13 @@ class Parser:
                     return captures[i + 1]
 
     def _parse_for(self, template, context):
-        """
-        Handle @for, @empty and @endfor directives.
+        """Handle @for, @empty and @endfor directives."""
 
-        :param template:
-        :param context:
-        :return:
-        """
         pattern = re.compile(r"@for\s*\((.*?)\s+in\s+(.*?)\)\s*(.*?)(?:@empty\s*(.*?))?@endfor", re.DOTALL)
         return pattern.sub(lambda match: self._handle_for(match, context), template)
 
     def _handle_for(self, match, context):
-        """Executes the foreach logic."""
+        """Executes the for logic."""
 
         variable = match.group(1)
         iterable = eval(match.group(2), {}, context)
@@ -141,6 +126,7 @@ class Parser:
             loop.index = index
 
             local_context = {
+                **context,
                 variable: item,
                 "loop": loop,
             }
