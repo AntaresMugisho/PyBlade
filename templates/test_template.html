@@ -17,35 +17,36 @@
 
     <h2>Conditional statements</h2>
 
-    @if(age > 18)
-        <p>You are eligible to vote.</p>
+    @if(age <= 18)
+        <p>You are young !</p>
     @endif
 
-    @if(True)
-        <p>If true, display this.</p>
-    @elif(True)
-        <p>Else if true, display this.</p>
-    @else
-        <p>Else, display this.</p>
-    @endif
 
     <h2>For loops</h2>
 
     <h3>With no-empty iterable</h3>
     <ul>
-    @for(item in items)
-        <li>Item: {{ item }}</li>
-    @endfor
+        @for(item in items)
+            <li>Item: {{ item }}</li>
+        @endfor
     </ul>
+
+    @if(age <= 18)
+        <p>If block.</p>
+    @elif(age < 50)
+        <p>Elif block.</p>
+    @else
+        <p>Else block.</p>
+    @endif
+
 
     <h3>With empty iterable and the @empty directive</h3>
     <ul>
-    @for(favorite in favorites)
-        <li>Favorite: favorite</li>
-    @empty
-        <p>No favorite item</p>
-    @endfor
+        @for(item in favorites)
+            <li>Favorite: {{item}}</li>
+        @empty
+            <p>No favorite item</p>
+        @endfor
     </ul>
-
 </body>
 </html>

@@ -22,7 +22,7 @@ def safe_eval(expression, allowed_globals=None, allowed_locals=None):
         allowed_locals = {}
     try:
         node = ast.parse(expression, mode='eval')
-        if not is_safe_node(node):
+        if not _is_safe_node(node):
             raise ValueError("Unsafe expression detected !")
 
         return eval(compile(node, filename="", mode="eval"), allowed_globals, allowed_locals)
@@ -31,7 +31,7 @@ def safe_eval(expression, allowed_globals=None, allowed_locals=None):
         raise ValueError(f"Error evaluating expression: {e}")
 
 
-def is_safe_node(node):
+def _is_safe_node(node):
     """
     Recursively ensure that the AST node contains only safe expressions
 
@@ -49,6 +49,6 @@ def is_safe_node(node):
         return False
 
     for child in ast.iter_child_nodes(node):
-        if not is_safe_node(child):
+        if not _is_safe_node(child):
             return False
     return True

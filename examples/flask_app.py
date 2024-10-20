@@ -21,7 +21,7 @@ def home():
         "name": "Antares",
         "last_name": "Mugisho",
         "age": 20,
-        "items": ["apple", "banana", "cherry"],
+        "items": ["Apple", "Banana", "Cherry"],
         "favorites": [],
         "html": "<strong>This is a HTML code</strong>"
     }
