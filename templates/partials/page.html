@@ -1,12 +1,15 @@
 @extends("base")
 
+@section("title")
+This is the page title
+@endsection
+
 <div>
     <h2>Hello again, {{ name }} !</h2>
     This must be in the slot
 </div>
 
 @section("header")
-
     @include("partials.navigation")
 
     <div class="hero">
@@ -20,6 +23,7 @@
         This is the main content.
     </div>
 @endsection
+
 <div>
     And this too must be in the slot variable.
 </div>
