@@ -48,3 +48,41 @@ class LoopContext:
     def _parent(self):
         """Should return the parent's loop variable, when in a nested loop."""
         pass
+
+
+class AttributesContext:
+    def __init__(self, attributes):
+        self._attributes = attributes
+
+    def __str__(self):
+        string = ""
+        for key, value in self._attributes.items():
+            if isinstance(value, str):
+                string += f"{key}" + (f'="{value}" ' if value != "" else "")
+        return string
+
+    def get(self, attr):
+        return self._attributes.get(attr)
+
+    def has(self, attributes: str | list[str]) -> bool:
+        if isinstance(attributes, str):
+            attributes = [attributes]
+
+        for attribute in attributes:
+            if attribute not in self._attributes.keys():
+                return False
+
+        return True
+
+    def has_any(self, attributes: str | list[str]) -> bool:
+        if isinstance(attributes, str):
+            attributes = [attributes]
+
+        for attribute in attributes:
+            if attribute in self._attributes.keys():
+                return True
+
+        return False
+
+    def merge(self, **kwargs):
+        pass

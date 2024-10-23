@@ -11,7 +11,7 @@ class PyBlade:
         """
         Render the parsed template content with replaced values.
 
-        :param template:
+        :param template: The file name without extension
         :param context:
         :return:
         """

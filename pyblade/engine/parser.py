@@ -1,7 +1,7 @@
 import html
 import re
 
-from .contexts import LoopContext
+from .contexts import AttributesContext, LoopContext
 from .exceptions import UndefinedVariableError
 from .loader import load_template
 
@@ -41,6 +41,8 @@ class Parser:
 
     def parse_directives(self, template: str, context: dict) -> str:
         """Process all directives within a template."""
+
+        template = self._parse_pyblade_tags(template, context)
 
         for directive, func in self.directives.items():
             template = func(template, context)
@@ -186,24 +188,32 @@ class Parser:
 
     def _parse_section(self, template, layout):
         """
-        Find every section that can be yielded in the layout
+        Find every section that can be yielded in the layout.
+        Sections may be inside @section(<name>) and @endsection directives, or inside
+        @block(<name>) and @endblock directives.
 
         :param template: The partial template content
         :param layout: The layout content in which sections will be yielded
         :return: The full page after yield
         """
 
-        pattern = re.compile(r"@section\s*\((?P<section_name>[^)]*)\)\s*(?P<content>.*?)@endsection", re.DOTALL)
-        matches = pattern.findall(template)
+        directives = ("section", "block")
 
         local_context = {}
-        for match in matches:
-            argument, content = match
-            line_match_pattern = re.compile(rf"@section\s*\(({argument})\)", re.DOTALL)
-            section_name = self._validate_argument(line_match_pattern.search(template))
+        for directive in directives:
+            pattern = re.compile(
+                rf"@{directive}\s*\((?P<section_name>[^)]*)\)\s*(?P<content>.*?)@end{directive}", re.DOTALL
+            )
 
-            local_context[section_name] = content
-            # TODO: Add a slot variable that will contain all the content outside the @section directives
+            matches = pattern.findall(template)
+
+            for match in matches:
+                argument, content = match
+                line_match_pattern = re.compile(rf"@{directive}\s*\(({argument})\)", re.DOTALL)
+                section_name = self._validate_argument(line_match_pattern.search(template))
+
+                local_context[section_name] = content
+                # TODO: Add a slot variable that will contain all the content outside the @section directives
 
         return self._parse_yield(layout, local_context)
 
@@ -221,6 +231,42 @@ class Parser:
     def _handle_yield(self, match, context):
         yieldable_name = self._validate_argument(match)
         return context.get(yieldable_name)
+
+    def _parse_pyblade_tags(self, template, context):
+        pattern = re.compile(
+            r"<b-(?P<component>\w+-?\w+)\s*(?P<attributes>.*?)\s*(?:/>|>(?P<slot>.*?)</b-(?P=component)>)", re.DOTALL
+        )
+        return pattern.sub(lambda match: self._handle_pyblade_tags(match, context), template)
+
+    def _handle_pyblade_tags(self, match, context):
+        component_name = match.group("component")
+        component = load_template(f"components.{component_name}")
+
+        attr_string = match.group("attributes")
+        attr_pattern = re.compile(r"(?P<attribute>:?\w+)(?:\s*=\s*(?P<value>[\"']?.*?[\"']))?", re.DOTALL)
+        attrs = attr_pattern.findall(attr_string)
+
+        attributes = {}
+        for attr in attrs:
+            name, value = attr
+            value = value[1:-1]
+            if name.startswith(":"):
+                name = name[1:]
+                value = eval(value, {}, context) if value else None
+
+            attributes[name] = value
+
+        print(attributes)
+        attributes = AttributesContext(attributes)
+        print(attributes)
+
+        component_context = context.copy()
+        component_context["slot"] = match.group("slot")
+        component_context["attributes"] = attributes
+
+        parsed_component = self.parse(component, component_context)
+
+        return parsed_component
 
     def _validate_argument(self, match):
         argument = match.group(1)

@@ -1,9 +1,9 @@
 <nav>
     From navigation we say hello {{ name }}.
     <ul>
-        <li>Menu 1</li>
-        <li>Menu 2</li>
-        <li>Menu 3</li>
-        <li>Menu 4</li>
+        @for (menu in menus)
+            <b-nav-item active href="{{ menu.lower() }}" :attribute="True" class="mb-4 p-2" >{{ menu }}</b-nav-item>
+        @endfor
     </ul>
+    <b-name> Something </b-name>
 </nav>

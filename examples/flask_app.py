@@ -11,10 +11,11 @@ def home():
         "user": {"name": "Antares", "email": "antaresmugisho@gmail.com"},
         "name": "Antares",
         "last_name": "Mugisho",
-        "age": 18,
+        "age": 50,
         "items": ["Apple", "Banana", "Cherry"],
         "favorites": [],
         "html": "<strong>This is a HTML code</strong>",
+        "menus": ["Contact", "About", "Contact", "Log in", "Sign in"],
     }
 
     pyblade = PyBlade()
