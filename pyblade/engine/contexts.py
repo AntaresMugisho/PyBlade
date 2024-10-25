@@ -58,7 +58,7 @@ class AttributesContext:
     def __str__(self):
         string = ""
         for key, value in self._attributes.items():
-            if isinstance(value, str):
+            if key not in self._props and isinstance(value, str):
                 string += f" {key}" + (f'="{value}"' if value != "" else "")
         return string
 
@@ -81,13 +81,16 @@ class AttributesContext:
         return False
 
     # TODO: Complete all these functions
-    def merge(self, **kwargs):
+    def merge(self, attrs: dict):
         """
         Merge attribute.
-        :param kwargs:
+        :param args:
         :return:
         """
-        pass
+
+        for key, value in attrs.items():
+            self._attributes[key] = f"{attrs[key]} {self._attributes[key]}"
+        return self
 
     def where_starts_with(self, needle: str) -> str:
         """

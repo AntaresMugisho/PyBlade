@@ -3,11 +3,12 @@
     "active" : True
 })
 
-<li class="nav-item" {{ attributes }}>
+<li {{ attributes.merge({"class": "nav-item"}) }}>
     <a class="nav-link" href="{{ attributes.get('href') }}">{{ slot }}</a>
     @if(active)
         <p>Active</p>
     @endif
+
     @if(attributes.has("class"))
         <div>Attributes exists</div>
     @endif
