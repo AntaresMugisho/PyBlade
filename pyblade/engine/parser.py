@@ -261,8 +261,8 @@ class Parser:
                 name = name[1:]
                 try:
                     value = eval(value, {}, context) if value else None
-                except NameError:
-                    pass
+                except NameError as e:
+                    raise e
 
                 component_context[name] = value
 
