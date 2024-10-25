@@ -1,7 +1,7 @@
 <li class="nav-item" {{ attributes }}>
     <a class="nav-link" href="{{ attributes.get('href') }}">{{ slot }}</a>
 
-    @if attributes.has("href") :
-    <div>href exists</div>
+    @if(attributes.has("class"))
+        <div>Attributes exists</div>
     @endif
 </li>

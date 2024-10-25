@@ -58,31 +58,59 @@ class AttributesContext:
         string = ""
         for key, value in self._attributes.items():
             if isinstance(value, str):
-                string += f"{key}" + (f'="{value}" ' if value != "" else "")
+                string += f" {key}" + (f'="{value}"' if value != "" else "")
         return string
 
     def get(self, attr):
         return self._attributes.get(attr)
 
-    def has(self, attributes: str | list[str]) -> bool:
-        if isinstance(attributes, str):
-            attributes = [attributes]
+    def has(self, *args) -> bool:
 
-        for attribute in attributes:
+        for attribute in args:
             if attribute not in self._attributes.keys():
                 return False
 
         return True
 
-    def has_any(self, attributes: str | list[str]) -> bool:
-        if isinstance(attributes, str):
-            attributes = [attributes]
-
-        for attribute in attributes:
+    def has_any(self, *args) -> bool:
+        for attribute in args:
             if attribute in self._attributes.keys():
                 return True
 
         return False
 
+    # TODO: Complete all these functions
     def merge(self, **kwargs):
+        """
+        Merge attribute.
+        :param kwargs:
+        :return:
+        """
         pass
+
+    def where_starts_with(self, needle: str) -> str:
+        """
+        Return all the attributes starting with the given string
+        :param needle: the string to search
+        :return:
+        """
+        pass
+
+    def where_does_not_start_with(self, needle: str) -> str:
+        """
+        Return all the attributes that do not start with the given string
+        :param needle: the string to search
+        :return:
+        :param needle:
+        :return:
+        """
+        pass
+
+
+class SlotContext:
+
+    def __init__(self, content: str):
+        self.content = content
+
+    def __str__(self):
+        return self.content

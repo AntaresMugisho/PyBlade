@@ -1,7 +1,7 @@
 import html
 import re
 
-from .contexts import AttributesContext, LoopContext
+from .contexts import AttributesContext, LoopContext, SlotContext
 from .exceptions import UndefinedVariableError
 from .loader import load_template
 
@@ -78,6 +78,10 @@ class Parser:
         else:
             variable_value = context[variable_name]
 
+        # SlotContext and AttributesContext variables must not be escaped anyway
+        if isinstance(variable_value, (SlotContext, AttributesContext)):
+            escape = False
+
         if escape:
             return html.escape(str(variable_value))
         return str(variable_value)
@@ -93,7 +97,7 @@ class Parser:
         """Handle @if, @elif, @else and @endif directives."""
 
         pattern = re.compile(
-            r"@(if)\s*\((.*?)\)\s*(.*?)\s*(?:@(elif)\s*\((.*?)\)\s*(.*?))*(?:@(else)\s*(.*?))?@(endif)", re.DOTALL
+            r"@(if)\s*\((.*?\)?)\)\s*(.*?)\s*(?:@(elif)\s*\((.*?\)?)\)\s*(.*?))*(?:@(else)\s*(.*?))?@(endif)", re.DOTALL
         )
         return pattern.sub(lambda match: self._handle_if(match, context), template)
 
@@ -256,12 +260,10 @@ class Parser:
 
             attributes[name] = value
 
-        print(attributes)
         attributes = AttributesContext(attributes)
-        print(attributes)
 
         component_context = context.copy()
-        component_context["slot"] = match.group("slot")
+        component_context["slot"] = SlotContext(match.group("slot"))
         component_context["attributes"] = attributes
 
         parsed_component = self.parse(component, component_context)

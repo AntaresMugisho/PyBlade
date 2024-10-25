@@ -2,7 +2,11 @@
     From navigation we say hello {{ name }}.
     <ul>
         @for (menu in menus)
-            <b-nav-item active href="{{ menu.lower() }}" :attribute="True" class="mb-4 p-2" >{{ menu }}</b-nav-item>
+            <b-nav-item active href="{{ menu.lower() }}" :attribute="True" class="mb-4 p-2" >
+
+                <p>This is a link slot</p>
+
+            </b-nav-item>
         @endfor
     </ul>
     <b-name> Something </b-name>
