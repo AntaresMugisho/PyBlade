@@ -2,7 +2,7 @@ import ast
 import html
 import re
 
-from .contexts import AttributesContext, LoopContext, SlotContext
+from .contexts import AttributesContext, ClassContext, LoopContext, SlotContext
 from .exceptions import UndefinedVariableError
 from .loader import load_template
 
@@ -79,8 +79,8 @@ class Parser:
         else:
             variable_value = context[variable_name]
 
-        # SlotContext and AttributesContext variables must not be escaped anyway
-        if isinstance(variable_value, (SlotContext, AttributesContext)):
+        # SlotContext AttributesContext and ClassContext variables must not be escaped anyway
+        if isinstance(variable_value, (SlotContext, AttributesContext, ClassContext)):
             escape = False
 
         if escape:
@@ -270,7 +270,7 @@ class Parser:
 
         component, props = self._parse_props(component)
         component_context.update(attributes)
-        attributes = AttributesContext(props, attributes)
+        attributes = AttributesContext(props, attributes, component_context)
 
         component_context["slot"] = SlotContext(match.group("slot"))
         component_context["attributes"] = attributes

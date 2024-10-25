@@ -51,9 +51,10 @@ class LoopContext:
 
 
 class AttributesContext:
-    def __init__(self, props: dict, attributes: dict):
+    def __init__(self, props: dict, attributes: dict, context: dict):
         self._props = props
         self._attributes = {**self._props, **attributes}
+        self._context = context
 
     def __str__(self):
         string = ""
@@ -80,7 +81,6 @@ class AttributesContext:
 
         return False
 
-    # TODO: Complete all these functions
     def merge(self, attrs: dict):
         """
         Merge attribute.
@@ -92,6 +92,20 @@ class AttributesContext:
             self._attributes[key] = f"{attrs[key]} {self._attributes[key]}"
         return self
 
+    def class_(self, attrs: dict):
+        """
+        Conditionally marge classes
+        :param attrs: A dictionary containing a class : condition key values.
+        :return:
+        """
+        class_ = ""
+        for key, value in attrs.items():
+            if eval(str(value), {}, self._context):
+                class_ += f"{key} "
+
+        return ClassContext(class_.strip())
+
+    # TODO: Complete all these functions
     def where_starts_with(self, needle: str) -> str:
         """
         Return all the attributes starting with the given string
@@ -118,3 +132,11 @@ class SlotContext:
 
     def __str__(self):
         return self.content
+
+
+class ClassContext:
+    def __init__(self, class_string: str):
+        self._class_string = class_string
+
+    def __str__(self):
+        return f'class="{self._class_string}"'

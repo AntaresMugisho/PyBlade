@@ -3,6 +3,9 @@
     "active" : True
 })
 
+<p {{ attributes.class_({"p4": True, "mt": False}) }}>This is a paragraph</p>
+
+
 <li {{ attributes.merge({"class": "nav-item"}) }}>
     <a class="nav-link" href="{{ attributes.get('href') }}">{{ slot }}</a>
     @if(active)

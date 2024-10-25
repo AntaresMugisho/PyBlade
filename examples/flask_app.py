@@ -12,7 +12,7 @@ def home():
         "name": "Antares",
         "last_name": "Mugisho",
         "age": 50,
-        "active": True,
+        "online": True,
         "items": ["Apple", "Banana", "Cherry"],
         "favorites": [],
         "html": "<strong>This is a HTML code</strong>",
