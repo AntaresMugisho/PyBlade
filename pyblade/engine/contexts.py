@@ -51,8 +51,9 @@ class LoopContext:
 
 
 class AttributesContext:
-    def __init__(self, attributes):
-        self._attributes = attributes
+    def __init__(self, props: dict, attributes: dict):
+        self._props = props
+        self._attributes = {**self._props, **attributes}
 
     def __str__(self):
         string = ""

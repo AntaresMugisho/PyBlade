@@ -1,3 +1,4 @@
+import ast
 import html
 import re
 
@@ -251,18 +252,21 @@ class Parser:
         attrs = attr_pattern.findall(attr_string)
 
         attributes = {}
+        component_context = {}
+
         for attr in attrs:
             name, value = attr
             value = value[1:-1]
             if name.startswith(":"):
                 name = name[1:]
                 value = eval(value, {}, context) if value else None
+                component_context[name] = value
 
             attributes[name] = value
 
-        attributes = AttributesContext(attributes)
+        component, props = self._parse_props(component)
+        attributes = AttributesContext(props, attributes)
 
-        component_context = context.copy()
         component_context["slot"] = SlotContext(match.group("slot"))
         component_context["attributes"] = attributes
 
@@ -270,7 +274,24 @@ class Parser:
 
         return parsed_component
 
+    def _parse_props(self, component: str) -> tuple:
+        pattern = re.compile(r"@props\s*\((?P<dictionary>.*?)\s*\)", re.DOTALL)
+        match = pattern.search(component)
+
+        props = {}
+        if match:
+            component = re.sub(pattern, "", component)
+            try:
+                props = ast.literal_eval(match.group("dictionary"))
+            except SyntaxError as e:
+                raise e
+            except ValueError as e:
+                raise e
+
+        return component, props
+
     def _validate_argument(self, match):
+
         argument = match.group(1)
         if (argument[0], argument[-1]) not in (('"', '"'), ("'", "'")) or len(argument.split(" ")) > 1:
             raise Exception(
