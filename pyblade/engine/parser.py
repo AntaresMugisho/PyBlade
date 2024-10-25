@@ -259,17 +259,21 @@ class Parser:
             value = value[1:-1]
             if name.startswith(":"):
                 name = name[1:]
-                value = eval(value, {}, context) if value else None
+                try:
+                    value = eval(value, {}, context) if value else None
+                except NameError:
+                    pass
+
                 component_context[name] = value
 
             attributes[name] = value
 
         component, props = self._parse_props(component)
+        component_context.update(attributes)
         attributes = AttributesContext(props, attributes)
 
         component_context["slot"] = SlotContext(match.group("slot"))
         component_context["attributes"] = attributes
-
         parsed_component = self.parse(component, component_context)
 
         return parsed_component

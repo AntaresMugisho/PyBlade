@@ -1,11 +1,13 @@
 @props({
-    "name" : "Antares",
+    "name" : "Olivier",
     "active" : True
 })
 
 <li class="nav-item" {{ attributes }}>
     <a class="nav-link" href="{{ attributes.get('href') }}">{{ slot }}</a>
-
+    @if(active)
+        <p>Active</p>
+    @endif
     @if(attributes.has("class"))
         <div>Attributes exists</div>
     @endif
