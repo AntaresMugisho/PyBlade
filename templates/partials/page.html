@@ -17,7 +17,12 @@
 
 
 @block("main")
-    <div>
+    <div @class({
+    "color-black": "online",
+    "color-white": False,
+    "pb-4 my-3 bg-gray font-bold": True,
+})
+>
         This is the main content.
     </div>
 @endblock

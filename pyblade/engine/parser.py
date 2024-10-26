@@ -15,6 +15,7 @@ class Parser:
             "if": self._parse_if,
             "extends": self._parse_extends,
             "include": self._parse_include,
+            "class": self._parse_class,
         }
 
     def parse(self, template: str, context: dict) -> str:
@@ -293,6 +294,22 @@ class Parser:
                 raise e
 
         return component, props
+
+    def _parse_class(self, template, context):
+        pattern = re.compile(r"@class\s*\((?P<dictionary>.*?)\s*\)", re.DOTALL)
+
+        match = pattern.search(template)
+        if match:
+            try:
+                attrs = ast.literal_eval(match.group("dictionary"))
+            except SyntaxError as e:
+                raise e
+            except ValueError as e:
+                raise e
+            else:
+                classes = ClassContext(attrs, context)
+                return re.sub(pattern, str(classes), template)
+        return template
 
     def _validate_argument(self, match):
 

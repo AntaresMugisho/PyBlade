@@ -98,12 +98,7 @@ class AttributesContext:
         :param attrs: A dictionary containing a class : condition key values.
         :return:
         """
-        class_ = ""
-        for key, value in attrs.items():
-            if eval(str(value), {}, self._context):
-                class_ += f"{key} "
-
-        return ClassContext(class_.strip())
+        return ClassContext(attrs, self._context)
 
     # TODO: Complete all these functions
     def where_starts_with(self, needle: str) -> str:
@@ -135,8 +130,11 @@ class SlotContext:
 
 
 class ClassContext:
-    def __init__(self, class_string: str):
-        self._class_string = class_string
+    def __init__(self, attrs: dict, context: dict):
+        self._class = ""
+        for key, value in attrs.items():
+            if eval(str(value), {}, context):
+                self._class += f"{key} "
 
     def __str__(self):
-        return f'class="{self._class_string}"'
+        return f'class="{self._class.strip()}"'
