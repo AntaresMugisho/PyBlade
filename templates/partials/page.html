@@ -1,11 +1,8 @@
 @extends("base")
 
-@section("title")This is the page title@endsection
-
-<div>
-    <h2>Hello again, {{ name }} !</h2>
-    This must be in the slot
-</div>
+@section("title")
+This is the page title
+@endsection
 
 @section("header")
     @include("partials.navigation")
@@ -20,13 +17,17 @@
     <div @class({
     "color-black": "online",
     "color-white": False,
-    "pb-4 my-3 bg-gray font-bold": True,
+    "pb-4 my-3 bg-gray font-bold ": True,
 })
 >
         This is the main content.
     </div>
+
+    <div>
+        <h3>Hello again, {{ name }} !</h3>
+    </div>
 @endblock
 
-<div>
+<div b-click="submit()">
     And this too must be in the slot variable.
 </div>

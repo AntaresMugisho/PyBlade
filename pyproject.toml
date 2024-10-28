@@ -10,9 +10,10 @@ readme = "README.md"
 python = "^3.10"
 
 [tool.poetry.group.dev.dependencies]
-flask = "^3.0.3"
-pytest = "^8.3.3"
 pre-commit = "^4.0.1"
+pytest = "^8.3.3"
+django = "^5.1.2"
+flask = "^3.0.3"
 
 [tool.black]
 line_length = 120
