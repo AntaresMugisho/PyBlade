@@ -14,7 +14,7 @@ setup(
     "Laravel's Blade and Livewire, it simplifies dynamic template creation with developer-friendly @-based "
     "directives and component support, all while prioritizing security.",
     url="https://github.com/antaresmugisho/pyblade",
-    download_url="https://github.com/antaresmugisho/pyblade/archive/refs/tags/v0.1.0-alpha.tar.gz",
+    download_url="https://github.com/antaresmugisho/pyblade/archive/refs/tags/v0.1.4-alpha.tar.gz",
     long_description=long_description,
     long_description_content_type="text/markdown",
     author="Antares Mugisho",
