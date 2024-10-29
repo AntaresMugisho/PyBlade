@@ -7,7 +7,7 @@ from django.template.backends.base import BaseEngine
 from pyblade import PyBlade
 
 
-class PyBladeTemplates(BaseEngine):
+class DjangoPyBlade(BaseEngine):
     def __init__(self, params):
         super().__init__(params)
 
@@ -32,7 +32,7 @@ class PyBladeTemplates(BaseEngine):
 
         raise TemplateDoesNotExist(template_name)
 
-    def render(self, template_name, context=None, request=None):
+    def render(self, request, template_name, context=None):
         """Override the render method to use PyBlade."""
 
         context = context or {}
