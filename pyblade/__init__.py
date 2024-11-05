@@ -1,1 +1,1 @@
-from .engine.renderer import PyBlade
+from .engine.renderer import PyBlade, render
