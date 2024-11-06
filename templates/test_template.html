@@ -6,6 +6,8 @@
     <link rel="stylesheet" href="@static("style.css")">
 </head>
 <body>
+
+
     <h1>PyBlade</h1>
 
     <h2>Variable binding</h2>
@@ -17,6 +19,7 @@
     <p>Unescaped html : {!! html !!}</p>
 
     <h2>Conditional statements</h2>
+
 
     @if(age <= 18)
         <p>You are young !</p>
@@ -81,5 +84,15 @@
         </div>
         <img src="@static("app/images/image.jpg")" alt="">
     </form>
+
+    @auth
+        <p>Authenticated</p>
+    @else
+        <p>Not Authenticated</p>
+    @endauth
+
+    @auth
+        <p>2 Authenticated</p>
+    @endauth
 </body>
 </html>

@@ -20,6 +20,7 @@ class Parser:
             "class": self._parse_class,
             "url": self._parse_url,
             "static": self._parse_static,
+            "auth": self._parse_auth,
             "extends": self._parse_extends,
             "include": self._parse_include,
         }
@@ -110,15 +111,38 @@ class Parser:
         return pattern.sub(lambda match: self._handle_if(match, context), template)
 
     def _handle_if(self, match, context):
-
         captures = [group for group in match.groups() if group not in (None, "")]
 
         for i, capture in enumerate(captures[:-1]):
-            if capture in ("if", "elif", "else"):
+            if capture in ("if", "elif", "else", "auth"):
                 if capture in ("if", "elif"):
                     if eval(captures[i + 1], {}, context):
                         return captures[i + 2]
                 else:
+                    return captures[i + 1]
+
+    def _parse_auth(self, template, context):
+        """Check if the user is authenticated."""
+
+        pattern = re.compile(r"@(auth)\s*(.*?)\s*(?:@(else)\s*(.*?))?\s*@(endauth)", re.DOTALL)
+        return pattern.sub(lambda match: self._handle_auth(match, context), template)
+
+    def _handle_auth(self, match, context):
+        authenticated = False
+        request = context.pop("request", None)
+        if request:
+            try:
+                authenticated = request.user.is_authenticated
+            except Exception as e:
+                raise Exception(str(e))
+
+        captures = [group for group in match.groups() if group not in (None, "")]
+        for i, capture in enumerate(captures[:-1]):
+            if capture == "auth":
+                if authenticated:
+                    return captures[i + 1]
+            elif capture == "else":
+                if not authenticated:
                     return captures[i + 1]
 
     def _parse_for(self, template, context):
@@ -399,14 +423,10 @@ class Parser:
                     elif isinstance(params, list):
                         return reverse(route_name, args=params)
                     else:
-                        raise Exception("The url parametters must be of type list or dict")
-
+                        raise Exception("The url parameters must be of type list or dict")
             return reverse(route_name)
         except ImproperlyConfigured as e:
             raise Exception(str(e))
-
-    def _parse_auth(self, template, context):
-        pass
 
     def _parse_checked(self, template, context):
         pattern = re.compile(r"@checked\s*\(\s*(?P<expression>.*?)\s*\)", re.DOTALL)

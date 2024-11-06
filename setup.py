@@ -8,7 +8,7 @@ with open("README.md", "r") as file:
 setup(
     name="PyBlade",
     packages=["pyblade"],
-    version="0.1.6",
+    version="0.1.7",
     license="MIT",
     description="PyBlade is a lightweight template engine for Python, initially designed for Django. Inspired by "
     "Laravel's Blade and Livewire, it simplifies dynamic template creation with developer-friendly @-based "
