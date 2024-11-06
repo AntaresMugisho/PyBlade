@@ -18,6 +18,8 @@ class Parser:
             "checked": self._parse_checked,
             "selected": self._parse_selected,
             "class": self._parse_class,
+            "url": self._parse_url,
+            "static": self._parse_static,
             "extends": self._parse_extends,
             "include": self._parse_include,
         }
@@ -340,10 +342,68 @@ class Parser:
         return f"""<input type="hidden" name="_method" value="{method}">"""
 
     def _parse_static(self, template, context):
-        pass
+        pattern = re.compile(r"@static\s*\(\s*(?P<path>.*?)\s*\)", re.DOTALL)
+        return pattern.sub(lambda match: self._handle_static(match), template)
+
+    @staticmethod
+    def _handle_static(match):
+        try:
+            from django.core.exceptions import ImproperlyConfigured
+            from django.templatetags.static import static
+        except ImportError:
+            raise Exception("@static directive is only supported in django apps.")
+
+        else:
+            path = match.group("path")
+            try:
+                return static(path)
+            except ImproperlyConfigured as exc:
+                raise exc
 
     def _parse_url(self, template, context):
-        pass
+        pattern = re.compile(r"@url\s*\(\s*(?P<name>.*?)\s*(?:,(?P<params>.*?))?\)")
+
+        return pattern.sub(lambda match: self._handle_url(match, context), template)
+
+    def _handle_url(self, match, context):
+        # Check django installation
+        try:
+            from django.core.exceptions import ImproperlyConfigured
+            from django.urls import reverse
+        except ImportError:
+            raise Exception("@url directive is only supported in django projects.")
+
+        route_name = match.group("name")
+        params = match.group("params")
+
+        # Check route name is a valid string
+        try:
+            route_name = ast.literal_eval(route_name)
+        except SyntaxError:
+            raise Exception(
+                f"Syntax error: The route name must be a valid string. Got {route_name} near line "
+                f"{self._get_line_number(match)}"
+            )
+
+        # Try return the route url or raise errors if bad configuration encountered
+        try:
+            if params:
+                try:
+                    params = eval(params, {}, context)
+                    params = ast.literal_eval(str(params))
+                except (SyntaxError, ValueError) as e:
+                    raise Exception(str(e))
+                else:
+                    if isinstance(params, dict):
+                        return reverse(route_name, kwargs=params)
+                    elif isinstance(params, list):
+                        return reverse(route_name, args=params)
+                    else:
+                        raise Exception("The url parametters must be of type list or dict")
+
+            return reverse(route_name)
+        except ImproperlyConfigured as e:
+            raise Exception(str(e))
 
     def _parse_auth(self, template, context):
         pass

@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Test Template</title>
+    <link rel="stylesheet" href="@static("style.css")">
 </head>
 <body>
     <h1>PyBlade</h1>
@@ -64,6 +65,12 @@
             >Mango</label></div>
         <div><label for=""><input type="checkbox" @checked(False) name="fruits[]" value="Apple">Apple</label></div>
 
+        <a href="@url("route_name", {"id": 2, "name": name })">Url one</a>
+
+        <a href="@url("route_name", [2, name])">Url 2</a>
+
+        <a href="@url("route_name")">Url 3</a>
+
         <h3>Selected directive</h3>
         <div>
             <select name="gender">
@@ -72,6 +79,7 @@
                 <option value="F" @selected (True)>Female</option>
             </select>
         </div>
+        <img src="@static("app/images/image.jpg")" alt="">
     </form>
 </body>
 </html>
