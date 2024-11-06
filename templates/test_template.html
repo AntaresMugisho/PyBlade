@@ -49,5 +49,15 @@
             <p>No favorite item</p>
         @endfor
     </ul>
+
+    <h2>Form related directives</h2>
+    <form action="">
+        @csrf
+        @method("POST")
+
+        <h3>Checked directive</h3>
+        <div><label for=""><input type="checkbox" name="fruits[]" value="Mango" @checked(name == "Antares")>Mango</label></div>
+        <div><label for=""><input type="checkbox" name="fruits[]" value="Apple">Apple</label></div>
+    </form>
 </body>
 </html>

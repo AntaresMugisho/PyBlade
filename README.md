@@ -53,9 +53,9 @@ Contributions are welcome! PyBlade is an open-source project, and we invite deve
 - [x] Basic template rendering with variable interpolation
 - [x] Support for conditionals and loops
 - [x] Template inheritance, partials, and slots
+- [x] Integration with Django
 - [ ] Components similar to Laravel Livewire
 - [ ] Security measures
-- [ ] Integration with Django
 - [ ] Full documentation
 
 ## License

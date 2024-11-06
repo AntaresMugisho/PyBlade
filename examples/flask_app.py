@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from flask import Flask, render_template_string
 
 from pyblade import PyBlade
@@ -19,8 +21,9 @@ def home():
         "menus": ["Contact", "About", "Contact", "Log in", "Sign in"],
     }
 
-    pyblade = PyBlade()
-    output = pyblade.render(template="partials.page", context=context)
+    engine = PyBlade([Path("/home/antares/Documents/Coding/Python/PyBlade/templates")])
+    template = engine.get_template("test_template")
+    output = template.render(context)
     return render_template_string(output)
 
 

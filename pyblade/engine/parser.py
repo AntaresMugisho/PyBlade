@@ -11,6 +11,8 @@ class Parser:
 
     def __init__(self):
         self.directives = {
+            "csrf": self._parse_csrf,
+            "method": self._parse_method,
             "for": self._parse_for,
             "if": self._parse_if,
             "extends": self._parse_extends,
@@ -320,3 +322,32 @@ class Parser:
                 f"Look at line {self._get_line_number(match)}"
             )
         return argument[1:-1]
+
+    def _parse_csrf(self, template, context):
+        pattern = re.compile(r"@csrf", re.DOTALL)
+        token = context.pop("csrf_token", "")
+
+        return pattern.sub(f"""<input type="hidden" name="csrfmiddlewaretoken" value="{token}">""", template)
+
+    def _parse_method(self, template, context):
+        pattern = re.compile(r"@method\s*\(\s*(?P<method>.*?)\s*\)", re.DOTALL)
+        return pattern.sub(lambda match: self._handle_method(match), template)
+
+    def _handle_method(self, match):
+        method = self._validate_argument(match)
+        return f"""<input type="hidden" name="_method" value="{method}">"""
+
+    def _parse_static(self, template, context):
+        pass
+
+    def _parse_url(self, template, context):
+        pass
+
+    def _parse_auth(self, template, context):
+        pass
+
+    def _parse_checked(self, template, context):
+        pass
+
+    def _parse_selected(self, template, context):
+        pass
