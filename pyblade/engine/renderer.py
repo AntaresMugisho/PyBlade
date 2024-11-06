@@ -1,43 +1,38 @@
-from pathlib import Path
-
-from django.http import HttpResponse
-
-from .loader import load_template
+from . import loader
+from .exceptions import TemplateNotFound
 from .parser import Parser
 
 
 class PyBlade:
 
-    def __init__(self, dirs=None, app_dirs=None):
-        self._dirs = dirs
-        self._app_dirs = app_dirs
-        self.parser = Parser()
+    def __init__(self, dirs=None):
+        self._template_dirs = dirs or []
+        self._parser = Parser()
 
-    def render(self, template: str, context: dict) -> str:
+    def render(self, template: str, context: dict | None = None) -> str:
         """
         Render the parsed template content with replaced values.
 
-        :param template: The file name without extension
+        :param template: The file string content
         :param context:
         :return:
         """
-        template = load_template(template, self._dirs)
-        template = self.parser.parse(template, context)
+        if context is None:
+            context = {}
 
-        return template
+        template_code = self._parser.parse(template, context)
 
-    def from_string(self):
+        return template_code
+
+    @staticmethod
+    def from_string(template_code):
         return "FROM STRING"
 
+    def get_template(self, template_name):
+        try:
+            template = loader.load_template(template_name, self._template_dirs)
+            template.engine = self
+        except TemplateNotFound as exc:
+            raise exc
 
-def render(request, template_name, context=None):
-    if context is None:
-        context = {}
-    engine = PyBlade(
-        [
-            Path("/home/antares/Documents/Coding/Python/PyBlade/examples/django_backend/example/app/templates"),
-            Path("/home/antares/Documents/Coding/Python/PyBlade/examples/django_backend/example/example/templates"),
-        ],
-        True,
-    )
-    return HttpResponse(engine.render(template_name, context))
+        return template

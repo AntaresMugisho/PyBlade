@@ -1,29 +1,35 @@
 import os
-from pathlib import Path
 
-BASE_DIR = Path(__file__).parent.parent.parent
+from .exceptions import TemplateNotFound
+from .template import Template
 
-TEMPLATES_DIR = BASE_DIR.joinpath("templates")
+TEMPLATE_EXTENSION = ".html"
+TEMPLATE_DIRS = []
 
-CURRENT_PATH = ""
+current_directory = None
 
 
-def load_template(template_name: str, template_dirs: list | None = None) -> str:
+def load_template(template_name: str, directories: list | None = None) -> Template:
     """
     Loads the template file.
 
-    :param template_dirs: The list of directories where to find templates
+    :param directories: List of template directories
     :param template_name: The template name.
     :return: The template content as string.
     """
-    # Optionally remove .html extension if added
-    template_name = template_name.rstrip(".html").replace(".", "/")
+    global TEMPLATE_DIRS
 
-    for directory in template_dirs:
-        template_path = f"{directory.joinpath(template_name)}.html"
+    if directories is not None:
+        TEMPLATE_DIRS = directories
+
+    template_name = template_name.replace(".", "/")
+
+    for directory in TEMPLATE_DIRS:
+        template_path = f"{directory.joinpath(template_name)}{TEMPLATE_EXTENSION}"
 
         if os.path.exists(template_path):
             with open(template_path, "r") as file:
-                return file.read()
+                content = file.read()
+                return Template(template_name, template_path, content)
 
-    raise Exception("PyBlade Template Not Found")
+    raise TemplateNotFound(f"{template_name}{TEMPLATE_EXTENSION}")

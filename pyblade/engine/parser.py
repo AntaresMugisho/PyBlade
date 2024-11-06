@@ -2,9 +2,9 @@ import ast
 import html
 import re
 
+from . import loader
 from .contexts import AttributesContext, ClassContext, LoopContext, SlotContext
 from .exceptions import UndefinedVariableError
-from .loader import load_template
 
 
 class Parser:
@@ -161,11 +161,11 @@ class Parser:
 
         if match is not None:
             file_name = match.group(1) if match else None
-            partial_template = load_template(file_name) if file_name else None
+            partial_template = loader.load_template(f"partials.{file_name}") if file_name else None
 
             if partial_template:
                 # Parse the content to include before replacement
-                partial_template = self.parse(partial_template, context)
+                partial_template = self.parse(str(partial_template), context)
                 return re.sub(pattern, partial_template, template)
 
         return template
@@ -176,7 +176,7 @@ class Parser:
         pattern = re.compile(r"(.*?)@extends\s*\(\s*[\"']?(.*?(?:\.?\.*?)*)[\"']?\s*\)", re.DOTALL)
         match = re.match(pattern, template)
 
-        if match is not None:
+        if match:
             if match.group(1):
                 raise Exception("The @extend tag must be at the top of the file before any character.")
 
@@ -185,8 +185,8 @@ class Parser:
                 raise Exception("Layout not found")
 
             try:
-                layout = load_template(f"layouts.{layout_name}")
-                return self._parse_section(template, layout)
+                layout = loader.load_template(f"layouts.{layout_name}")
+                return self._parse_section(template, str(layout))
             except Exception as e:
                 raise e
 
@@ -246,7 +246,7 @@ class Parser:
 
     def _handle_pyblade_tags(self, match, context):
         component_name = match.group("component")
-        component = load_template(f"components.{component_name}")
+        component = loader.load_template(f"components.{component_name}")
 
         attr_string = match.group("attributes")
         attr_pattern = re.compile(r"(?P<attribute>:?\w+)(?:\s*=\s*(?P<value>[\"']?.*?[\"']))?", re.DOTALL)
@@ -269,7 +269,7 @@ class Parser:
 
             attributes[name] = value
 
-        component, props = self._parse_props(component)
+        component, props = self._parse_props(str(component))
         component_context.update(attributes)
         attributes = AttributesContext(props, attributes, component_context)
 
