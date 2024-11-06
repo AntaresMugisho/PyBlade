@@ -11,13 +11,15 @@ class Parser:
 
     def __init__(self):
         self.directives = {
-            "csrf": self._parse_csrf,
-            "method": self._parse_method,
             "for": self._parse_for,
             "if": self._parse_if,
+            "csrf": self._parse_csrf,
+            "method": self._parse_method,
+            "checked": self._parse_checked,
+            "selected": self._parse_selected,
+            "class": self._parse_class,
             "extends": self._parse_extends,
             "include": self._parse_include,
-            "class": self._parse_class,
         }
 
     def parse(self, template: str, context: dict) -> str:
@@ -347,7 +349,23 @@ class Parser:
         pass
 
     def _parse_checked(self, template, context):
-        pass
+        pattern = re.compile(r"@checked\s*\(\s*(?P<expression>.*?)\s*\)", re.DOTALL)
+        return pattern.sub(lambda match: self._handle_checked(match, context), template)
+
+    @staticmethod
+    def _handle_checked(match, context):
+        expression = match.group("expression")
+        if not (eval(expression, {}, context)):
+            return ""
+        return "checked"
 
     def _parse_selected(self, template, context):
-        pass
+        pattern = re.compile(r"@selected\s*\(\s*(?P<expression>.*?)\s*\)", re.DOTALL)
+        return pattern.sub(lambda match: self._handle_selected(match, context), template)
+
+    @staticmethod
+    def _handle_selected(match, context):
+        expression = match.group("expression")
+        if not (eval(expression, {}, context)):
+            return ""
+        return "selected"

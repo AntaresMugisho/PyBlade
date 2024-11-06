@@ -56,8 +56,22 @@
         @method("POST")
 
         <h3>Checked directive</h3>
-        <div><label for=""><input type="checkbox" name="fruits[]" value="Mango" @checked(name == "Antares")>Mango</label></div>
-        <div><label for=""><input type="checkbox" name="fruits[]" value="Apple">Apple</label></div>
+        <div><label for=""><input type="radio" name="gender" value="F" @checked(False)
+            >Female</label></div>
+        <div><label for=""><input type="radio" @checked(True) name="gender" value="Apple">Male</label></div>
+
+        <div><label for=""><input type="checkbox" name="fruits[]" value="M" @checked(name == "Antares")
+            >Mango</label></div>
+        <div><label for=""><input type="checkbox" @checked(False) name="fruits[]" value="Apple">Apple</label></div>
+
+        <h3>Selected directive</h3>
+        <div>
+            <select name="gender">
+                <option value="">Choose your gender</option>
+                <option value="M" @selected(1==3)>Male</option>
+                <option value="F" @selected (True)>Female</option>
+            </select>
+        </div>
     </form>
 </body>
 </html>
