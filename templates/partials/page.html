@@ -15,8 +15,8 @@ This is the page title
 
 @block("main")
     <div @class({
-    "color-black": "online",
-    "color-white": False,
+    "color-black": online,
+    "color-white": name == "Antares",
     "pb-4 my-3 bg-gray font-bold ": True,
 })
 >
@@ -28,6 +28,6 @@ This is the page title
     </div>
 @endblock
 
-<div b-click="submit()">
+<div>
     And this too must be in the slot variable.
 </div>

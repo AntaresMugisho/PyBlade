@@ -22,7 +22,7 @@ def home():
     }
 
     engine = PyBlade([Path("/home/antares/Documents/Coding/Python/PyBlade/templates")])
-    template = engine.get_template("test_template")
+    template = engine.get_template("partials.page")
     output = template.render(context)
     return render_template_string(output)
 

@@ -13,14 +13,14 @@ class Parser:
         self.directives = {
             "for": self._parse_for,
             "if": self._parse_if,
-            "csrf": self._parse_csrf,
+            # "csrf": self._parse_csrf,
             "method": self._parse_method,
             "checked": self._parse_checked,
             "selected": self._parse_selected,
             "class": self._parse_class,
-            "url": self._parse_url,
-            "static": self._parse_static,
-            "auth": self._parse_auth,
+            # "url": self._parse_url,
+            # "static": self._parse_static,
+            # "auth": self._parse_auth,
             "extends": self._parse_extends,
             "include": self._parse_include,
         }
@@ -299,7 +299,7 @@ class Parser:
 
             attributes[name] = value
 
-        component, props = self._parse_props(str(component))
+        component, props = self._parse_props(str(component), context)
         component_context.update(attributes)
         attributes = AttributesContext(props, attributes, component_context)
 
@@ -309,15 +309,17 @@ class Parser:
 
         return parsed_component
 
-    def _parse_props(self, component: str) -> tuple:
+    def _parse_props(self, component: str, context) -> tuple:
         pattern = re.compile(r"@props\s*\((?P<dictionary>.*?)\s*\)", re.DOTALL)
         match = pattern.search(component)
 
         props = {}
         if match:
             component = re.sub(pattern, "", component)
+            dictionary = match.group("dictionary")
             try:
-                props = ast.literal_eval(match.group("dictionary"))
+                props = eval(dictionary, {}, context)
+                props = ast.literal_eval(props)
             except SyntaxError as e:
                 raise e
             except ValueError as e:
@@ -331,7 +333,8 @@ class Parser:
         match = pattern.search(template)
         if match:
             try:
-                attrs = ast.literal_eval(match.group("dictionary"))
+                attrs = eval(match.group("dictionary"), {}, context)
+                attrs = ast.literal_eval(str(attrs))
             except SyntaxError as e:
                 raise e
             except ValueError as e:
@@ -380,7 +383,7 @@ class Parser:
         else:
             path = match.group("path")
             try:
-                return static(path)
+                return static(str(path))
             except ImproperlyConfigured as exc:
                 raise exc
 
@@ -449,3 +452,15 @@ class Parser:
         if not (eval(expression, {}, context)):
             return ""
         return "selected"
+
+    def _parse_error(self, template, context):
+        """Check if an input form contains a validation error"""
+        pass
+
+    def _parse_active(self, template, context):
+        """Use the @active('route_name', 'active_class') directive to set an active class in a nav link"""
+        pass
+
+    def _parse_field(self, template, context):
+        """To render an input field with custom attributes"""
+        pass
