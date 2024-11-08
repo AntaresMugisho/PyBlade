@@ -11,12 +11,15 @@ class Parser:
 
     def __init__(self):
         self.directives = {
+            "comments": self._parse_comments,
             "for": self._parse_for,
             "if": self._parse_if,
             # "csrf": self._parse_csrf,
             "method": self._parse_method,
             "checked": self._parse_checked,
             "selected": self._parse_selected,
+            "active": self._parse_active,
+            "error": self._parse_error,
             "class": self._parse_class,
             # "url": self._parse_url,
             # "static": self._parse_static,
@@ -455,12 +458,74 @@ class Parser:
 
     def _parse_error(self, template, context):
         """Check if an input form contains a validation error"""
-        pass
+        pattern = re.compile(r"@error\s*\((?P<field>.*?)\)\s*(?P<slot>.*?)\s*@enderror", re.DOTALL)
+
+        return pattern.sub(lambda match: self._handle_error(match, context), template)
+
+    def _handle_error(self, match, context):
+        field = match.group("field")
+        slot = match.group("slot")
+
+        message = eval(field, {}, context)
+        if message:
+            local_context = context.copy()
+            local_context["message"] = message
+            rendered = self.parse(slot, local_context)
+
+            return rendered
+
+        return ""
 
     def _parse_active(self, template, context):
         """Use the @active('route_name', 'active_class') directive to set an active class in a nav link"""
-        pass
+        pattern = re.compile(r"@active\((?P<route>.*?)(?:,(?P<param>.*?))?\)", re.DOTALL)
+        return pattern.sub(lambda match: self._handle_active(match, context), template)
+
+    @staticmethod
+    def _handle_active(match, context):
+        route = match.group("route")
+        param = match.group("param")
+
+        # TODO: Check if the route is active
+        if route.is_active:
+            if param:
+                try:
+                    param = ast.literal_eval(param)
+                    return param
+                except SyntaxError as e:
+                    raise e
+                except ValueError as e:
+                    raise e
+            return "active"
+
+        return ""
 
     def _parse_field(self, template, context):
         """To render an input field with custom attributes"""
+        pass
+
+    @staticmethod
+    def _parse_comments(template, context):
+        pattern = re.compile(r"{#(.*?)#}", re.DOTALL)
+        return pattern.sub("", template)
+
+    def _parse_guest(self):
+        pass
+
+    def _parse_unless(self):
+        pass
+
+    def _parse_break(self):
+        pass
+
+    def _parse_continue(self):
+        pass
+
+    def _parse_switch(self):
+        pass
+
+    def _parse_while(self):
+        pass
+
+    def _parse_component(self):
         pass

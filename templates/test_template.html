@@ -66,7 +66,11 @@
             >Mango</label></div>
         <div><label for=""><input type="checkbox" @checked(False) name="fruits[]" value="Apple">Apple</label></div>
 
-        <a href="@url("route_name", {"id": 2, "name": name })">Url one</a>
+        @error("This field is required.")
+            <small class="text-red-500">{{ message }}</small>
+        @enderror
+
+        <a href="@url("route_name", {"id": 2, "name": name })" class="nav-link @active('name')">Url one</a>
 
         <a href="@url("route_name", [2, name])">Url 2</a>
 
