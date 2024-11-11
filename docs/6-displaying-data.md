@@ -16,7 +16,7 @@ Assuming you have a variable named `name` passed to the template, you can displa
 # In your rendiring view function
 def show_greeting(request):
     context = {'name': 'John Doe'}
-    return render(request, 'greeting.html', context)
+    return render(request, 'greeting', context)
 ```
 
 ```html
@@ -44,7 +44,7 @@ If a variable `message` contains HTML, such as `"<strong>Welcome back!</strong>"
 # In your rendiring view function
 def show_message(request):
     context = {'message': '<strong>Welcome back!</strong>'}
-    return render(request, 'message.html', context)
+    return render(request, 'message', context)
 ```
 
 ```html
@@ -97,7 +97,7 @@ If `name` is a string variable, you can call `.upper()` to display it in upperca
 # In your rendiring view function
 def show_greeting(request):
     context = {'name': 'Jane'}
-    return render(request, 'greeting.html', context)
+    return render(request, 'greeting', context)
 ```
 
 ```html
@@ -130,6 +130,9 @@ If you want to capitalize only the first letter of `name`, you can use `.capital
 ```
 
 ### Getting the length of a ist
+::: info Upcoming feature
+This feature is not yet implemented but should be ready in the next version. This part of documentation is provided for informative purpose only.
+:::
 
 If you have a list called `items`, you can display its length with `len()`:
 
@@ -150,3 +153,30 @@ Using methods within curly braces allows for greater flexibility and keeps your 
 :::tip
 For best performance and maintainability, follow the principle of “Logic in the code, templates are for display only.” Perform complex logic and data transformations in your views or controllers, passing only the final, display-ready data to your templates. This keeps templates focused solely on presentation, enhancing readability and performance.
 :::
+
+## Comments
+
+In PyBlade, comments allow you to include notes within your templates without rendering them in the final output. This is useful for adding explanations, reminders, or temporary code blocks without affecting the generated HTML.
+
+To add a comment in PyBlade, wrap your comment text inside `{# #}` placeholders. Any content within `{# #}` will be ignored during rendering, so it won’t appear in the HTML output.
+
+#### Example
+
+```html
+<div class="content">
+    {# This is a comment and will not appear in the rendered HTML #}
+    <p>Welcome to our website!</p>
+
+    {# Temporarily hiding this section
+    <p>Check back soon for updates.</p>
+    #}
+</div>
+```
+
+#### Output
+
+```html
+<div class="content">
+    <p>Welcome to our website!</p>
+</div>
+```

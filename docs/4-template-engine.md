@@ -125,7 +125,7 @@ This syntax allows setting attributes directly, making components cleaner and ea
 Within the component template, you can use the `@props` directive to define which props the component should receive:
 
 ```html
-<!-- components/button.blade.html -->
+<!-- components/button.blade.pyblade -->
 @props(['label', 'type' => 'button'])
 
 <button type="{{ type }}">{{ label }}</button>
