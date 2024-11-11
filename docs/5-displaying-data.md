@@ -63,7 +63,7 @@ Use `{!! !!}` with caution. Always ensure that the content is safe to display to
 
 ## Displaying data with default values
 
-::: danger Upcoming feature
+::: info Upcoming feature
 This feature is not yet implemented but should be ready in the next version. This part of documentation is provided for informative purpose only.
 :::
 
@@ -114,7 +114,7 @@ This flexibility allows you to use any method that is available on the variable 
 
 
 ::: warning
-Avoid using too many methods or computationally expensive operations within {{ }} in your templates. While PyBlade supports calling methods directly on variables, it’s best to keep these calls minimal and efficient. Overusing or relying on time-consuming methods can slow down rendering, impacting user experience.
+Avoid using too many methods or computationally expensive operations within <span v-pre>`{{ }}`</span> in your templates. While PyBlade supports calling methods directly on variables, it’s best to keep these calls minimal and efficient. Overusing or relying on time-consuming methods can slow down rendering, impacting user experience.
 :::
 
 ### Other useful examples
