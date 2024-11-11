@@ -21,9 +21,27 @@ export default defineConfig({
         ]
       },
       {
-        text: 'Pyblade : Template engine',
+        text: 'PyBlade : Template engine',
         items: [
-          {text: "Comon directives"}
+          {text: "Displaying Data", link:'/5-displaying-data'},
+          {text: "PyBlade Directives", link:'/4-template-engine'},
+          {text: "Components", link:'/4-template-engine'},
+          {text: "Building Layouts", link:'/4-template-engine'},
+          {text: "Forms", link:'/4-template-engine'},
+        ]
+      },
+      {
+        text: 'LiveBlade: Interactive UIs',
+        items: [
+          {}
+        ]
+      },
+      {
+        text: 'Outro',
+        items: [
+          {text: "Future Features", link:'/future-features'},
+          {text: "Support and Contribution", link:'/support-and-contribution'},
+
         ]
       }
     ],

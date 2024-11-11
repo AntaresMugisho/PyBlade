@@ -1,6 +1,10 @@
-# PyBlade Template Engine
+# PyBlade: Template Engine
 
-PyBlade includes various `@`-based directives, providing robust support for conditionals, loops, error handling, and more.
+## Introduction
+
+PyBlade is a lightweight yet powerful template engine tailored for Python web applications. Unlike some templating engines, PyBlade keeps things simple while staying flexible, allowing you to use familiar Python syntax and expressions directly in your templates. Each PyBlade template is compiled into HTML code and cached to ensure optimal performance, meaning PyBlade adds virtually no overhead to your application. PyBlade templates use the `.pyblade` file extension and are typically stored within the `templates` directory of your app.
+
+In Django or Flask applications, PyBlade views can be rendered directly within views or controllers, keeping data handling and template rendering clean and straightforward. Just pass the data you need as context, and PyBlade takes care of the rest, providing a seamless, Pythonic approach to building dynamic, secure web templates.
 
 ### Available Directives
 
@@ -12,7 +16,7 @@ PyBlade includes various `@`-based directives, providing robust support for cond
    - `@auth`, `@endauth`, `@guest`, `@endguest`
 
 3. **Loops with Loop Variables:**
-   - `@for`, `@endfor`, `@foreach`, `@endforeach`, `@while`, `@endwhile`
+   - `@for`, `@endfor`, `@while`, `@endwhile`
    - `@break`, `@continue`
 
     PyBlade provides a `loop` variable with properties in `@foreach` and `@for` loops:
@@ -130,23 +134,3 @@ Within the component template, you can use the `@props` directive to define whic
 This structure ensures default values and improves readability for the data passed into the component.
 
 ---
-
-## 6. Future Features and Community Contributions
-
-As PyBlade continues to grow, a few key directions for development are in consideration:
-
-1. **Feature Suggestions**: While PyBlade currently lacks a system for custom directives, community suggestions for new built-in directives are highly encouraged and will be considered as PyBlade evolves.
-
-2. **PyBlade Intellisense**: A planned extension, **PyBlade Intellisense**, will support syntax highlighting, autocompletion, and error checking in the four most popular code editors. This single, centralized extension will simplify PyBlade development across editors and serve as a base for the community to contribute.
-
-3. **Extending PyBlade from Core Repository**: To keep contributions manageable and cohesive, any additional features should ideally extend from the official PyBlade repository rather than creating independent versions. This ensures continuity and ease of maintenance as the project matures.
-
----
-
-## 7. Support and Contribution
-
-For questions or to report issues, see the [Code of Conduct](#). Contributions are welcome! Please consider contributing to the PyBlade Intellisense project and helping improve the extension for the broader community.
-
----
-
-This documentation now includes the latest information on future plans, highlighting how the community can shape PyBlade through official channels rather than separate forks, ensuring consistency and quality in the ecosystem.

@@ -5,7 +5,7 @@ layout: home
 hero:
   name: "PyBlade"
   text: "The lightweight and secure template engine for Python web frameworks !"
-  tagline: "Elegant and efficient templates."
+  tagline: "Elegant and efficient."
   actions:
     - theme: brand
       text: Getting started
@@ -18,10 +18,10 @@ hero:
       link: https://github.com/antaresmugisho/pyblade
 
 features:
-  - title: Developer Experience
-    details: Lorem
-  - title: Reusable components
-    details: Lorem ipsum dolor sit amet, consectetur adipiscing elit
+  - title: Pythonic syntaxt
+    details: PyBlade offers a templating syntax that feels familiar and natural to Python developers. Write templates without living the Python confort.
+  - title: Component-Driven
+    details: Create highly interactive UIs and reusable self-contained components, with less code and greater flexibility. So, DRY.
   - title: Third-party integration
-    details: Lorem ipsum dolor sit amet, consectetur adipiscing elit
+    details: From custom form handling to data-binding and rich UI components, PyBlade works harmoniously with popular Python Web Frameworks.
 ---
