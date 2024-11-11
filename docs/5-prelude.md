@@ -13,3 +13,5 @@ PyBlade templates use the `.pyblade` file extension and are typically stored wit
 In Django or Flask applications, PyBlade views can be rendered directly within views or controllers, keeping data handling and template rendering clean and straightforward.
 
 Just pass the data you need as context, and PyBlade takes care of the rest, providing a seamless, Pythonic approach to building dynamic, secure web templates.
+
+Check out the next section to learn more about [PyBlade Directives](/6-displaying-data).
