@@ -1,3 +1,5 @@
+# PyBlade Documentation
+----
 
 # Getting started
 
