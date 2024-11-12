@@ -335,13 +335,13 @@ Nested loops are not supported yet.
 
 ### Skipping and ending loop iterations
 
-In PyBlade, you can use the `@continue` directive to skip the current iteration and move on to the next one, or the `@break` directive to exit the loop entirely based on a condition.
-
-#### Example with `@continue` and `@break`
 ::: info Upcoming feature
 This feature is not yet implemented but should be ready in the next version. This part of documentation is provided for informative purpose only.
 :::
 
+In PyBlade, you can use the `@continue` directive to skip the current iteration and move on to the next one, or the `@break` directive to exit the loop entirely based on a condition.
+
+#### Example with `@continue` and `@break`
 
 Suppose you have a list of fruits, and you want to display each fruit's name but want to skip "Banana" and stop the loop entirely once you reach "Date."
 
