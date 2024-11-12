@@ -15,3 +15,9 @@ In Django or Flask applications, PyBlade views can be rendered directly within v
 Just pass the data you need as context, and PyBlade takes care of the rest, providing a seamless, Pythonic approach to building dynamic, secure web templates.
 
 Check out the next section to learn more about [PyBlade Directives](/6-displaying-data).
+
+::: danger ⚠️ Warning: Experimental Feature
+PyBlade is currently in experimental mode. While we are actively developing and testing its features, please be aware that it may contain bugs or incomplete functionality. We recommend using PyBlade exclusively in test environments or with caution in production settings.
+
+Your feedback is invaluable as we work toward a stable release. Thank you for helping us improve PyBlade!
+:::
