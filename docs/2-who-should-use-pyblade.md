@@ -1,6 +1,13 @@
 
 # Who should use PyBlade?
 
+::: danger ⚠️ Warning: Experimental Feature
+PyBlade is currently in experimental mode. While we are actively developing and testing its features, please be aware that it may contain bugs or incomplete functionality. We recommend using PyBlade exclusively in test environments or with caution in production environments.
+
+Your feedback is invaluable as we work toward a stable release. Thank you for helping us improve PyBlade!
+:::
+
+
 PyBlade is built for developers who want to maximize efficiency and maintainability in their template code. It’s ideal for:
 
 1. **Python Developers Seeking Simple and Secure Templating**: PyBlade’s `@`-based syntax enables developers to write expressive templates with minimal overhead, providing a secure and feature-rich templating experience.

@@ -1,6 +1,12 @@
 
 # What is PyBlade ?
 
+::: danger ⚠️ Warning: Experimental Feature
+PyBlade is currently in experimental mode. While we are actively developing and testing its features, please be aware that it may contain bugs or incomplete functionality. We recommend using PyBlade exclusively in test environments or with caution in production environments.
+
+Your feedback is invaluable as we work toward a stable release. Thank you for helping us improve PyBlade!
+:::
+
 **PyBlade** is a lightweight, secure template engine for Python, designed to be both powerful and easy to use. Drawing
 inspiration from Laravel's Blade, PyBlade allows developers to build expressive, secure templates using an intuitive `@`-based syntax. While many template engines focus on backend logic, PyBlade extends into component-driven development through LiveBlade, helping you create complex, reusable UI components that reduce reliance on backend rendering and enhance performance.
 
@@ -41,10 +47,3 @@ PyBlade provides a range of directives for handling logic within templates, from
 ## How PyBlade Accelerates Development
 
 With its concise syntax and component-driven approach, PyBlade helps developers build applications faster by reducing the amount of code required to create robust templates. By focusing on `@`-based directives, PyBlade provides a less verbose, more readable syntax that makes templates easy to maintain and extend. Developers can move from idea to implementation more quickly, thanks to PyBlade’s intuitive directive system and streamlined component architecture.
-
-
-::: danger ⚠️ Warning: Experimental Feature
-PyBlade is currently in experimental mode. While we are actively developing and testing its features, please be aware that it may contain bugs or incomplete functionality. We recommend using PyBlade exclusively in test environments or with caution in production settings.
-
-Your feedback is invaluable as we work toward a stable release. Thank you for helping us improve PyBlade!
-:::

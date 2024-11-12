@@ -8,6 +8,8 @@ export default defineConfig({
     // https://vitepress.dev/reference/default-theme-config
     nav: [
       { text: 'Home', link: '/' },
+      { text: 'About', link: '/1-what-is-pyblade'},
+      { text: 'Audience', link: '/2-who-should-use-pyblade'},
       { text: 'Documentation', link: '/3-getting-started' }
     ],
 

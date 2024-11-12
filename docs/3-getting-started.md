@@ -1,6 +1,12 @@
 # PyBlade Documentation
 ----
 
+::: danger ⚠️ Warning: Experimental Feature
+PyBlade is currently in experimental mode. While we are actively developing and testing its features, please be aware that it may contain bugs or incomplete functionality. We recommend using PyBlade exclusively in test environments or with caution in production environments.
+
+Your feedback is invaluable as we work toward a stable release. Thank you for helping us improve PyBlade!
+:::
+
 # Getting started
 
 ## Installation
@@ -11,12 +17,6 @@ To install PyBlade, simply use `pip`:
 pip install pyblade
 ```
 ---
-
-::: danger ⚠️ Warning: Experimental Feature
-PyBlade is currently in experimental mode. While we are actively developing and testing its features, please be aware that it may contain bugs or incomplete functionality. We recommend using PyBlade exclusively in test environments or with caution in production settings.
-
-Your feedback is invaluable as we work toward a stable release. Thank you for helping us improve PyBlade!
-:::
 
 ## Configuration
 
