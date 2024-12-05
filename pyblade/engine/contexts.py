@@ -1,9 +1,10 @@
 class LoopContext:
     """Holds context information for loops."""
 
-    def __init__(self, items):
+    def __init__(self, items, parent=None):
         self._total_items = len(items)
         self._current_index = 0
+        self._parent = parent
 
     @property
     def index(self):
@@ -41,13 +42,15 @@ class LoopContext:
     def odd(self):
         return self.iteration % 2 != 0
 
-    def _depth(self):
-        """Should return the nesting level of the current loop."""
-        pass
+    @property
+    def parent(self):
+        """The parent's loop variable, when in a nested loop."""
+        return self._parent
 
-    def _parent(self):
-        """Should return the parent's loop variable, when in a nested loop."""
-        pass
+    @property
+    def depth(self):
+        """The nesting level of the current loop."""
+        return self.parent.depth + 1 if self.parent else 0
 
 
 class AttributesContext:

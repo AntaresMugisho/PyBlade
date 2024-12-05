@@ -2,6 +2,8 @@ import ast
 import html
 import re
 
+from django.utils.translation import gettext as _, ngettext, pgettext
+
 from . import loader
 from .contexts import AttributesContext, ClassContext, LoopContext, SlotContext
 from .exceptions import UndefinedVariableError
@@ -156,34 +158,38 @@ class Parser:
 
     def _handle_for(self, match, context):
         """Executes the for logic."""
-
         variable = match.group(1)
-        iterable = eval(match.group(2), {}, context)
+        iterable_expression = match.group(2)
         block = match.group(3)
         empty_block = match.group(4)
 
-        # Empty handling if iterable is None or empty
-        if iterable is None or len(iterable) == 0:
+        try:
+            iterable = eval(iterable_expression, {}, context)
+        except Exception as e:
+            raise ValueError(f"Error evaluating iterable expression '{iterable_expression}': {e}")
+
+        # Handle empty iterable
+        if not iterable:
             return empty_block if empty_block else ""
 
         result = []
-        loop = LoopContext(iterable)
-        for (
-            index,
-            item,
-        ) in enumerate(iterable):
+        current_loop = context.get("loop")  # Get the parent loop if any
+        loop = LoopContext(iterable, parent=current_loop)
+
+        for index, item in enumerate(iterable):
             loop.index = index
 
+            # Update local context for this iteration
             local_context = {
                 **context,
                 variable: item,
                 "loop": loop,
             }
 
-            # Reparse block for possible nested directives consideration
+            # Reparse block to process nested directives
             parsed_block = self.parse(block, local_context)
-
             result.append(parsed_block)
+
         return "".join(result)
 
     def _parse_include(self, template, context):
@@ -529,3 +535,54 @@ class Parser:
 
     def _parse_component(self):
         pass
+
+    def _parse_translations(slef, template, context):
+        """
+        Process @translate, @trans, @blocktranslate, and @plural directives in PyBlade templates.
+        """
+
+        # Handle @translate and @trans with optional context
+        def replace_trans(match):
+            text = match.group('text')
+            translation_context = match.group('context')
+            if translation_context:
+                return pgettext(translation_context.strip('"'), text.strip('"'))
+            return _(text.strip('"'))
+
+        # Handle @blocktranslate with @plural and @endblocktranslate
+        def replace_blocktrans(match):
+            block_content = match.group('block')
+            count_var = match.group('count')
+            plural = None
+            singular = None
+
+            # Parse the block for @plural
+            plural_match = re.search(r'(?P<singular>.*)@plural\s*(?P<plural>.*)', block_content, re.DOTALL)
+            if plural_match:
+                singular = plural_match.group('singular').strip()
+                plural = plural_match.group('plural').strip()
+            else:
+                singular = block_content.strip()
+
+            # Resolve count variable if provided
+            count = int(context.get(count_var.strip(), 0)) if count_var else None
+
+            # Perform translation
+            if plural and count is not None:
+                return ngettext(singular, plural, count)
+            return _(singular)
+
+        # Regex patterns
+        translate_pattern = re.compile(
+            r"@(?:trans|translate)\(\s*(?P<text>'[^']+'|\"[^\"]+\")\s*(?:,\s*context\s*=\s*(?P<context>'[^']+'|\"[^\"]+\"))?\s*\)"
+        )
+        blocktranslate_pattern = re.compile(
+            r"@blocktranslate(?:\s+count\s+(?P<count>\w+))?\s*\{(?P<block>.*?)@endblocktranslate\}",
+            re.DOTALL
+        )
+
+        # Replace directives in content
+        template = translate_pattern.sub(replace_trans, template)
+        template = blocktranslate_pattern.sub(replace_blocktrans, template)
+
+        return template

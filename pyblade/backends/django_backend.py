@@ -6,7 +6,7 @@ from django.utils.module_loading import import_string
 from pyblade import PyBlade
 
 
-class DjangoPyBlade(BaseEngine):
+class DjangoTemplates(BaseEngine):
 
     app_dirname = "templates"
 
@@ -32,6 +32,8 @@ class DjangoPyBlade(BaseEngine):
     @cached_property
     def template_context_processors(self):
         return [import_string(path) for path in self.context_processors]
+
+        
 
 
 class Template:
