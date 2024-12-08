@@ -174,8 +174,6 @@ class Parser:
         """Check if the user is not authenticated. Same as @guest"""
         return self._parse_auth_or_guest(template, context)
 
-
-
     def _parse_for(self, template, context):
         """Handle @for, @empty and @endfor directives."""
 
@@ -212,11 +210,54 @@ class Parser:
                 "loop": loop,
             }
 
-            # Reparse block to process nested directives
+
+            # Re parse block to process nested loops
             parsed_block = self.parse(block, local_context)
+            should_break, parsed_block = self._parse_break(parsed_block, local_context)
+            should_continue, parsed_block = self._parse_continue(parsed_block, local_context)
+
+            # Check for break and continue keywords before adding the block in the result
+            if should_break:
+                break
+
+            if should_continue:
+                continue
+
             result.append(parsed_block)
 
         return "".join(result)
+
+    @staticmethod
+    def _parse_break(template, context):
+        pattern = re.compile(r"@break(?:\s*\(\s*(?P<expression>.*?)\s*\))?", re.DOTALL)
+        match = pattern.search(template)
+
+        if match :
+            template = re.sub(pattern, "", template)
+            expression = match.group("expression")
+            if not expression:
+                return True, template
+            elif eval(expression, {}, context):
+                return True, template
+        return False, template
+
+    @staticmethod
+    def _parse_continue(template, context):
+        pattern = re.compile(r"@continue(?:\s*\(\s*(?P<expression>.*?)\s*\))?", re.DOTALL)
+        match = pattern.search(template)
+
+
+        if match :
+            template = re.sub(pattern, "", template)
+            expression = match.group("expression")
+            if not expression:
+                return True, template
+            elif eval(expression, {}, context):
+                return True, template
+        return False, template
+
+
+
 
     def _parse_include(self, template, context):
         """Find partials code to include in the template"""
@@ -355,7 +396,6 @@ class Parser:
             dictionary = match.group("dictionary")
             try:
                 props = eval(dictionary, {}, context)
-                props = ast.literal_eval(props)
             except SyntaxError as e:
                 raise e
             except ValueError as e:
@@ -370,7 +410,6 @@ class Parser:
         if match:
             try:
                 attrs = eval(match.group("dictionary"), {}, context)
-                attrs = ast.literal_eval(str(attrs))
             except SyntaxError as e:
                 raise e
             except ValueError as e:
@@ -417,9 +456,9 @@ class Parser:
             raise Exception("@static directive is only supported in django apps.")
 
         else:
-            path = match.group("path")
+            path = ast.literal_eval(match.group("path"))
             try:
-                return static(str(path))
+                return static(path)
             except ImproperlyConfigured as exc:
                 raise exc
 
@@ -538,11 +577,15 @@ class Parser:
     def _parse_unless(self):
         pass
 
-    def _parse_break(self):
-        pass
 
-    def _parse_continue(self):
-        pass
+
+    @staticmethod
+    def _handle_csr(match, context):
+        directive = match.group("directive")
+        expression = match.group("expression")
+        if not (eval(expression, {}, context)):
+            return ""
+        return directive
 
     def _parse_switch(self):
         pass
