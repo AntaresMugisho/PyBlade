@@ -115,7 +115,7 @@ class Parser:
         return pattern.sub(lambda match: self._handle_if(match, context), template)
 
     def _handle_if(self, match, context):
-        captures = [group for group in match.groups() if group not in (None, "")]
+        captures = [group for group in match.groups()]
 
         for i, capture in enumerate(captures[:-1]):
             if capture in ("if", "elif", "else", "auth"):
@@ -245,7 +245,6 @@ class Parser:
     def _parse_continue(template, context):
         pattern = re.compile(r"@continue(?:\s*\(\s*(?P<expression>.*?)\s*\))?", re.DOTALL)
         match = pattern.search(template)
-
 
         if match :
             template = re.sub(pattern, "", template)
@@ -576,7 +575,6 @@ class Parser:
 
     def _parse_unless(self):
         pass
-
 
 
     @staticmethod
