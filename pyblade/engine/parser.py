@@ -125,29 +125,56 @@ class Parser:
                 else:
                     return captures[i + 1]
 
-    def _parse_auth(self, template, context):
-        """Check if the user is authenticated."""
+    def _parse_auth_or_guest(self, template, context):
+        """
+        Generalized method to parse @auth or @guest directives.
+        """
+        pattern = re.compile(
+            r"@(?P<directive>auth|guest|anonymous)\s*(.*?)\s*(?:@(else)\s*(.*?))?\s*@end(?P=directive)", re.DOTALL
+        )
+        return pattern.sub(lambda match: self._handle_auth_or_guest(match, context), template)
 
-        pattern = re.compile(r"@(auth)\s*(.*?)\s*(?:@(else)\s*(.*?))?\s*@(endauth)", re.DOTALL)
-        return pattern.sub(lambda match: self._handle_auth(match, context), template)
+    @staticmethod
+    def _handle_auth_or_guest(match, context):
+        """
+        Generalized handler for @auth and @guest directives.
+        """
+        directive = match.group('directive')
 
-    def _handle_auth(self, match, context):
-        authenticated = False
-        request = context.pop("request", None)
+        is_authenticated = False
+        request = context.get("request", None)
         if request:
             try:
-                authenticated = request.user.is_authenticated
+                is_authenticated = request.user.is_authenticated
             except Exception as e:
                 raise Exception(str(e))
 
+        should_render_first_block = (
+            is_authenticated if directive == "auth" else not is_authenticated
+        )
+
         captures = [group for group in match.groups() if group not in (None, "")]
         for i, capture in enumerate(captures[:-1]):
-            if capture == "auth":
-                if authenticated:
+            if capture == directive:
+                if should_render_first_block:
                     return captures[i + 1]
             elif capture == "else":
-                if not authenticated:
+                if not should_render_first_block:
                     return captures[i + 1]
+
+    def _parse_auth(self, template, context):
+        """Check if the user is authenticated."""
+        return self._parse_auth_or_guest(template, context)
+
+    def _parse_guest(self, template, context):
+        """Check if the user is not authenticated."""
+        return self._parse_auth_or_guest(template, context)
+
+    def _parse_anonymous(self, template, context):
+        """Check if the user is not authenticated. Same as @guest"""
+        return self._parse_auth_or_guest(template, context)
+
+
 
     def _parse_for(self, template, context):
         """Handle @for, @empty and @endfor directives."""
@@ -507,8 +534,6 @@ class Parser:
         pattern = re.compile(r"{#(.*?)#}", re.DOTALL)
         return pattern.sub("", template)
 
-    def _parse_guest(self):
-        pass
 
     def _parse_unless(self):
         pass
