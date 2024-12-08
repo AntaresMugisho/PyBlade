@@ -1,4 +1,5 @@
 import os
+import re
 
 from .exceptions import TemplateNotFound
 from .template import Template
@@ -22,11 +23,13 @@ def load_template(template_name: str, directories: list | None = None) -> Templa
     if directories is not None:
         TEMPLATE_DIRS = directories
 
+    # Optionally remove .html extension if it exists
+    template_name = template_name.removesuffix(".html")
+
     template_name = template_name.replace(".", "/")
 
     for directory in TEMPLATE_DIRS:
         template_path = f"{directory.joinpath(template_name)}{TEMPLATE_EXTENSION}"
-
         if os.path.exists(template_path):
             with open(template_path, "r") as file:
                 content = file.read()

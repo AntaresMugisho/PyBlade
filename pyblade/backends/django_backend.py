@@ -1,4 +1,5 @@
 from django.template.backends.base import BaseEngine
+from django.template.backends.django import DjangoTemplates
 from django.template.backends.utils import csrf_input_lazy, csrf_token_lazy
 from django.utils.functional import cached_property
 from django.utils.module_loading import import_string
@@ -6,7 +7,7 @@ from django.utils.module_loading import import_string
 from pyblade import PyBlade
 
 
-class DjangoTemplates(BaseEngine):
+class DjangoPyBlade(BaseEngine):
 
     app_dirname = "templates"
 

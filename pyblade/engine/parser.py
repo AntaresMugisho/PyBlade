@@ -16,16 +16,15 @@ class Parser:
             "comments": self._parse_comments,
             "for": self._parse_for,
             "if": self._parse_if,
-            # "csrf": self._parse_csrf,
+            "csrf": self._parse_csrf,
             "method": self._parse_method,
-            "checked": self._parse_checked,
-            "selected": self._parse_selected,
+            "checked_selected_required": self._checked_selected_required,
             "active": self._parse_active,
             "error": self._parse_error,
             "class": self._parse_class,
-            # "url": self._parse_url,
-            # "static": self._parse_static,
-            # "auth": self._parse_auth,
+            "url": self._parse_url,
+            "static": self._parse_static,
+            "auth": self._parse_auth,
             "extends": self._parse_extends,
             "include": self._parse_include,
         }
@@ -200,7 +199,7 @@ class Parser:
 
         if match is not None:
             file_name = match.group(1) if match else None
-            partial_template = loader.load_template(f"partials.{file_name}") if file_name else None
+            partial_template = loader.load_template(file_name) if file_name else None
 
             if partial_template:
                 # Parse the content to include before replacement
@@ -224,7 +223,8 @@ class Parser:
                 raise Exception("Layout not found")
 
             try:
-                layout = loader.load_template(f"layouts.{layout_name}")
+                layout = loader.load_template(layout_name)
+                self.parse(str(layout), context)
                 return self._parse_section(template, str(layout))
             except Exception as e:
                 raise e
@@ -440,27 +440,17 @@ class Parser:
         except ImproperlyConfigured as e:
             raise Exception(str(e))
 
-    def _parse_checked(self, template, context):
-        pattern = re.compile(r"@checked\s*\(\s*(?P<expression>.*?)\s*\)", re.DOTALL)
-        return pattern.sub(lambda match: self._handle_checked(match, context), template)
+    def _checked_selected_required(self, template, context):
+        pattern = re.compile(r"@(?P<directive>checked|selected|required)\s*\(\s*(?P<expression>.*?)\s*\)", re.DOTALL)
+        return pattern.sub(lambda match: self._handle_csr(match, context), template)
 
     @staticmethod
-    def _handle_checked(match, context):
+    def _handle_csr(match, context):
+        directive = match.group("directive")
         expression = match.group("expression")
         if not (eval(expression, {}, context)):
             return ""
-        return "checked"
-
-    def _parse_selected(self, template, context):
-        pattern = re.compile(r"@selected\s*\(\s*(?P<expression>.*?)\s*\)", re.DOTALL)
-        return pattern.sub(lambda match: self._handle_selected(match, context), template)
-
-    @staticmethod
-    def _handle_selected(match, context):
-        expression = match.group("expression")
-        if not (eval(expression, {}, context)):
-            return ""
-        return "selected"
+        return directive
 
     def _parse_error(self, template, context):
         """Check if an input form contains a validation error"""
@@ -489,22 +479,24 @@ class Parser:
 
     @staticmethod
     def _handle_active(match, context):
-        route = match.group("route")
-        param = match.group("param")
+        try:
+            route = ast.literal_eval(match.group("route"))
+            param = ast.literal_eval(match.group("param")) if match.group("param") else "active"
+        except SyntaxError as e:
+            raise e
+        except ValueError as e:
+            raise e
 
-        # TODO: Check if the route is active
-        if route.is_active:
-            if param:
-                try:
-                    param = ast.literal_eval(param)
-                    return param
-                except SyntaxError as e:
-                    raise e
-                except ValueError as e:
-                    raise e
-            return "active"
+        try:
+            from django.urls import resolve
+        except ImportError:
+            raise Exception("@active directive is currenctly supported by django only")
+        else:
+            resolver_match = resolve(context.get('request').path_info)
 
-        return ""
+            if route == resolver_match.url_name:
+                return param
+            return ""
 
     def _parse_field(self, template, context):
         """To render an input field with custom attributes"""
