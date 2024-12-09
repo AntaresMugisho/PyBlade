@@ -166,13 +166,7 @@ def configure_tailwind(project_name):
         with open(tailwind_config_path, 'w') as file:
             file.write(new_config)
 
-        static_dir = os.path.join(project_name, 'static')
-        os.makedirs(static_dir, exist_ok=True)
-
-        css_file = os.path.join(static_dir, 'styles.css')
-        with open(css_file, 'w') as file:
-            file.write("@tailwind base;\n@tailwind components;\n@tailwind utilities;")
-
-        print("[✔️ INFO] TailwindCSS has been installed and configured. Add 'styles.css' to your templates.")
+        print("[✔️ INFO] Tailwind configuration updated.\n \n \n use python manage.py tailwind install to install Tailwind \n use this command to watch for changes: \n python manage.py tailwind start \n \n \n")
+        
     except FileNotFoundError:
         print(f"[❌ ERROR] Tailwind configuration file not found: {tailwind_config_path}")
