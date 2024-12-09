@@ -1,8 +1,8 @@
 import sys
 from colorama import Fore, Style
-from command.migrate import migrate
-from command.add import liveblade
-from command.init_ import init
+from pyblade.cli.command.migrate import migrate
+from pyblade.cli.command.add import liveblade
+from pyblade.cli.command.init_ import init
 
 COMMANDS = {
     "migrate": {

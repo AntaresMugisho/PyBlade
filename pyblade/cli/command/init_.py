@@ -3,7 +3,7 @@
 import os
 import subprocess
 import questionary
-from command.core.edit_page import edit_html_file
+from pyblade.cli.command.core.edit_page import edit_html_file
 
 
 def init():

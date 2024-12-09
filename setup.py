@@ -40,7 +40,7 @@ setup(
     ],
      entry_points={
         'console_scripts': [
-            'pyblade=pyblade.Pyblade_cli.main:cli',
+            'pyblade=pyblade.cli.main:cli',
         ],
     },
 )

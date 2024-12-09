@@ -28,7 +28,7 @@ class Component:
 
 def view(template, context):
     """Rend le template avec le contexte donné."""
-    template_ = loader.get_template(template)
+    template_ = loader.get_template(f"liveblade.{template}")
     return template_.render(context)  
 
 def bladeRedirect(route):

@@ -3,7 +3,7 @@ import os
 import re
 import shutil
 import subprocess
-from command.core.convert import convert_django_to_pyblade
+from pyblade.cli.command.core.convert import convert_django_to_pyblade
 
 
 def migrate():

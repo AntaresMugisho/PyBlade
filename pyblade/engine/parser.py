@@ -607,10 +607,16 @@ class Parser:
 
                 # Parse the content to include before replacement
                 try:
-                    # from components.submit import Submit
-                    parsed = self.parse(str(component_content), context)
+                    import importlib
+
+                    module = importlib.import_module(f"components.{component}")
+                    cls = getattr(module, "".join([word.capitalize() for word in component.split('_')]))
+
+                    parsed = cls().render()
                     return re.sub(pattern, parsed, template)
-                except ImportError as e:
+                except ModuleNotFoundError as e:
+                    raise e
+                except AttributeError as e:
                     raise e
                 except Exception as e:
                     raise e
