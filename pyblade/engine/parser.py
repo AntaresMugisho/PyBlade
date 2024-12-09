@@ -27,6 +27,7 @@ class Parser:
             "auth": self._parse_auth,
             "extends": self._parse_extends,
             "include": self._parse_include,
+            "liveblade": self._parse_liveblade,
         }
 
     def parse(self, template: str, context: dict) -> str:
@@ -210,7 +211,6 @@ class Parser:
                 "loop": loop,
             }
 
-
             # Re parse block to process nested loops
             parsed_block = self.parse(block, local_context)
             should_break, parsed_block = self._parse_break(parsed_block, local_context)
@@ -224,6 +224,7 @@ class Parser:
                 continue
 
             result.append(parsed_block)
+
 
         return "".join(result)
 
@@ -254,8 +255,6 @@ class Parser:
             elif eval(expression, {}, context):
                 return True, template
         return False, template
-
-
 
 
     def _parse_include(self, template, context):
@@ -576,7 +575,6 @@ class Parser:
     def _parse_unless(self):
         pass
 
-
     @staticmethod
     def _handle_csr(match, context):
         directive = match.group("directive")
@@ -585,14 +583,41 @@ class Parser:
             return ""
         return directive
 
-    def _parse_switch(self):
-        pass
-
-    def _parse_while(self):
-        pass
-
     def _parse_component(self):
         pass
+
+    def _parse_match(self):
+        pass
+
+    def _parse_liveblade(self, template, context):
+        pattern = re.compile(r"@liveblade\s*\(\s*(?P<component>.*?)\s*\)")
+        match = re.search(pattern, template)
+
+        if match is not None:
+            component = ast.literal_eval(match.group("component"))
+            component_content = loader.load_template(f"liveblade.{component}") if component else None
+
+            if component_content:
+                # Add pyblade id to the parent tag of the component
+                tag_pattern = re.compile(r"<(?P<tag>\w+)\s*(?P<attributes>.*?)>(.*)</(?P=tag)", re.DOTALL)
+
+                m = re.search(tag_pattern, str(component_content))
+                attributes = m.group("attributes")
+                component_content = re.sub(attributes, f'{attributes} liveblade_id="{component}"', str(component_content))
+
+                # Parse the content to include before replacement
+                try:
+                    # from components.submit import Submit
+                    parsed = self.parse(str(component_content), context)
+                    return re.sub(pattern, parsed, template)
+                except ImportError as e:
+                    raise e
+                except Exception as e:
+                    raise e
+
+        return template
+
+
 
     def _parse_translations(slef, template, context):
         """
