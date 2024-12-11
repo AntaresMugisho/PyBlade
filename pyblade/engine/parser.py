@@ -16,6 +16,7 @@ class Parser:
             "comments": self._parse_comments,
             "for": self._parse_for,
             "if": self._parse_if,
+            "unless": self._parse_unless,
             "csrf": self._parse_csrf,
             "method": self._parse_method,
             "checked_selected_required": self._checked_selected_required,
@@ -125,6 +126,16 @@ class Parser:
                         return captures[i + 2]
                 else:
                     return captures[i + 1]
+
+    def _parse_unless(self, template, context):
+        pattern = re.compile(r"@unless\s*\((?P<expression>.*?)\)(?P<slot>.*?)@endunless", re.DOTALL)
+        return  pattern.sub(lambda match: self._handle_unless(match, context), str(template))
+
+    @staticmethod
+    def _handle_unless(match, context):
+        if not eval(match.group('expression'), {}, context):
+            return match.group('slot')
+        return ''
 
     def _parse_auth_or_guest(self, template, context):
         """
@@ -571,9 +582,6 @@ class Parser:
         pattern = re.compile(r"{#(.*?)#}", re.DOTALL)
         return pattern.sub("", template)
 
-
-    def _parse_unless(self):
-        pass
 
     @staticmethod
     def _handle_csr(match, context):
