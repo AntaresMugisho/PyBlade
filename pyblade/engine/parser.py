@@ -120,7 +120,7 @@ class Parser:
         captures = [group for group in match.groups()]
 
         for i, capture in enumerate(captures[:-1]):
-            if capture in ("if", "elif", "else", "auth"):
+            if capture in ("if", "elif", "else"):
                 if capture in ("if", "elif"):
                     if eval(captures[i + 1], {}, context):
                         return captures[i + 2]
