@@ -9,7 +9,7 @@ class UndefinedVariableError(Exception):
         super().__init__(message)
 
 
-class TemplateNotFound(Exception):
+class TemplateNotFoundError(Exception):
     """Raised when a template file cannot be found."""
     def __init__(self, template_name: str):
         super().__init__(f"Template not found: {template_name}")

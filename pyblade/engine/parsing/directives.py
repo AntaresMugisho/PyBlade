@@ -105,6 +105,7 @@ class DirectiveParser:
 
     def _parse_if(self, template: str) -> str:
         """Process @if, @elif, and @else directives."""
+
         def replace_if(match: Match) -> str:
             try:
                 directive = match.group(1)
@@ -129,6 +130,7 @@ class DirectiveParser:
 
     def _parse_unless(self, template: str) -> str:
         """Process @unless directives."""
+        
         def replace_unless(match: Match) -> str:
             try:
                 expression = match.group('expression')

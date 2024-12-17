@@ -4,7 +4,7 @@ PyBlade template rendering engine.
 from typing import Dict, List, Optional, Union
 
 from . import loader
-from .exceptions import TemplateNotFound
+from .exceptions import TemplateNotFoundError
 from .parsing.template_processor import TemplateProcessor
 
 
@@ -51,7 +51,7 @@ class PyBlade:
             The rendered template
             
         Raises:
-            TemplateNotFound: If the template file cannot be found
+            TemplateNotFoundError: If the template file cannot be found
         """
         template = self.get_template(template_name)
         return self.render(str(template), context)
@@ -67,14 +67,14 @@ class PyBlade:
             The template content
             
         Raises:
-            TemplateNotFound: If the template file cannot be found
+            TemplateNotFoundError: If the template file cannot be found
         """
         try:
             template = loader.load_template(template_name, self._template_dirs)
             template.set_engine(self)
             return template
         except Exception as e:
-            raise TemplateNotFound(template_name) from e
+            raise TemplateNotFoundError(template_name) from e
 
     def from_string(self, template_code, context):
         pass

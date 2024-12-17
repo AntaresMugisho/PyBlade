@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 from typing import List, Optional, Union
 
-from .exceptions import TemplateNotFound
+from .exceptions import TemplateNotFoundError
 from .template import Template
 
 
@@ -48,7 +48,7 @@ class TemplateLoader:
             The template content
             
         Raises:
-            TemplateNotFound: If the template file cannot be found
+            TemplateNotFoundError: If the template file cannot be found
         """
         # Remove extension if it exists
         template_name = template_name.removesuffix(self._extension)
@@ -65,7 +65,7 @@ class TemplateLoader:
             except (IOError, OSError):
                 continue
                 
-        raise TemplateNotFound(f"{template_name}{self._extension}")
+        raise TemplateNotFoundError(f"{template_name}{self._extension}")
 
     def _read_template(self, path: Path) -> str:
         """
@@ -106,7 +106,7 @@ def load_template(template_name: str, directories: Optional[List[Union[str, Path
         The template content
         
     Raises:
-        TemplateNotFound: If the template file cannot be found
+        TemplateNotFoundError: If the template file cannot be found
     """
     if directories:
         _default_loader.add_directories(directories)
