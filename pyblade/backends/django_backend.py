@@ -17,7 +17,7 @@ class DjangoPyBlade(BaseEngine):
         super().__init__(params)
 
         self.context_processors = options.pop("context_processors", [])
-        self.engine = PyBlade(self.template_dirs)
+        self.engine = PyBlade(dirs=self.template_dirs)
 
     def from_string(self, template_code):
         return Template(self.engine.from_string(template_code), self)
@@ -38,10 +38,10 @@ class DjangoPyBlade(BaseEngine):
 
 
 class Template:
-    def __init__(self, template, backend):
-        self.template = template
+    def __init__(self, pyblade_template, backend):
+        self.pyblade_template = pyblade_template
+        self.pyblade_template.set_backend(backend)
         self.backend = backend
-        self.template.backend = backend
 
     def render(self, context=None, request=None):
         if context is None:
@@ -54,4 +54,4 @@ class Template:
             for context_processor in self.backend.template_context_processors:
                 context.update(context_processor(request))
 
-        return self.template.render(context)
+        return self.pyblade_template.render(context)

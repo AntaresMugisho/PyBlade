@@ -1,38 +1,96 @@
+"""
+PyBlade template rendering engine.
+"""
+from typing import Dict, List, Optional, Union
+
 from . import loader
 from .exceptions import TemplateNotFound
-from .parser import Parser
+from .parsing.template_processor import TemplateProcessor
 
 
 class PyBlade:
+    """Main template rendering engine class."""
 
-    def __init__(self, dirs=None):
-        self._template_dirs = dirs or []
-        self._parser = Parser()
-
-    def render(self, template: str, context: dict | None = None) -> str:
+    def __init__(self, dirs: Optional[List[str]] = None, cache_size: int = 1000, cache_ttl: int = 3600):
         """
-        Render the parsed template content with replaced values.
+        Initialize the PyBlade template engine.
+        
+        Args:
+            dirs: List of template directories
+            cache_size: Maximum number of templates to cache
+            cache_ttl: Cache time-to-live in seconds
+        """
+        self._template_dirs = dirs or []
+        self._processor = TemplateProcessor(cache_size=cache_size, cache_ttl=cache_ttl)
 
-        :param template: The file string content
-        :param context:
-        :return:
+    def render(self, template: str, context: Optional[Dict] = None) -> str:
+        """
+        Render a template with the given context.
+        
+        Args:
+            template: The template string to render
+            context: The context dictionary
+            
+        Returns:
+            The rendered template string
         """
         if context is None:
             context = {}
 
-        template_code = self._parser.parse(template, context)
+        return self._processor.render(template, context)
 
-        return template_code
+    def render_file(self, template_name: str, context: Optional[Dict] = None) -> str:
+        """
+        Load and render a template file.
+        
+        Args:
+            template_name: Name of the template file
+            context: The context dictionary
+            
+        Returns:
+            The rendered template
+            
+        Raises:
+            TemplateNotFound: If the template file cannot be found
+        """
+        template = self.get_template(template_name)
+        return self.render(str(template), context)
 
-    @staticmethod
-    def from_string(template_code):
-        return "FROM STRING"
-
-    def get_template(self, template_name):
+    def get_template(self, template_name: str) -> str:
+        """
+        Load a template file by name.
+        
+        Args:
+            template_name: Name of the template file
+            
+        Returns:
+            The template content
+            
+        Raises:
+            TemplateNotFound: If the template file cannot be found
+        """
         try:
             template = loader.load_template(template_name, self._template_dirs)
-            template.engine = self
-        except TemplateNotFound as exc:
-            raise exc
+            template.set_engine(self)
+            return template
+        except Exception as e:
+            raise TemplateNotFound(template_name) from e
 
-        return template
+    def from_string(self, template_code, context):
+        pass
+
+    def clear_cache(self) -> None:
+        """Clear the template cache."""
+        self._processor.clear_cache()
+
+    def invalidate_template(self, template: str, context: Optional[Dict] = None) -> None:
+        """
+        Invalidate a specific template in the cache.
+        
+        Args:
+            template: The template string
+            context: The context dictionary used with the template
+        """
+        if context is None:
+            context = {}
+        self._processor.invalidate_template(template, context)
