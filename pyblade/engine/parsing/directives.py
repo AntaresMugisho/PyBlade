@@ -17,17 +17,60 @@ class DirectiveParser:
         re.DOTALL
     )
     _IF_PATTERN: Pattern = re.compile(
-        r"@(if|elif|else)(?:\s*\((?P<expression>.*?)\))?\s*(?P<content>.*?)(?=@(?:elif|else|endif)|$)",
+        r"@(if)\s*\((.*?\)?)\)\s*(.*?)\s*(?:@(elif)\s*\((.*?\)?)\)\s*(.*?))*(?:@(else)\s*(.*?))?@(endif)",
         re.DOTALL
     )
     _UNLESS_PATTERN: Pattern = re.compile(
         r"@unless\s*\((?P<expression>.*?)\)(?P<slot>.*?)@endunless",
         re.DOTALL
     )
+    _SWITCH_PATTERN: Pattern = re.compile(
+        r"@switch\s*\((?P<expression>.*?)\)\s*(?P<cases>.*?)@endswitch",
+        re.DOTALL
+    )
+    _CASE_PATTERN: Pattern = re.compile(
+        r"@case\s*\((?P<value>.*?)\)\s*(?P<content>.*?)(?=@case|@default|@endswitch)",
+        re.DOTALL
+    )
+    _DEFAULT_PATTERN: Pattern = re.compile(
+        r"@default\s*(?P<content>.*?)(?=@endswitch)",
+        re.DOTALL
+    )
     _COMMENTS_PATTERN: Pattern = re.compile(r"{#(.*?)#}", re.DOTALL)
 
     def __init__(self):
         self._context: Dict[str, Any] = {}
+        self._line_map: Dict[str, int] = {}  # Maps directive positions to line numbers
+
+    def _get_line_number(self, template: str, position: int) -> int:
+        """Get the line number for a position in the template."""
+        return template.count('\n', 0, position) + 1
+
+    def _check_unclosed_tags(self, template: str) -> None:
+        """Check for unclosed directive tags and report their line numbers."""
+        # Define pairs of opening and closing tags
+        tag_pairs = {
+            '@if': '@endif',
+            '@for': '@endfor',
+            '@unless': '@endunless',
+            '@switch': '@endswitch'
+        }
+        
+        for start_tag, end_tag in tag_pairs.items():
+            # Find all occurrences of start tags
+            start_positions = [m.start() for m in re.finditer(re.escape(start_tag), template)]
+            end_positions = [m.start() for m in re.finditer(re.escape(end_tag), template)]
+            
+            if len(start_positions) > len(end_positions):
+                # Find the first unclosed tag
+                for pos in start_positions:
+                    # Count matching end tags before this position
+                    matching_ends = sum(1 for end_pos in end_positions if end_pos > pos)
+                    if matching_ends < 1:
+                        line_number = self._get_line_number(template, pos)
+                        raise DirectiveParsingError(
+                            f"Unclosed {start_tag} directive at line {line_number}"
+                        )
 
     def parse_directives(self, template: str, context: Dict[str, Any]) -> str:
         """
@@ -41,12 +84,26 @@ class DirectiveParser:
             The processed template
         """
         self._context = context
+        self._check_unclosed_tags(template)
 
         # Process directives in order
         template = self._parse_comments(template)
-        template = self._parse_for(template)
+        template = self._parse_for(template)    # Process for before any other conditional directive to avoid conflicts about context variables
+        template = self._parse_switch(template)  # Process switch before if to avoid conflicts
         template = self._parse_if(template)
         template = self._parse_unless(template)
+        template = self._parse_csrf(template),
+        template = self._parse_method(template),
+        template = self._checked_selected_required(template),
+        template = self._parse_active(template),
+        template = self._parse_error(template),
+        template = self._parse_class(template),
+        template = self._parse_url(template),
+        template = self._parse_static(template),
+        template = self._parse_auth(template),
+        template = self._parse_extends(template),
+        template = self._parse_include(template),
+        template = self._parse_liveblade(template),
         
         return template
 
@@ -107,15 +164,19 @@ class DirectiveParser:
         """Process @if, @elif, and @else directives."""
 
         def replace_if(match: Match) -> str:
-            captures = [group for group in match.groups()]
+            try:
+                captures = [group for group in match.groups()]
 
-            for i, capture in enumerate(captures[:-1]):
-                if capture in ("if", "elif", "else", "auth"):
-                    if capture in ("if", "elif"):
-                        if eval(captures[i + 1], {}, self._context):
-                            return captures[i + 2]
-                    else:
-                        return captures[i + 1]
+                for i, capture in enumerate(captures[:-1]):
+                    if capture in ("if", "elif", "else"):
+                        if capture in ("if", "elif"):
+                            if eval(captures[i + 1], {}, self._context):
+                                return captures[i + 2]
+                        else:
+                            return captures[i + 1]
+
+            except Exception as e:
+                raise DirectiveParsingError(f"Error in @{directive} directive: {str(e)}")
 
         return self._IF_PATTERN.sub(replace_if, template)
 
@@ -141,6 +202,49 @@ class DirectiveParser:
 
         return self._UNLESS_PATTERN.sub(replace_unless, template)
 
+    def _parse_switch(self, template: str) -> str:
+        """Process @switch, @case, and @default directives."""
+        def replace_switch(match: Match) -> str:
+            try:
+                expression = match.group('expression')
+                cases_block = match.group('cases')
+
+                # Evaluate the switch expression
+                try:
+                    switch_value = eval(expression, {}, self._context)
+                except Exception as e:
+                    raise DirectiveParsingError(
+                        f"Error evaluating switch expression '{expression}': {str(e)}"
+                    )
+
+                # Find all cases
+                cases = self._CASE_PATTERN.finditer(cases_block)
+                default_match = self._DEFAULT_PATTERN.search(cases_block)
+
+                # Check each case
+                for case in cases:
+                    case_value = case.group('value')
+                    try:
+                        case_result = eval(case_value, {}, self._context)
+                    except Exception as e:
+                        raise DirectiveParsingError(
+                            f"Error evaluating case value '{case_value}': {str(e)}"
+                        )
+
+                    if case_result == switch_value:
+                        return self.parse_directives(case.group('content'), self._context)
+
+                # If no case matched and there's a default, use it
+                if default_match:
+                    return self.parse_directives(default_match.group('content'), self._context)
+
+                return ""
+
+            except Exception as e:
+                raise DirectiveParsingError(f"Error in @switch directive: {str(e)}")
+
+        return self._SWITCH_PATTERN.sub(replace_switch, template)
+
     @staticmethod
     def _parse_comments(template: str) -> str:
         """Remove template comments."""
@@ -165,7 +269,7 @@ class DirectiveParser:
         return False, template
 
     @staticmethod
-    def _parse_continue(template: str, context: Dict[str, Any]) -> Tuple[bool, str]:
+    def _parse_continue(template: str) -> Tuple[bool, str]:
         """Process @continue directives."""
         pattern = re.compile(r"@continue(?:\s*\(\s*(?P<expression>.*?)\s*\))?", re.DOTALL)
         match = pattern.search(template)
@@ -176,7 +280,7 @@ class DirectiveParser:
             if not expression:
                 return True, template
             try:
-                if eval(expression, {}, context):
+                if eval(expression, {}, self._context):
                     return True, template
             except Exception as e:
                 raise DirectiveParsingError(f"Error in @continue directive: {str(e)}")
@@ -185,24 +289,24 @@ class DirectiveParser:
 
     # TODO : Update parsers
 
-    def _parse_auth_or_guest(self, template, context):
+    def _parse_auth_or_guest(self, template):
         """
         Generalized method to parse @auth or @guest directives.
         """
         pattern = re.compile(
             r"@(?P<directive>auth|guest|anonymous)\s*(.*?)\s*(?:@(else)\s*(.*?))?\s*@end(?P=directive)", re.DOTALL
         )
-        return pattern.sub(lambda match: self._handle_auth_or_guest(match, context), template)
+        return pattern.sub(lambda match: self._handle_auth_or_guest(match, self._context), template)
 
     @staticmethod
-    def _handle_auth_or_guest(match, context):
+    def _handle_auth_or_guest(match):
         """
         Generalized handler for @auth and @guest directives.
         """
         directive = match.group('directive')
 
         is_authenticated = False
-        request = context.get("request", None)
+        request = self._context.get("request", None)
         if request:
             try:
                 is_authenticated = request.user.is_authenticated
@@ -222,20 +326,20 @@ class DirectiveParser:
                 if not should_render_first_block:
                     return captures[i + 1]
 
-    def _parse_auth(self, template, context):
+    def _parse_auth(self, template):
         """Check if the user is authenticated."""
-        return self._parse_auth_or_guest(template, context)
+        return self._parse_auth_or_guest(template)
 
-    def _parse_guest(self, template, context):
+    def _parse_guest(self, template):
         """Check if the user is not authenticated."""
-        return self._parse_auth_or_guest(template, context)
+        return self._parse_auth_or_guest(template, self._context)
 
-    def _parse_anonymous(self, template, context):
+    def _parse_anonymous(self, template):
         """Check if the user is not authenticated. Same as @guest"""
-        return self._parse_auth_or_guest(template, context)
+        return self._parse_auth_or_guest(template)
 
 
-    def _parse_include(self, template, context):
+    def _parse_include(self, template):
         """Find partials code to include in the template"""
 
         pattern = re.compile(r"@include\s*\(\s*[\"']?(.*?(?:\.?\.*?)*)[\"']?\s*\)", re.DOTALL)
@@ -556,9 +660,6 @@ class DirectiveParser:
     def _parse_component(self):
         pass
 
-    def _parse_switch(self):
-        pass
-
     def _parse_liveblade(self, template, context):
         pattern = re.compile(r"@liveblade\s*\(\s*(?P<component>.*?)\s*\)")
         match = re.search(pattern, template)
@@ -643,4 +744,3 @@ class DirectiveParser:
         template = blocktranslate_pattern.sub(replace_blocktrans, template)
 
         return template
-
