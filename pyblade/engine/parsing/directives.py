@@ -107,24 +107,15 @@ class DirectiveParser:
         """Process @if, @elif, and @else directives."""
 
         def replace_if(match: Match) -> str:
-            try:
-                directive = match.group(1)
-                expression = match.group('expression')
-                content = match.group('content')
+            captures = [group for group in match.groups()]
 
-                if directive == 'if' or directive == 'elif':
-                    try:
-                        condition = eval(expression, {}, self._context)
-                    except Exception as e:
-                        raise DirectiveParsingError(
-                            f"Error evaluating condition '{expression}': {str(e)}"
-                        )
-                    return content if condition else ""
-                else:  # else
-                    return content
-
-            except Exception as e:
-                raise DirectiveParsingError(f"Error in @{directive} directive: {str(e)}")
+            for i, capture in enumerate(captures[:-1]):
+                if capture in ("if", "elif", "else", "auth"):
+                    if capture in ("if", "elif"):
+                        if eval(captures[i + 1], {}, self._context):
+                            return captures[i + 2]
+                    else:
+                        return captures[i + 1]
 
         return self._IF_PATTERN.sub(replace_if, template)
 
