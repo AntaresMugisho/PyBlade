@@ -12,8 +12,8 @@ class VariableParser:
     """Handles parsing and rendering of template variables."""
     
     # Cached regex patterns
-    _ESCAPED_VAR_PATTERN: Pattern = re.compile(r"{{\\s*(.*?(?:\\.?.*?)*)\\s*}}")
-    _UNESCAPED_VAR_PATTERN: Pattern = re.compile(r"{!!\\s*(.*?(?:\\.?.*?)*)\\s*!!}")
+    _ESCAPED_VAR_PATTERN: Pattern = re.compile(r"{{\s*(.*?(?:\.?.*?)*)\s*}}")
+    _UNESCAPED_VAR_PATTERN: Pattern = re.compile(r"{!!\s*(.*?(?:\.?.*?)*)\s*!!}")
 
     def __init__(self):
         self._context: Dict[str, Any] = {}
@@ -32,6 +32,7 @@ class VariableParser:
         self._context = context
         template = self._render_escaped_variables(template)
         template = self._render_unescaped_variables(template)
+
         return template
 
     def _render_escaped_variables(self, template: str) -> str:

@@ -64,6 +64,7 @@ class TemplateProcessor:
         # First process all directives
         template = self.directive_parser.parse_directives(template, context)
         
+
         # Then process variables
         template = self.variable_parser.parse_variables(template, context)
         
