@@ -167,9 +167,7 @@ class DirectiveParser:
 
         # Process directives in order
         template = self._parse_comments(template)
-        template = self._parse_verbatim_shorthand(template)  # Process shorthand verbatim first
         template = self._parse_verbatim(template)
-        template = self._parse_comment(template)
         template = self._parse_for(template)
         template = self._parse_switch(template)
         template = self._parse_if(template)
@@ -191,9 +189,10 @@ class DirectiveParser:
         template = self._parse_widthratio(template)
         template = self._parse_with(template)
         template = self._parse_component(template)
+        template = self._parse_url(template)
         
         template = self._parse_csrf(template)
-        template = self._parse_liveblade_scripts(template)  # Process liveblade scripts last
+        template = self._parse_liveblade_scripts(template)
         return template
 
     def _parse_for(self, template: str) -> str:
@@ -334,10 +333,97 @@ class DirectiveParser:
 
         return self._SWITCH_PATTERN.sub(replace_switch, template)
 
-    @staticmethod
-    def _parse_comments(template: str) -> str:
-        """Remove template comments."""
-        return DirectiveParser._COMMENTS_PATTERN.sub("", template)
+    def _parse_comments(self, template: str) -> str:
+        """Process both inline comments ({# #}) and block comments (@comment)."""
+        # First process inline comments
+        template = self._COMMENTS_PATTERN.sub("", template)
+        
+        # Then process block comments
+        def replace_comment(match: Match) -> str:
+            try:
+                return ''  # Remove the comment and its content
+            except Exception as e:
+                raise DirectiveParsingError(f"Error in comment directive: {str(e)}")
+        
+        return self._COMMENT_PATTERN.sub(replace_comment, template)
+
+    def _parse_verbatim(self, template: str) -> str:
+        """
+        Process both @verbatim blocks and shorthand verbatim (@{{ }}).
+        The shorthand is processed first to prevent interference with block processing.
+        """
+        # First process shorthand verbatim (@{{ }})
+        def replace_shorthand(match: Match) -> str:
+            try:
+                return match.group(1)  # Return the content without the @ prefix
+            except Exception as e:
+                raise DirectiveParsingError(f"Error in verbatim shorthand: {str(e)}")
+        
+        template = self._VERBATIM_SHORTHAND_PATTERN.sub(replace_shorthand, template)
+        
+        # Then process verbatim blocks
+        def replace_verbatim(match: Match) -> str:
+            try:
+                return match.group('content')  # Return the content without processing
+            except Exception as e:
+                raise DirectiveParsingError(f"Error in @verbatim directive: {str(e)}")
+        
+        return self._VERBATIM_PATTERN.sub(replace_verbatim, template)
+
+    def _parse_url(self, template: str) -> str:
+        """Process @url directive with support for Django-style 'as' variable assignment."""
+        def replace_url(match: Match) -> str:
+            try:
+                url_pattern = match.group('pattern').strip('\'"')
+                params = match.group('params')
+                as_var = match.group('as_var')
+                
+                # Build URL parameters
+                url_params = []
+                if params:
+                    for param in params.split(','):
+                        param = param.strip()
+                        if '=' in param:
+                            key, value = param.split('=', 1)
+                            key = key.strip()
+                            value = value.strip()
+                            try:
+                                # Evaluate the value in the current context
+                                evaluated_value = eval(value, {}, self._context)
+                                url_params.append((key, evaluated_value))
+                            except Exception as e:
+                                raise DirectiveParsingError(f"Error evaluating URL parameter '{value}': {str(e)}")
+                
+                # Get URL patterns from context
+                urlconf = self._context.get('urlconf', None)
+                if not urlconf:
+                    raise DirectiveParsingError("URL configuration not found in context")
+                
+                try:
+                    # Resolve URL pattern
+                    from django.urls import reverse
+                    url = reverse(url_pattern, args=[p[1] for p in url_params if not p[0]], 
+                                kwargs={p[0]: p[1] for p in url_params if p[0]})
+                    
+                    # If 'as' variable is specified, store in context and return empty string
+                    if as_var:
+                        self._context[as_var.strip()] = url
+                        return ''
+                    return url
+                    
+                except Exception as e:
+                    raise DirectiveParsingError(f"Error resolving URL '{url_pattern}': {str(e)}")
+                
+            except Exception as e:
+                raise DirectiveParsingError(f"Error in @url directive: {str(e)}")
+        
+        # Updated pattern to support 'as' variable assignment
+        url_pattern = re.compile(
+            r"@url\s*\(\s*(?P<pattern>['\"].*?['\"])\s*(?:,\s*(?P<params>.*?))?\s*(?:\s+as\s+(?P<as_var>\w+))?\s*\)",
+            re.DOTALL
+        )
+        
+        return url_pattern.sub(replace_url, template)
 
     @staticmethod
     def _parse_break(template: str) -> Tuple[bool, str]:

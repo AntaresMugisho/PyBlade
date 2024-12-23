@@ -243,13 +243,13 @@ def test_malformed_if_structure():
     """Test error handling for malformed if structures."""
     parser = DirectiveParser()
     
-    # Missing @endif
+    # Test missing @endif
     template = "@if(condition) content"
     with pytest.raises(DirectiveParsingError) as exc_info:
         parser.parse_directives(template, {"condition": True})
     assert "Malformed" in str(exc_info.value)
     
-    # Mismatched @endif
+    # Test mismatched @endif
     template = "@if(a) @if(b) nested @endif content"
     with pytest.raises(DirectiveParsingError) as exc_info:
         parser.parse_directives(template, {"a": True, "b": True})
@@ -514,3 +514,206 @@ def test_switch_error_handling():
     with pytest.raises(DirectiveParsingError) as exc_info:
         parser.parse_directives(template, {"value": 1})
     assert "undefined_var" in str(exc_info.value)
+
+
+def test_comment_directives():
+    """Test both inline and block comments."""
+    parser = DirectiveParser()
+    
+    # Test inline comments
+    template = "Hello{# This is a comment #}World"
+    result = parser.parse_directives(template, {})
+    assert result == "HelloWorld"
+    
+    # Test block comments
+    template = """
+    Start
+    @comment
+        This is a
+        multiline comment
+    @endcomment
+    End"""
+    result = parser.parse_directives(template, {})
+    assert "Start" in result and "End" in result
+    assert "This is a" not in result
+    
+    # Test nested comments
+    template = """
+    @comment
+        Outer comment
+        {# Inner comment #}
+    @endcomment
+    """
+    result = parser.parse_directives(template, {})
+    assert result.strip() == ""
+
+
+def test_verbatim_directives():
+    """Test both verbatim blocks and shorthand verbatim."""
+    parser = DirectiveParser()
+    
+    # Test verbatim block
+    template = """
+    @verbatim
+        {{ user.name }}
+        @if(condition)
+            Content
+        @endif
+    @endverbatim
+    """
+    result = parser.parse_directives(template, {"user": {"name": "John"}})
+    assert "{{ user.name }}" in result
+    assert "@if(condition)" in result
+    
+    # Test shorthand verbatim
+    template = "Normal: {{ value }}, Verbatim: @{{ value }}"
+    result = parser.parse_directives(template, {"value": "test"})
+    assert "Normal: test" in result
+    assert "Verbatim: {{ value }}" in result
+    
+    # Test mixed usage
+    template = """
+    @verbatim
+        @{{ nested.shorthand }}
+        {{ regular.syntax }}
+    @endverbatim
+    """
+    result = parser.parse_directives(template, {})
+    assert "@{{ nested.shorthand }}" in result
+    assert "{{ regular.syntax }}" in result
+
+
+def test_url_directive():
+    """Test URL directive with various features."""
+    parser = DirectiveParser()
+    
+    # Mock Django's reverse function
+    class MockReverse:
+        def __call__(self, pattern, args=None, kwargs=None):
+            if pattern == "user-profile":
+                return f"/user/{kwargs.get('id', '')}"
+            elif pattern == "search":
+                return f"/search?q={kwargs.get('query', '')}"
+            return "/"
+    
+    # Add mock to context
+    import sys
+    mock_module = type('module', (), {'reverse': MockReverse()})
+    sys.modules['django.urls'] = mock_module
+    
+    # Test basic URL
+    template = '@url("user-profile", id=123)'
+    result = parser.parse_directives(template, {"urlconf": {}})
+    assert result == "/user/123"
+    
+    # Test URL with multiple parameters
+    template = '@url("search", query=search_term)'
+    result = parser.parse_directives(template, {
+        "urlconf": {},
+        "search_term": "test"
+    })
+    assert result == "/search?q=test"
+    
+    # Test URL with 'as' variable
+    template = '@url("user-profile", id=user_id) as profile_url {{ profile_url }}'
+    result = parser.parse_directives(template, {
+        "urlconf": {},
+        "user_id": 456
+    })
+    assert "/user/456" in result
+    
+    # Test error handling
+    with pytest.raises(DirectiveParsingError):
+        parser.parse_directives('@url("invalid")', {})
+
+
+def test_component_directive():
+    """Test component directive functionality."""
+    parser = DirectiveParser()
+    
+    # Create a test component file
+    import os
+    import tempfile
+    
+    with tempfile.TemporaryDirectory() as temp_dir:
+        os.makedirs(os.path.join(temp_dir, "components"))
+        component_path = os.path.join(temp_dir, "components/alert.html")
+        
+        with open(component_path, "w") as f:
+            f.write("""
+            <div class="{{ type }}">
+                <h2>{{ title }}</h2>
+                {{ slot }}
+            </div>
+            """)
+        
+        # Test basic component usage
+        template = """
+        @component("alert", type="error", title="Error")
+            <p>Something went wrong!</p>
+        @endcomponent
+        """
+        result = parser.parse_directives(template, {})
+        assert 'class="error"' in result
+        assert "<h2>Error</h2>" in result
+        assert "<p>Something went wrong!</p>" in result
+        
+        # Test component with dynamic data
+        template = '@component("alert", type=alert_type, title=alert_title){{ message }}@endcomponent'
+        result = parser.parse_directives(template, {
+            "alert_type": "success",
+            "alert_title": "Great!",
+            "message": "Operation completed"
+        })
+        assert 'class="success"' in result
+        assert "<h2>Great!</h2>" in result
+        assert "Operation completed" in result
+
+
+def test_liveblade_scripts_directive():
+    """Test liveblade_scripts directive functionality."""
+    parser = DirectiveParser()
+    
+    # Test basic script inclusion
+    template = "@liveblade_scripts"
+    result = parser.parse_directives(template, {})
+    assert '<script src="/static/js/liveblade.js"></script>' in result
+    assert "window.liveblade = new Liveblade();" in result
+    
+    # Test with CSRF token
+    template = "@liveblade_scripts"
+    result = parser.parse_directives(template, {"csrf_token": "test-token"})
+    assert 'content="test-token"' in result
+    
+    # Test with custom attributes
+    template = '@liveblade_scripts(poll_interval=2000, debug="true")'
+    result = parser.parse_directives(template, {})
+    assert "poll_interval" in result
+    assert "2000" in result
+    assert "debug" in result
+    assert "true" in result
+
+
+def test_directive_error_handling():
+    """Test error handling for all directives."""
+    parser = DirectiveParser()
+    
+    # Test component not found
+    with pytest.raises(DirectiveParsingError) as exc:
+        parser.parse_directives('@component("nonexistent")', {})
+    assert "Component not found" in str(exc.value)
+    
+    # Test invalid URL
+    with pytest.raises(DirectiveParsingError) as exc:
+        parser.parse_directives('@url("invalid")', {})
+    assert "URL configuration not found" in str(exc.value)
+    
+    # Test unclosed verbatim
+    with pytest.raises(DirectiveParsingError) as exc:
+        parser.parse_directives('@verbatim{{ content }}', {})
+    assert "Unclosed" in str(exc.value)
+    
+    # Test invalid component data
+    with pytest.raises(DirectiveParsingError) as exc:
+        parser.parse_directives('@component("alert", invalid_syntax)', {})
+    assert "Error processing component data" in str(exc.value)
