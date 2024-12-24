@@ -8,13 +8,13 @@ with open("README.md", "r") as file:
 setup(
     name="PyBlade",
     packages=["pyblade"],
-    version="0.1.7",
+    version="0.1.8",
     license="MIT",
     description="PyBlade is a lightweight template engine for Python, initially designed for Django. Inspired by "
     "Laravel's Blade and Livewire, it simplifies dynamic template creation with developer-friendly @-based "
     "directives and component support, all while prioritizing security.",
     url="https://github.com/antaresmugisho/pyblade",
-    download_url="https://github.com/antaresmugisho/pyblade/archive/refs/tags/v0.1.4-alpha.tar.gz",
+    download_url="https://github.com/antaresmugisho/pyblade/archive/refs/tags/v0.1.8-alpha.tar.gz",
     long_description=long_description,
     long_description_content_type="text/markdown",
     author="Antares Mugisho",
@@ -28,17 +28,18 @@ setup(
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
         "Framework :: Django",
         "Topic :: Software Development :: Libraries :: Python Modules",
         "Topic :: Internet :: WWW/HTTP :: Dynamic Content :: CGI Tools/Libraries",
         "Topic :: Text Processing :: Markup :: HTML",
         "Security :: Security",
     ],
-     install_requires=[
+    install_requires=[
         'questionary', 
         'colorama' 
     ],
-     entry_points={
+    entry_points={
         'console_scripts': [
             'pyblade=pyblade.cli.main:cli',
         ],

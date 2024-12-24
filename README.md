@@ -52,12 +52,10 @@ PyBlade uses the standard `.html` file extension for templates, making it compat
 ## IDE Support
 
 ### Available Now
-- **Visual Studio Code**: **PyBlade IntelliSense** in the VS Code marketplace
+- **PyBlade IntelliSense** in the VS Code marketplace with support of:
   - Syntax highlighting
   - Snippets
-  - IntelliSense
   - Auto-completion for directives and components
-  - Live template preview
 
 ### Coming Soon
 - **JetBrains IDEs** (PyCharm, WebStorm, etc.)
@@ -103,10 +101,10 @@ PyBlade is open source and welcomes contributions! Here's how you can help:
 
 - **Core Development**: Visit our [PyBlade GitHub repository](https://github.com/antaresmugisho/pyblade)
 - **IDE Extensions**: Help develop extensions for various editors
-    - [PyBlade IntelliSense for VS Code](https://github.com/antaresmugisho/pyblade)
-    - [PyBlade IntelliSense for Sublime Text](https://github.com/antaresmugisho/pyblade)
-    - [PyBlade IntelliSense for JetBrains IDEs](https://github.com/antaresmugisho/pyblade)
-    - [PyBlade IntelliSense for Atom](https://github.com/antaresmugisho/pyblade)
+    - [PyBlade IntelliSense for VS Code](https://github.com/antaresmugisho/pybladeintellisense-vscode)
+    - [PyBlade IntelliSense for Sublime Text](https://github.com/antaresmugisho/pybladeintellisense-sublime)
+    - [PyBlade IntelliSense for JetBrains IDEs](https://github.com/antaresmugisho/pybladeintellisense-jetbrains)
+    - [PyBlade IntelliSense for Atom](https://github.com/antaresmugisho/pybladeintellisense-atom)
 - **Documentation**: Improve our docs from the [core repository](https://github.com/antaresmugisho/pyblade)
 - **Bug Reports**: Submit issues on GitHub
 - **Feature Requests**: Share your ideas through GitHub discussions
