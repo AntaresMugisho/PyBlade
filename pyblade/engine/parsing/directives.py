@@ -7,6 +7,7 @@ import json
 from typing import Any, Dict, Match, Pattern, Tuple, Optional
 from ..exceptions import DirectiveParsingError
 from ..contexts import LoopContext
+from .variables import VariableParser
 
 
 class DirectiveParser:
@@ -120,6 +121,7 @@ class DirectiveParser:
     def __init__(self):
         self._context: Dict[str, Any] = {}
         self._line_map: Dict[str, int] = {}  # Maps directive positions to line numbers
+        self._variable_parser = VariableParser()
 
     def _get_line_number(self, template: str, position: int) -> int:
         """Get the line number for a position in the template."""
@@ -226,15 +228,12 @@ class DirectiveParser:
 
             for index, item in enumerate(iterable):
                 loop.index = index
-                local_context = {
-                    **self._context,
-                    variable: item,
-                    "loop": loop,
-                }
+                self._context.update({variable: item, "loop": loop})
 
-                parsed_block = self.parse_directives(block, local_context)
-                should_break, parsed_block = self._parse_break(parsed_block, local_context)
-                should_continue, parsed_block = self._parse_continue(parsed_block, local_context)
+                parsed_block = self._variable_parser.parse_variables(block, self._context)
+
+                should_break, parsed_block = self._parse_break(parsed_block)
+                should_continue, parsed_block = self._parse_continue(parsed_block)
 
                 if should_break:
                     break

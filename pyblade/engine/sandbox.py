@@ -254,6 +254,9 @@ def _is_safe_ast(node: ast.AST, max_power: int = 100) -> bool:
     Returns:
         bool: True if the AST is safe, False otherwise
     """
+
+    print(node)
+
     if not isinstance(node, tuple(_get_safe_nodes())):
         return False
     

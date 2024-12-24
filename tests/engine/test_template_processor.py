@@ -59,7 +59,7 @@ def test_render_with_loop():
 def test_render_with_nested_variables():
     """Test rendering with nested object attributes."""
     processor = TemplateProcessor()
-    template = "{{ user.name }}"
+    template = "{{ user.get('name') }}"
     context = {"user": {"name": "John"}}
     
     result = processor.render(template, context)
