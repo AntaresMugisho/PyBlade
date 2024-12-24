@@ -27,15 +27,15 @@ class DirectiveParser:
         re.DOTALL
     )
     _SWITCH_PATTERN: Pattern = re.compile(
-        r"@switch\s*\((?P<expression>.*?)\)\s*(?P<cases>.*?)@endswitch",
+        r"@(?P<directive>switch|match)\s*\((?P<expression>.*?)\)\s*(?P<cases>.*?)@end(?P=directive)",
         re.DOTALL
     )
     _CASE_PATTERN: Pattern = re.compile(
-        r"@case\s*\((?P<value>.*?)\)\s*(?P<content>.*?)(?=@case|@default|@endswitch)",
+        r"@case\s*\((?P<value>.*?)\)\s*(?P<content>.*?)(?=@case|@default|@end(switch|match)|$)",
         re.DOTALL
     )
     _DEFAULT_PATTERN: Pattern = re.compile(
-        r"@default\s*(?P<content>.*?)(?=@endswitch)",
+        r"@default\s*(?P<content>.*?)$",
         re.DOTALL
     )
     _COMMENTS_PATTERN: Pattern = re.compile(r"{#(.*?)#}", re.DOTALL)
@@ -171,10 +171,13 @@ class DirectiveParser:
         template = self._parse_comments(template)
         template = self._parse_verbatim(template)
         template = self._parse_for(template)
-        template = self._parse_switch(template)
         template = self._parse_if(template)
+        template = self._parse_switch(template)
         template = self._parse_unless(template)
-        
+        template = self._parse_auth(template)
+        template = self._parse_guest(template)
+        template = self._parse_anonymous(template)
+
         # Django-like directives
         template = self._parse_autoescape(template)
         template = self._parse_cycle(template)
@@ -291,6 +294,7 @@ class DirectiveParser:
 
     def _parse_switch(self, template: str) -> str:
         """Process @switch, @case, and @default directives."""
+        
         def replace_switch(match: Match) -> str:
             try:
                 expression = match.group('expression')
@@ -307,7 +311,7 @@ class DirectiveParser:
                 # Find all cases
                 cases = self._CASE_PATTERN.finditer(cases_block)
                 default_match = self._DEFAULT_PATTERN.search(cases_block)
-
+                
                 # Check each case
                 for case in cases:
                     case_value = case.group('value')
@@ -467,46 +471,46 @@ class DirectiveParser:
         """
         Generalized method to parse @auth or @guest directives.
         """
+        def handle_auth_or_guest(match):
+            """
+            Generalized handler for @auth and @guest directives.
+            """
+            directive = match.group('directive')
+
+            is_authenticated = False
+            request = self._context.get("request", None)
+            if request:
+                try:
+                    is_authenticated = request.user.is_authenticated
+                except Exception as e:
+                    raise Exception(str(e))
+
+            should_render_first_block = (
+                is_authenticated if directive == "auth" else not is_authenticated
+            )
+
+            captures = [group for group in match.groups() if group not in (None, "")]
+            for i, capture in enumerate(captures[:-1]):
+                if capture == directive:
+                    if should_render_first_block:
+                        return captures[i + 1]
+                elif capture == "else":
+                    if not should_render_first_block:
+                        return captures[i + 1]
+
         pattern = re.compile(
             r"@(?P<directive>auth|guest|anonymous)\s*(.*?)\s*(?:@(else)\s*(.*?))?\s*@end(?P=directive)", re.DOTALL
         )
-        return pattern.sub(lambda match: self._handle_auth_or_guest(match, self._context), template)
+        return pattern.sub(lambda match: handle_auth_or_guest(match), template)
 
-    @staticmethod
-    def _handle_auth_or_guest(match):
-        """
-        Generalized handler for @auth and @guest directives.
-        """
-        directive = match.group('directive')
-
-        is_authenticated = False
-        request = self._context.get("request", None)
-        if request:
-            try:
-                is_authenticated = request.user.is_authenticated
-            except Exception as e:
-                raise Exception(str(e))
-
-        should_render_first_block = (
-            is_authenticated if directive == "auth" else not is_authenticated
-        )
-
-        captures = [group for group in match.groups() if group not in (None, "")]
-        for i, capture in enumerate(captures[:-1]):
-            if capture == directive:
-                if should_render_first_block:
-                    return captures[i + 1]
-            elif capture == "else":
-                if not should_render_first_block:
-                    return captures[i + 1]
-
+    
     def _parse_auth(self, template):
         """Check if the user is authenticated."""
         return self._parse_auth_or_guest(template)
 
     def _parse_guest(self, template):
         """Check if the user is not authenticated."""
-        return self._parse_auth_or_guest(template, self._context)
+        return self._parse_auth_or_guest(template)
 
     def _parse_anonymous(self, template):
         """Check if the user is not authenticated. Same as @guest"""
