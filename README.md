@@ -52,7 +52,7 @@ PyBlade uses the standard `.html` file extension for templates, making it compat
 ## IDE Support
 
 ### Available Now
-- **PyBlade IntelliSense** in the VS Code marketplace with support of:
+- [**PyBlade IntelliSense**](https://marketplace.visualstudio.com/items?itemName=antares.pyblade-intellisense) in the VS Code marketplace with support of:
   - Syntax highlighting
   - Snippets
   - Auto-completion for directives and components
