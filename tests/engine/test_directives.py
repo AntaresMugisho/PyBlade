@@ -244,13 +244,18 @@ def test_malformed_if_structure():
     parser = DirectiveParser()
     
     # Test missing @endif
-    template = "@if(condition) content"
+    template = """
+    @if(condition)
+        Content
+    """
     with pytest.raises(DirectiveParsingError) as exc_info:
         parser.parse_directives(template, {"condition": True})
     assert "Malformed" in str(exc_info.value)
     
     # Test mismatched @endif
-    template = "@if(a) @if(b) nested @endif content"
+    template = """
+    @if(a) @if(b) nested @endif content
+    """
     with pytest.raises(DirectiveParsingError) as exc_info:
         parser.parse_directives(template, {"a": True, "b": True})
     assert "Malformed" in str(exc_info.value)
@@ -284,7 +289,7 @@ def test_parse_auth_directive(mock_request):
     # Test with authenticated user
     mock_request.user.is_authenticated = True
     result = parser.parse_directives(template, {"request": mock_request})
-    assert result == " content "
+    assert result == "content"
     
     # Test with unauthenticated user
     mock_request.user.is_authenticated = False
@@ -305,7 +310,7 @@ def test_parse_guest_directive(mock_request):
     # Test with unauthenticated user
     mock_request.user.is_authenticated = False
     result = parser.parse_directives(template, {"request": mock_request})
-    assert result == " content "
+    assert result == "content"
 
 
 def test_parse_props_directive():
@@ -500,9 +505,9 @@ def test_switch_error_handling():
             One
     @endswitch
     """
-    with pytest.raises(DirectiveParsingError) as exc_info:
+    with pytest.raises(DirectiveParsingError) as exc:
         parser.parse_directives(template, {})
-    assert "undefined_var" in str(exc_info.value)
+    assert "undefined_var" in str(exc.value)
     
     # Test invalid case expression
     template = """
@@ -511,9 +516,9 @@ def test_switch_error_handling():
             One
     @endswitch
     """
-    with pytest.raises(DirectiveParsingError) as exc_info:
+    with pytest.raises(DirectiveParsingError) as exc:
         parser.parse_directives(template, {"value": 1})
-    assert "undefined_var" in str(exc_info.value)
+    assert "undefined_var" in str(exc.value)
 
 
 def test_comment_directives():
@@ -717,3 +722,300 @@ def test_directive_error_handling():
     with pytest.raises(DirectiveParsingError) as exc:
         parser.parse_directives('@component("alert", invalid_syntax)', {})
     assert "Error processing component data" in str(exc.value)
+
+
+def test_style_directive():
+    """Test @style directive functionality."""
+    parser = DirectiveParser()
+    
+    # Test basic style
+    template = '<div @style({"color: red;": True})>Test</div>'
+    result = parser.parse_directives(template, {})
+    assert 'style="color: red;"' in result
+    
+    # Test multiple styles
+    template = '<div @style({"color: red;": True, "font-weight: bold;": True})>Test</div>'
+    result = parser.parse_directives(template, {})
+    assert 'style="color: red; font-weight: bold;"' in result
+    
+    # Test conditional styles
+    context = {"isError": True, "isBold": False}
+    template = '<div @style({"color: red;": isError, "font-weight: bold;": isBold})>Test</div>'
+    result = parser.parse_directives(template, context)
+    assert 'style="color: red;"' in result
+    assert 'font-weight: bold' not in result
+    
+    # Test with expressions
+    context = {"count": 5}
+    template = '<div @style({"color: red;": count > 3, "color: blue;": count < 3})>Test</div>'
+    result = parser.parse_directives(template, context)
+    assert 'style="color: red;"' in result
+    assert 'color: blue' not in result
+    
+    # Test empty result when no styles are active
+    template = '<div @style({"color: red;": False})>Test</div>'
+    result = parser.parse_directives(template, {})
+    assert 'style=' not in result
+    
+    # Test style cleanup
+    template = '<div @style({"  color: red  ;  ": True})>Test</div>'
+    result = parser.parse_directives(template, {})
+    assert 'style="color: red;"' in result
+
+
+def test_style_directive_errors():
+    """Test error handling in @style directive."""
+    parser = DirectiveParser()
+    
+    # Test invalid dictionary
+    with pytest.raises(DirectiveParsingError) as exc:
+        template = '<div @style("not a dict")>Test</div>'
+        parser.parse_directives(template, {})
+    assert "requires a dictionary" in str(exc.value)
+    
+    # Test invalid condition
+    with pytest.raises(DirectiveParsingError) as exc:
+        template = '<div @style({"color: red;": "invalid"})>Test</div>'
+        parser.parse_directives(template, {})
+    assert "Error in @style directive" in str(exc.value)
+    
+    # Test missing context variable
+    with pytest.raises(DirectiveParsingError) as exc:
+        template = '<div @style({"color: red;": undefined_var})>Test</div>'
+        parser.parse_directives(template, {})
+    assert "Error in @style directive" in str(exc.value)
+
+
+def test_class_directive():
+    """Test @class directive functionality."""
+    parser = DirectiveParser()
+    
+    # Test basic class
+    template = '<div @class({"active": True})>Test</div>'
+    result = parser.parse_directives(template, {})
+    assert 'class="active"' in result
+    
+    # Test multiple classes
+    template = '<div @class({"active": True, "bold": True})>Test</div>'
+    result = parser.parse_directives(template, {})
+    assert 'class="active bold"' in result
+    
+    # Test conditional classes
+    context = {"isActive": True, "isDisabled": False}
+    template = '<div @class({"active": isActive, "disabled": isDisabled})>Test</div>'
+    result = parser.parse_directives(template, context)
+    assert 'class="active"' in result
+    assert 'disabled' not in result
+    
+    # Test with expressions
+    context = {"count": 5}
+    template = '<div @class({"highlight": count > 3, "dim": count < 3})>Test</div>'
+    result = parser.parse_directives(template, context)
+    assert 'class="highlight"' in result
+    assert 'dim' not in result
+    
+    # Test empty result when no classes are active
+    template = '<div @class({"active": False})>Test</div>'
+    result = parser.parse_directives(template, {})
+    assert 'class=' not in result
+    
+    # Test class name cleanup
+    template = '<div @class({"  active   ": True})>Test</div>'
+    result = parser.parse_directives(template, {})
+    assert 'class="active"' in result
+    
+    # Test with multiple conditions
+    context = {"isAdmin": True, "hasErrors": True, "isNew": False}
+    template = '''
+        <div @class({
+            "admin-view": isAdmin,
+            "error-state": hasErrors,
+            "new-item": isNew
+        })>Test</div>
+    '''
+    result = parser.parse_directives(template, context)
+    assert 'admin-view' in result
+    assert 'error-state' in result
+    assert 'new-item' not in result
+
+
+def test_class_directive_errors():
+    """Test error handling in @class directive."""
+    parser = DirectiveParser()
+    
+    # Test invalid dictionary
+    with pytest.raises(DirectiveParsingError) as exc:
+        template = '<div @class("not a dict")>Test</div>'
+        parser.parse_directives(template, {})
+    assert "requires a dictionary" in str(exc.value)
+    
+    # Test invalid condition
+    with pytest.raises(DirectiveParsingError) as exc:
+        template = '<div @class({"active": "invalid"})>Test</div>'
+        parser.parse_directives(template, {})
+    assert "Error in @class directive" in str(exc.value)
+    
+    # Test missing context variable
+    with pytest.raises(DirectiveParsingError) as exc:
+        template = '<div @class({"active": undefined_var})>Test</div>'
+        parser.parse_directives(template, {})
+    assert "Error in @class directive" in str(exc.value)
+    
+    # Test malformed syntax
+    with pytest.raises(DirectiveParsingError) as exc:
+        template = '<div @class({active: True)>Test</div>'
+        parser.parse_directives(template, {})
+    assert "Error in @class directive" in str(exc.value)
+
+
+def test_include_directive():
+    """Test @include directive functionality."""
+    parser = DirectiveParser()
+    
+    # Test basic include
+    template = '@include("partials.header")'
+    result = parser.parse_directives(template, {})
+    # Result will depend on the actual content of partials/header.html
+    
+    # Test include with data
+    template = '@include("components.alert", {"type": "error", "message": "Error!"})'
+    result = parser.parse_directives(template, {})
+    # Result will include the alert component with the provided data
+    
+    # Test include with context variables
+    context = {"user": {"name": "John"}}
+    template = '@include("partials.welcome", {"name": user.name})'
+    result = parser.parse_directives(template, context)
+    # Result will include the welcome partial with the user's name
+    
+    # Test nested includes
+    template = '@include("layouts.base")'  # base.html includes other partials
+    result = parser.parse_directives(template, {})
+    # Result will include the base layout with all nested includes
+
+
+def test_include_directive_errors():
+    """Test error handling in @include directive."""
+    parser = DirectiveParser()
+    
+    # Test invalid path format
+    with pytest.raises(DirectiveParsingError) as exc:
+        template = '@include("invalid/path")'  # Should use dots instead of slashes
+        parser.parse_directives(template, {})
+    assert "Error in @include directive" in str(exc.value)
+    
+    # Test missing template
+    with pytest.raises(DirectiveParsingError) as exc:
+        template = '@include("nonexistent.template")'
+        parser.parse_directives(template, {})
+    assert "Could not find partial template" in str(exc.value)
+    
+    # Test invalid data
+    with pytest.raises(DirectiveParsingError) as exc:
+        template = '@include("partials.header", "invalid")'  # Data should be a dict
+        parser.parse_directives(template, {})
+    assert "data must be a dictionary" in str(exc.value)
+    
+    # Test invalid context variable
+    with pytest.raises(DirectiveParsingError) as exc:
+        template = '@include("partials.header", {"name": undefined_var})'
+        parser.parse_directives(template, {})
+    assert "Error processing @include data" in str(exc.value)
+
+
+def test_field_directive():
+    """Test @field directive functionality."""
+    from django import forms
+    
+    class TestForm(forms.Form):
+        username = forms.CharField(max_length=100, required=True)
+        email = forms.EmailField(required=False)
+        password = forms.CharField(widget=forms.PasswordInput())
+        remember = forms.BooleanField(required=False)
+    
+    parser = DirectiveParser()
+    form = TestForm()
+    context = {'form': form}
+    
+    # Test basic text input with HTML-like attributes
+    template = '@field(form.username, class="form-control" placeholder="Enter username" required)'
+    result = parser.parse_directives(template, context)
+    assert 'type="text"' in result
+    assert 'name="username"' in result
+    assert 'class="form-control"' in result
+    assert 'placeholder="Enter username"' in result
+    assert 'required' in result
+    
+    # Test email input with boolean attributes
+    template = '@field(form.email, class="form-control" disabled readonly)'
+    result = parser.parse_directives(template, context)
+    assert 'type="email"' in result
+    assert 'class="form-control"' in result
+    assert 'disabled' in result
+    assert 'readonly' in result
+    assert 'required' not in result
+    
+    # Test password input with data attributes
+    template = '@field(form.password, class="form-control" data-toggle="password" autocomplete="off")'
+    result = parser.parse_directives(template, context)
+    assert 'type="password"' in result
+    assert 'class="form-control"' in result
+    assert 'data-toggle="password"' in result
+    assert 'autocomplete="off"' in result
+    
+    # Test checkbox with mixed attributes
+    template = '@field(form.remember, class="form-check-input" checked data-toggle="toggle")'
+    result = parser.parse_directives(template, context)
+    assert 'type="checkbox"' in result
+    assert 'class="form-check-input"' in result
+    assert 'checked' in result
+    assert 'data-toggle="toggle"' in result
+    
+    # Test with custom id and name
+    template = '@field(form.username, id="custom_id" name="custom_name")'
+    result = parser.parse_directives(template, context)
+    assert 'id="custom_id"' in result
+    assert 'name="custom_name"' in result
+    
+    # Test with field value
+    form.initial = {'username': 'testuser'}
+    template = '@field(form.username, class="form-control")'
+    result = parser.parse_directives(template, {'form': form})
+    assert 'value="testuser"' in result
+    
+    # Test with error class
+    form.add_error('username', 'This field is required')
+    template = '@field(form.username, class="form-control")'
+    result = parser.parse_directives(template, {'form': form})
+    assert 'class="form-control is-invalid"' in result
+
+
+def test_field_directive_errors():
+    """Test error handling in field directive."""
+    parser = DirectiveParser()
+    
+    # Test invalid field path
+    with pytest.raises(DirectiveParsingError) as exc:
+        template = '@field(username, class="form-control")'  # Missing form reference
+        parser.parse_directives(template, {})
+    assert "Invalid field path" in str(exc.value)
+    
+    # Test missing form
+    with pytest.raises(DirectiveParsingError) as exc:
+        template = '@field(nonexistent.field, class="form-control")'
+        parser.parse_directives(template, {})
+    assert "not found in context" in str(exc.value)
+    
+    # Test missing field
+    from django import forms
+    form = forms.Form()
+    with pytest.raises(DirectiveParsingError) as exc:
+        template = '@field(form.nonexistent, class="form-control")'
+        parser.parse_directives(template, {'form': form})
+    assert "not found in form" in str(exc.value)
+    
+    # Test invalid attribute syntax
+    with pytest.raises(DirectiveParsingError) as exc:
+        template = '@field(form.field, class=form-control)'  # Missing quotes
+        parser.parse_directives(template, {'form': forms.Form()})
+    assert "Error in @field directive" in str(exc.value)

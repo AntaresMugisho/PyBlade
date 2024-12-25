@@ -6,8 +6,9 @@ import re
 import json
 from typing import Any, Dict, Match, Pattern, Tuple, Optional
 from ..exceptions import DirectiveParsingError
-from ..contexts import LoopContext
+from ..contexts import LoopContext, ClassContext
 from .variables import VariableParser
+from pyblade.engine import loader
 
 
 class DirectiveParser:
@@ -85,6 +86,14 @@ class DirectiveParser:
         r"@spaceless\s*(?P<content>.*?)@endspaceless",
         re.DOTALL
     )
+    _STYLE_PATTERN: Pattern = re.compile(
+        r"@style\s*\((?P<styles>.*?)\)",
+        re.DOTALL
+    )
+    _CLASS_PATTERN: Pattern = re.compile(
+        r"@class\s*\((?P<classes>.*?)\)",
+        re.DOTALL
+    )
     _TEMPLATETAG_PATTERN: Pattern = re.compile(
         r"@templatetag\s*\((?P<tag>.*?)\)",
         re.DOTALL
@@ -115,6 +124,14 @@ class DirectiveParser:
     )
     _LIVEBLADE_SCRIPTS_PATTERN: Pattern = re.compile(
         r"@liveblade_scripts(?:\s*\(\s*(?P<attributes>.*?)\s*\))?",
+        re.DOTALL
+    )
+    _INCLUDE_PATTERN: Pattern = re.compile(
+        r"@include\s*\(\s*[\"'](?P<path>[\w.]+)[\"']\s*\)",
+        re.DOTALL
+    )
+    _FIELD_PATTERN: Pattern = re.compile(
+        r"@field\s*\(\s*(?P<field_path>[\w.]+)\s*,\s*(?P<attributes>(?:[\w-]+(?:=(?:\"[^\"]*\"|'[^']*'))?(?:\s+|$))*)\s*\)",
         re.DOTALL
     )
 
@@ -177,7 +194,19 @@ class DirectiveParser:
         template = self._parse_auth(template)
         template = self._parse_guest(template)
         template = self._parse_anonymous(template)
+        template = self._parse_class(template)
+        template = self._parse_style(template)
+        template = self._parse_active(template)
 
+        # Form helpers
+        template = self._checked_selected_required(template)
+        template = self._parse_csrf(template)
+        # template = self._parse_error(template)
+        template = self._parse_field(template)
+        
+        # Components related
+        template = self._parse_include(template)
+        
         # Django-like directives
         template = self._parse_autoescape(template)
         template = self._parse_cycle(template)
@@ -196,7 +225,6 @@ class DirectiveParser:
         template = self._parse_component(template)
         template = self._parse_url(template)
         
-        template = self._parse_csrf(template)
         template = self._parse_liveblade_scripts(template)
         return template
 
@@ -419,7 +447,7 @@ class DirectiveParser:
                 
             except Exception as e:
                 raise DirectiveParsingError(f"Error in @url directive: {str(e)}")
-        
+
         # Updated pattern to support 'as' variable assignment
         url_pattern = re.compile(
             r"@url\s*\(\s*(?P<pattern>['\"].*?['\"])\s*(?:,\s*(?P<params>.*?))?\s*(?:\s+as\s+(?P<as_var>\w+))?\s*\)",
@@ -517,22 +545,38 @@ class DirectiveParser:
         return self._parse_auth_or_guest(template)
 
 
-    def _parse_include(self, template):
-        """Find partials code to include in the template"""
-
-        pattern = re.compile(r"@include\s*\(\s*[\"']?(.*?(?:\.?\.*?)*)[\"']?\s*\)", re.DOTALL)
-        match = re.search(pattern, template)
-
-        if match is not None:
-            file_name = match.group(1) if match else None
-            partial_template = loader.load_template(file_name) if file_name else None
-
-            if partial_template:
-                # Parse the content to include before replacement
-                partial_template = self.parse(str(partial_template), self._context)
-                return re.sub(pattern, partial_template, template)
-
-        return template
+    def _parse_include(self, template: str) -> str:
+        """
+        Process @include directives to include partial templates.
+        
+        Example:
+            @include("partials.header")
+            
+        The path is dot-separated and will be converted to a file path:
+        - "partials.header" -> "partials/header.html"
+        - "components.navbar" -> "components/navbar.html"
+        
+        Args:
+            template: The template string
+            
+        Returns:
+            The processed template with included partials
+        """
+        def replace_include(match: Match) -> str:
+            try:
+                # Get the dot-separated path and optional data
+                path = match.group('path').strip()
+                
+                try:
+                    partial_template = loader.load_template(path)
+                    return self.parse_directives(str(partial_template), self._context)
+                except Exception as e:
+                    raise DirectiveParsingError(f"Error loading partial template {path}: {str(e)}")
+                    
+            except Exception as e:
+                raise DirectiveParsingError(f"Error in @include directive: {str(e)}")
+        
+        return self._INCLUDE_PATTERN.sub(replace_include, template)
 
     def _parse_extends(self, template):
         """Search for extends directive in the template then parse sections inside."""
@@ -660,21 +704,94 @@ class DirectiveParser:
 
         return component, props
 
-    def _parse_class(self, template):
-        pattern = re.compile(r"@class\s*\((?P<dictionary>.*?)\s*\)", re.DOTALL)
-
-        match = pattern.search(template)
-        if match:
+    def _parse_class(self, template: str) -> str:
+        """
+        Process @class directives to conditionally apply HTML classes.
+        
+        Example:
+            @class({'active': isActive, 'disabled': isDisabled})
+            
+        Args:
+            template: The template string
+            
+        Returns:
+            The processed template with class attributes
+        """
+        def replace_class(match: Match) -> str:
             try:
-                attrs = eval(match.group("dictionary"), {}, self._context)
-            except SyntaxError as e:
-                raise e
-            except ValueError as e:
-                raise e
-            else:
-                classes = ClassContext(attrs, self._context)
-                return re.sub(pattern, str(classes), template)
-        return template
+                # Get the classes dictionary from the directive
+                classes_str = match.group('classes').strip()
+                
+                # Evaluate the dictionary using eval for consistency with style directive
+                classes_dict = eval(classes_str, {}, self._context)
+                
+                if not isinstance(classes_dict, dict):
+                    raise DirectiveParsingError("@class directive requires a dictionary")
+                
+                active_classes = []
+                for class_name, condition in classes_dict.items():
+                    # Evaluate the condition if it's not already a boolean
+                    if not isinstance(condition, bool):
+                        condition = eval(str(condition), {}, self._context)
+                    
+                    if condition:
+                        # Clean up class name, removing quotes and extra spaces
+                        clean_class = class_name.strip().strip('"\'')
+                        if clean_class:
+                            active_classes.append(clean_class)
+                
+                # If we have active classes, return them as a class attribute
+                if active_classes:
+                    return f' class="{" ".join(active_classes)}"'
+                return ''
+                
+            except Exception as e:
+                raise DirectiveParsingError(f"Error in @class directive: {str(e)}")
+        
+        return self._CLASS_PATTERN.sub(replace_class, template)
+
+    def _parse_style(self, template: str) -> str:
+        """
+        Process @style directives to conditionally apply inline styles.
+        
+        Example:
+            @style({'color: red;': isError, 'font-weight: bold;': isBold})
+            
+        Args:
+            template: The template string
+            
+        Returns:
+            The processed template with style attributes
+        """
+        def replace_style(match: Match) -> str:
+            try:
+                # Get the styles dictionary from the directive
+                styles_str = match.group('styles').strip()
+                
+                styles_dict = eval(styles_str, {} ,self._context)
+                
+                if not isinstance(styles_dict, dict):
+                    raise DirectiveParsingError("@style directive requires a dictionary")
+                
+                active_styles = []
+                for style, condition in styles_dict.items():
+                    if not isinstance(condition, bool):
+                        condition = eval(str(condition), {} ,self._context)
+                    
+                    if condition:
+                        # Remove any existing 'style="' or '"' from the style string
+                        clean_style = style.strip().rstrip(';').strip('"\'')
+                        if clean_style:
+                            active_styles.append(clean_style)
+                
+                if active_styles:
+                    return f' style="{"; ".join(active_styles)};"'
+                return ''
+                
+            except Exception as e:
+                raise DirectiveParsingError(f"Error in @style directive: {str(e)}")
+        
+        return self._STYLE_PATTERN.sub(replace_style, template)
 
     def _parse_autoescape(self, template: str) -> str:
         """Process @autoescape directive for controlling HTML escaping."""
@@ -1004,9 +1121,8 @@ class DirectiveParser:
 
     def _parse_csrf(self, template):
         pattern = re.compile(r"@csrf", re.DOTALL)
-        token = self._context.get("csrf_token", "")
-
-        return pattern.sub(f"""<input type="hidden" name="csrfmiddlewaretoken" value="{token}">""", template)
+        csrf_input = self._context.get("csrf_input", "")
+        return pattern.sub(str(csrf_input), template)
 
     def _parse_method(self, template):
         pattern = re.compile(r"@method\s*\(\s*(?P<method>.*?)\s*\)", re.DOTALL)
@@ -1043,53 +1159,58 @@ class DirectiveParser:
     def _handle_url(self, match):
         # Check django installation
         try:
-            from django.core.exceptions import ImproperlyConfigured
-            from django.urls import reverse
+            from django.urls import resolve
         except ImportError:
-            raise Exception("@url directive is only supported in django projects.")
+            raise Exception("@url directive is currenctly supported by django only")
+        else:
+            resolver_match = resolve(self._context.get('request').path_info)
 
-        route_name = match.group("name")
-        params = match.group("params")
+            if resolver_match.url_name == match.group("name"):
+                return ""
 
-        # Check route name is a valid string
-        try:
-            route_name = ast.literal_eval(route_name)
-        except SyntaxError:
-            raise Exception(
-                f"Syntax error: The route name must be a valid string. Got {route_name} near line "
-                f"{self._get_line_number(match)}"
-            )
+            route_name = match.group("name")
+            params = match.group("params")
 
-        # Try return the route url or raise errors if bad configuration encountered
-        try:
-            if params:
-                try:
-                    params = eval(params, {}, self._context)
-                    params = ast.literal_eval(str(params))
-                except (SyntaxError, ValueError) as e:
-                    raise Exception(str(e))
-                else:
-                    if isinstance(params, dict):
-                        return reverse(route_name, kwargs=params)
-                    elif isinstance(params, list):
-                        return reverse(route_name, args=params)
+            # Check route name is a valid string
+            try:
+                route_name = ast.literal_eval(route_name)
+            except SyntaxError:
+                raise Exception(
+                    f"Syntax error: The route name must be a valid string. Got {route_name} near line "
+                    f"{self._get_line_number(match)}"
+                )
+
+            # Try return the route url or raise errors if bad configuration encountered
+            try:
+                if params:
+                    try:
+                        params = eval(params, {}, self._context)
+                        params = ast.literal_eval(str(params))
+                    except (SyntaxError, ValueError) as e:
+                        raise Exception(str(e))
                     else:
-                        raise Exception("The url parameters must be of type list or dict")
-            return reverse(route_name)
-        except ImproperlyConfigured as e:
-            raise Exception(str(e))
+                        if isinstance(params, dict):
+                            return resolve(route_name, kwargs=params)
+                        elif isinstance(params, list):
+                            return resolve(route_name, args=params)
+                        else:
+                            raise Exception("The url parameters must be of type list or dict")
+                return resolve(route_name)
+            except Exception as e:
+                raise e
 
-    def _checked_selected_required(self, template, context):
+    def _checked_selected_required(self, template):
+
+        def handle_csr(match):
+            directive = match.group("directive")
+            expression = match.group("expression")
+            if not (eval(expression, {}, self._context)):
+                return ""
+            return directive
+
         pattern = re.compile(r"@(?P<directive>checked|selected|required)\s*\(\s*(?P<expression>.*?)\s*\)", re.DOTALL)
-        return pattern.sub(lambda match: self._handle_csr(match, context), template)
+        return pattern.sub(handle_csr, template)
 
-    @staticmethod
-    def _handle_csr(match):
-        directive = match.group("directive")
-        expression = match.group("expression")
-        if not (eval(expression, {}, self._context)):
-            return ""
-        return directive
 
     def _parse_error(self, template):
         """Check if an input form contains a validation error"""
@@ -1105,7 +1226,7 @@ class DirectiveParser:
         if message:
             local_context = self._context.copy()
             local_context["message"] = message
-            rendered = self.parse(slot, local_context)
+            rendered = self.parse_directives(slot, local_context)
 
             return rendered
 
@@ -1114,10 +1235,9 @@ class DirectiveParser:
     def _parse_active(self, template):
         """Use the @active('route_name', 'active_class') directive to set an active class in a nav link"""
         pattern = re.compile(r"@active\((?P<route>.*?)(?:,(?P<param>.*?))?\)", re.DOTALL)
-        return pattern.sub(lambda match: self._handle_active(match, self._context), template)
+        return pattern.sub(lambda match: self._handle_active(match), template)
 
-    @staticmethod
-    def _handle_active(match):
+    def _handle_active(self, match):
         try:
             route = ast.literal_eval(match.group("route"))
             param = ast.literal_eval(match.group("param")) if match.group("param") else "active"
@@ -1131,24 +1251,134 @@ class DirectiveParser:
         except ImportError:
             raise Exception("@active directive is currenctly supported by django only")
         else:
-            resolver_match = resolve(context.get('request').path_info)
+            resolver_match = resolve(self._context.get('request').path_info)
 
             if route == resolver_match.url_name:
                 return param
             return ""
 
-    def _parse_field(self, template):
-        """To render an input field with custom attributes"""
-        pass
-
-
-    @staticmethod
-    def _handle_csr(match):
-        directive = match.group("directive")
-        expression = match.group("expression")
-        if not (eval(expression, {}, self._context)):
-            return ""
-        return directive
+    def _parse_field(self, template: str) -> str:
+        """
+        Process @field directive to render Django form fields with HTML-like attributes.
+        
+        Example:
+            @field(form.email, class="form-control" id="email-input" required)
+            
+        Args:
+            template: The template string
+            
+        Returns:
+            The processed template with rendered form fields
+        """
+        def replace_field(match: Match) -> str:
+            try:
+                # Get field path and attributes
+                field_path = match.group('field_path').strip()
+                attrs_str = match.group('attributes')
+                
+                # Get the form field using dot notation
+                parts = field_path.split('.')
+                if len(parts) < 2:
+                    raise DirectiveParsingError(f"Invalid field path: {field_path}. Must be in format 'form.field_name'")
+                
+                # Get the form
+                form = self._context
+                for part in parts[:-1]:  # All parts except the last one (field name)
+                    form = form.get(part)
+                    if not form:
+                        raise DirectiveParsingError(f"Form '{'.'.join(parts[:-1])}' not found in context")
+                
+                # Get the field
+                field_name = parts[-1]
+                try:
+                    field = form[field_name]
+                except (KeyError, AttributeError):
+                    raise DirectiveParsingError(f"Field '{field_name}' not found in form")
+                
+                # Parse HTML-like attributes
+                attrs = {}
+                if attrs_str:
+                    # Split by whitespace but preserve quoted values
+                    import shlex
+                    attr_tokens = shlex.split(attrs_str)
+                    for token in attr_tokens:
+                        if '=' in token:
+                            key, value = token.split('=', 1)
+                            # Remove quotes from value
+                            value = value.strip('"\'')
+                            attrs[key] = value
+                        else:
+                            # Boolean attribute
+                            attrs[token] = 'true'
+                
+                # Get field type and current value
+                field_type = field.field.widget.__class__.__name__.lower()
+                field_value = field.value() if hasattr(field, 'value') else ''
+                
+                # Build HTML attributes string
+                html_attrs = []
+                
+                # Add name and id attributes if not overridden
+                if 'name' not in attrs:
+                    html_attrs.append(f'name="{field_name}"')
+                if 'id' not in attrs:
+                    html_attrs.append(f'id="id_{field_name}"')
+                
+                # Add type attribute based on field type
+                input_type = {
+                    'textinput': 'text',
+                    'numberinput': 'number',
+                    'emailinput': 'email',
+                    'passwordinput': 'password',
+                    'dateinput': 'date',
+                    'datetimeinput': 'datetime-local',
+                    'timeinput': 'time',
+                    'urlinput': 'url',
+                    'telinput': 'tel',
+                    'checkboxinput': 'checkbox',
+                    'radioinput': 'radio',
+                    'fileinput': 'file'
+                }.get(field_type, 'text')
+                
+                if 'type' not in attrs:
+                    html_attrs.append(f'type="{input_type}"')
+                
+                # Add value attribute if present and not overridden
+                if field_value and 'value' not in attrs:
+                    html_attrs.append(f'value="{field_value}"')
+                
+                # Add required attribute if field is required and not overridden
+                if field.field.required and 'required' not in attrs:
+                    html_attrs.append('required')
+                
+                # Add custom attributes
+                for key, value in attrs.items():
+                    if value.lower() == 'true':
+                        html_attrs.append(key)
+                    elif value.lower() == 'false':
+                        continue
+                    else:
+                        html_attrs.append(f'{key}="{value}"')
+                
+                # Add error class if field has errors
+                if hasattr(field, 'errors') and field.errors:
+                    error_class = attrs.get('error-class', 'is-invalid')
+                    current_class = attrs.get('class', '')
+                    if current_class:
+                        html_attrs.append(f'class="{current_class} {error_class}"')
+                    else:
+                        html_attrs.append(f'class="{error_class}"')
+                elif 'class' in attrs:
+                    html_attrs.append(f'class="{attrs["class"]}"')
+                
+                # Render the input element
+                html_attrs_str = ' '.join(html_attrs)
+                return f'<input {html_attrs_str}>'
+                
+            except Exception as e:
+                raise DirectiveParsingError(f"Error in @field directive: {str(e)}")
+        
+        return self._FIELD_PATTERN.sub(replace_field, template)
 
     def _parse_component(self):
         pass
@@ -1348,7 +1578,6 @@ class DirectiveParser:
                         for pair in data.split(','):
                             key, value = pair.split('=')
                             key = key.strip()
-                            value = value.strip()
                             # Evaluate the value in the current context
                             data_dict[key] = eval(value, {}, self._context)
                         component_context.update(data_dict)
