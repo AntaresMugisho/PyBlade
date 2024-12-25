@@ -1,139 +1,79 @@
 """
 Directive parsing implementation for the template engine.
 """
+
 import ast
-import re
 import json
-from typing import Any, Dict, Match, Pattern, Tuple, Optional
-from ..exceptions import DirectiveParsingError
-from ..contexts import LoopContext, ClassContext
-from .variables import VariableParser
+import re
+from typing import Any, Dict, Match, Pattern, Tuple
+
 from pyblade.engine import loader
+
+from ..contexts import AttributesContext, LoopContext, SlotContext
+from ..exceptions import DirectiveParsingError
+from .variables import VariableParser
 
 
 class DirectiveParser:
     """Handles parsing and processing of template directives."""
 
     # Cached regex patterns
-    _FOR_PATTERN: Pattern = re.compile(
-        r"@for\s*\((.*?)\s+in\s+(.*?)\)\s*(.*?)(?:@empty\s*(.*?))?@endfor",
-        re.DOTALL
-    )
+    _FOR_PATTERN: Pattern = re.compile(r"@for\s*\((.*?)\s+in\s+(.*?)\)\s*(.*?)(?:@empty\s*(.*?))?@endfor", re.DOTALL)
     _IF_PATTERN: Pattern = re.compile(
-        r"@(if)\s*\((.*?\)?)\)\s*(.*?)\s*(?:@(elif)\s*\((.*?\)?)\)\s*(.*?))*(?:@(else)\s*(.*?))?@(endif)",
-        re.DOTALL
+        r"@(if)\s*\((.*?\)?)\)\s*(.*?)\s*(?:@(elif)\s*\((.*?\)?)\)\s*(.*?))*(?:@(else)\s*(.*?))?@(endif)", re.DOTALL
     )
-    _UNLESS_PATTERN: Pattern = re.compile(
-        r"@unless\s*\((?P<expression>.*?)\)(?P<slot>.*?)@endunless",
-        re.DOTALL
-    )
+    _UNLESS_PATTERN: Pattern = re.compile(r"@unless\s*\((?P<expression>.*?)\)(?P<slot>.*?)@endunless", re.DOTALL)
     _SWITCH_PATTERN: Pattern = re.compile(
-        r"@(?P<directive>switch|match)\s*\((?P<expression>.*?)\)\s*(?P<cases>.*?)@end(?P=directive)",
-        re.DOTALL
+        r"@(?P<directive>switch|match)\s*\((?P<expression>.*?)\)\s*(?P<cases>.*?)@end(?P=directive)", re.DOTALL
     )
     _CASE_PATTERN: Pattern = re.compile(
-        r"@case\s*\((?P<value>.*?)\)\s*(?P<content>.*?)(?=@case|@default|@end(switch|match)|$)",
-        re.DOTALL
+        r"@case\s*\((?P<value>.*?)\)\s*(?P<content>.*?)(?=@case|@default|@end(switch|match)|$)", re.DOTALL
     )
-    _DEFAULT_PATTERN: Pattern = re.compile(
-        r"@default\s*(?P<content>.*?)$",
-        re.DOTALL
-    )
+    _DEFAULT_PATTERN: Pattern = re.compile(r"@default\s*(?P<content>.*?)$", re.DOTALL)
     _COMMENTS_PATTERN: Pattern = re.compile(r"{#(.*?)#}", re.DOTALL)
 
     # New Django-like directive patterns
     _AUTOESCAPE_PATTERN: Pattern = re.compile(
-        r"@autoescape\s*\((?P<mode>on|off)\)\s*(?P<content>.*?)@endautoescape",
-        re.DOTALL
+        r"@autoescape\s*\((?P<mode>on|off)\)\s*(?P<content>.*?)@endautoescape", re.DOTALL
     )
-    _CYCLE_PATTERN: Pattern = re.compile(
-        r"@cycle\s*\((?P<values>.*?)\)",
-        re.DOTALL
-    )
-    _DEBUG_PATTERN: Pattern = re.compile(
-        r"@debug",
-        re.DOTALL
-    )
-    _FILTER_PATTERN: Pattern = re.compile(
-        r"@filter\s*\((?P<filters>.*?)\)\s*(?P<content>.*?)@endfilter",
-        re.DOTALL
-    )
+    _CYCLE_PATTERN: Pattern = re.compile(r"@cycle\s*\((?P<values>.*?)\)", re.DOTALL)
+    _DEBUG_PATTERN: Pattern = re.compile(r"@debug", re.DOTALL)
+    _FILTER_PATTERN: Pattern = re.compile(r"@filter\s*\((?P<filters>.*?)\)\s*(?P<content>.*?)@endfilter", re.DOTALL)
     _FIRSTOF_PATTERN: Pattern = re.compile(
-        r"@firstof\s*\((?P<values>.*?)(?:\s*,\s*default=(?P<default>.*?))?\)",
-        re.DOTALL
+        r"@firstof\s*\((?P<values>.*?)(?:\s*,\s*default=(?P<default>.*?))?\)", re.DOTALL
     )
     _IFCHANGED_PATTERN: Pattern = re.compile(
         r"@ifchanged\s*(?:\((?P<expressions>.*?)\))?\s*(?P<content>.*?)(?:@else\s*(?P<else_content>.*?))?@endifchanged",
-        re.DOTALL
+        re.DOTALL,
     )
     _LOREM_PATTERN: Pattern = re.compile(
-        r"@lorem\s*\((?P<count>\d+)(?:\s*,\s*(?P<method>w|p|b))?(?:\s*,\s*(?P<random>random))?\)",
-        re.DOTALL
+        r"@lorem\s*\((?P<count>\d+)(?:\s*,\s*(?P<method>w|p|b))?(?:\s*,\s*(?P<random>random))?\)", re.DOTALL
     )
-    _NOW_PATTERN: Pattern = re.compile(
-        r"@now\s*\((?P<format>.*?)\)",
-        re.DOTALL
-    )
-    _QUERYSTRING_PATTERN: Pattern = re.compile(
-        r"@querystring(?:\s*\((?P<updates>.*?)\))?",
-        re.DOTALL
-    )
+    _NOW_PATTERN: Pattern = re.compile(r"@now\s*\((?P<format>.*?)\)", re.DOTALL)
+    _QUERYSTRING_PATTERN: Pattern = re.compile(r"@querystring(?:\s*\((?P<updates>.*?)\))?", re.DOTALL)
     _REGROUP_PATTERN: Pattern = re.compile(
-        r"@regroup\s*\((?P<expression>.*?)\s+by\s+(?P<grouper>.*?)\s+as\s+(?P<var_name>.*?)\)",
-        re.DOTALL
+        r"@regroup\s*\((?P<expression>.*?)\s+by\s+(?P<grouper>.*?)\s+as\s+(?P<var_name>.*?)\)", re.DOTALL
     )
-    _SPACELESS_PATTERN: Pattern = re.compile(
-        r"@spaceless\s*(?P<content>.*?)@endspaceless",
-        re.DOTALL
-    )
-    _STYLE_PATTERN: Pattern = re.compile(
-        r"@style\s*\((?P<styles>.*?)\)",
-        re.DOTALL
-    )
-    _CLASS_PATTERN: Pattern = re.compile(
-        r"@class\s*\((?P<classes>.*?)\)",
-        re.DOTALL
-    )
-    _TEMPLATETAG_PATTERN: Pattern = re.compile(
-        r"@templatetag\s*\((?P<tag>.*?)\)",
-        re.DOTALL
-    )
+    _SPACELESS_PATTERN: Pattern = re.compile(r"@spaceless\s*(?P<content>.*?)@endspaceless", re.DOTALL)
+    _STYLE_PATTERN: Pattern = re.compile(r"@style\s*\((?P<styles>.*?)\)", re.DOTALL)
+    _CLASS_PATTERN: Pattern = re.compile(r"@class\s*\((?P<classes>.*?)\)", re.DOTALL)
+    _TEMPLATETAG_PATTERN: Pattern = re.compile(r"@templatetag\s*\((?P<tag>.*?)\)", re.DOTALL)
     _WIDTHRATIO_PATTERN: Pattern = re.compile(
-        r"@widthratio\s*\((?P<value>.*?)\s*,\s*(?P<max_value>.*?)\s*,\s*(?P<max_width>.*?)\)",
-        re.DOTALL
+        r"@widthratio\s*\((?P<value>.*?)\s*,\s*(?P<max_value>.*?)\s*,\s*(?P<max_width>.*?)\)", re.DOTALL
     )
-    _WITH_PATTERN: Pattern = re.compile(
-        r"@with\s*\((?P<expressions>.*?)\)\s*(?P<content>.*?)@endwith",
-        re.DOTALL
-    )
-    _COMMENT_PATTERN: Pattern = re.compile(
-        r"@comment\s*(?P<content>.*?)@endcomment",
-        re.DOTALL
-    )
-    _VERBATIM_PATTERN: Pattern = re.compile(
-        r"@verbatim\s*(?P<content>.*?)@endverbatim",
-        re.DOTALL
-    )
-    _VERBATIM_SHORTHAND_PATTERN: Pattern = re.compile(
-        r"@({[{%].*?[%}]})",
-        re.DOTALL
-    )
+    _WITH_PATTERN: Pattern = re.compile(r"@with\s*\((?P<expressions>.*?)\)\s*(?P<content>.*?)@endwith", re.DOTALL)
+    _COMMENT_PATTERN: Pattern = re.compile(r"@comment\s*(?P<content>.*?)@endcomment", re.DOTALL)
+    _VERBATIM_PATTERN: Pattern = re.compile(r"@verbatim\s*(?P<content>.*?)@endverbatim", re.DOTALL)
+    _VERBATIM_SHORTHAND_PATTERN: Pattern = re.compile(r"@({[{%].*?[%}]})", re.DOTALL)
     _COMPONENT_PATTERN: Pattern = re.compile(
-        r"@component\s*\(\s*(?P<name>['\"].*?['\"])\s*(?:,\s*(?P<data>.*?))?\s*\)(?P<slot>.*?)@endcomponent",
-        re.DOTALL
+        r"@component\s*\(\s*(?P<name>['\"].*?['\"])\s*(?:,\s*(?P<data>.*?))?\s*\)(?P<slot>.*?)@endcomponent", re.DOTALL
     )
     _LIVEBLADE_SCRIPTS_PATTERN: Pattern = re.compile(
-        r"@liveblade_scripts(?:\s*\(\s*(?P<attributes>.*?)\s*\))?",
-        re.DOTALL
+        r"@liveblade_scripts(?:\s*\(\s*(?P<attributes>.*?)\s*\))?", re.DOTALL
     )
-    _INCLUDE_PATTERN: Pattern = re.compile(
-        r"@include\s*\(\s*[\"'](?P<path>[\w.]+)[\"']\s*\)",
-        re.DOTALL
-    )
-    _FIELD_PATTERN: Pattern = re.compile(
-        r"@field\s*\((?P<field>.*?)\s*,\s*(?P<attributes>.*?)\)",
-        re.DOTALL
-    )
+    _INCLUDE_PATTERN: Pattern = re.compile(r"@include\s*\(\s*[\"'](?P<path>[\w.]+)[\"']\s*\)", re.DOTALL)
+    _FIELD_PATTERN: Pattern = re.compile(r"@field\s*\((?P<field>.*?)\s*,\s*(?P<attributes>.*?)\)", re.DOTALL)
+    _ERROR_PATTERN: Pattern = re.compile(r"@error\s*\((?P<field>.*?)\s*\)\s*(?P<slot>.*?)\s*@enderror", re.DOTALL)
 
     def __init__(self):
         self._context: Dict[str, Any] = {}
@@ -142,23 +82,18 @@ class DirectiveParser:
 
     def _get_line_number(self, template: str, position: int) -> int:
         """Get the line number for a position in the template."""
-        return template.count('\n', 0, position) + 1
+        return template.count("\n", 0, position) + 1
 
     def _check_unclosed_tags(self, template: str) -> None:
         """Check for unclosed directive tags and report their line numbers."""
         # Define pairs of opening and closing tags
-        tag_pairs = {
-            '@if': '@endif',
-            '@for': '@endfor',
-            '@unless': '@endunless',
-            '@switch': '@endswitch'
-        }
-        
+        tag_pairs = {"@if": "@endif", "@for": "@endfor", "@unless": "@endunless", "@switch": "@endswitch"}
+
         for start_tag, end_tag in tag_pairs.items():
             # Find all occurrences of start tags
             start_positions = [m.start() for m in re.finditer(re.escape(start_tag), template)]
             end_positions = [m.start() for m in re.finditer(re.escape(end_tag), template)]
-            
+
             if len(start_positions) > len(end_positions):
                 # Find the first unclosed tag
                 for pos in start_positions:
@@ -166,18 +101,16 @@ class DirectiveParser:
                     matching_ends = sum(1 for end_pos in end_positions if end_pos > pos)
                     if matching_ends < 1:
                         line_number = self._get_line_number(template, pos)
-                        raise DirectiveParsingError(
-                            f"Unclosed {start_tag} directive at line {line_number}"
-                        )
+                        raise DirectiveParsingError(f"Unclosed {start_tag} directive at line {line_number}")
 
     def parse_directives(self, template: str, context: Dict[str, Any]) -> str:
         """
         Process all directives within a template.
-        
+
         Args:
             template: The template string
             context: The context dictionary
-            
+
         Returns:
             The processed template
         """
@@ -202,11 +135,11 @@ class DirectiveParser:
         template = self._checked_selected_required(template)
         template = self._parse_csrf(template)
         template = self._parse_field(template)
-        # template = self._parse_error(template)
-        
+        template = self._parse_error(template)
+
         # Components related
         template = self._parse_include(template)
-        
+
         # Django-like directives
         template = self._parse_autoescape(template)
         template = self._parse_cycle(template)
@@ -224,16 +157,13 @@ class DirectiveParser:
         template = self._parse_with(template)
         template = self._parse_component(template)
         template = self._parse_url(template)
-        
+
         template = self._parse_liveblade_scripts(template)
         return template
 
     def _parse_for(self, template: str) -> str:
         """Process @for loops with @empty fallback."""
-        return self._FOR_PATTERN.sub(
-            lambda match: self._handle_for(match),
-            template
-        )
+        return self._FOR_PATTERN.sub(lambda match: self._handle_for(match), template)
 
     def _handle_for(self, match: Match) -> str:
         """Handle @for loop logic with proper error handling."""
@@ -246,9 +176,7 @@ class DirectiveParser:
             try:
                 iterable = eval(iterable_expression, {}, self._context)
             except Exception as e:
-                raise DirectiveParsingError(
-                    f"Error evaluating iterable expression '{iterable_expression}': {str(e)}"
-                )
+                raise DirectiveParsingError(f"Error evaluating iterable expression '{iterable_expression}': {str(e)}")
 
             if not iterable:
                 return empty_block if empty_block else ""
@@ -294,24 +222,22 @@ class DirectiveParser:
                             return captures[i + 1]
 
             except Exception as e:
-                raise DirectiveParsingError(f"Error in @{directive} directive: {str(e)}")
+                raise DirectiveParsingError(f"Error in @if directive: {str(e)}")
 
         return self._IF_PATTERN.sub(replace_if, template)
 
     def _parse_unless(self, template: str) -> str:
         """Process @unless directives."""
-        
+
         def replace_unless(match: Match) -> str:
             try:
-                expression = match.group('expression')
-                slot = match.group('slot')
+                expression = match.group("expression")
+                slot = match.group("slot")
 
                 try:
                     condition = eval(expression, {}, self._context)
                 except Exception as e:
-                    raise DirectiveParsingError(
-                        f"Error evaluating unless condition '{expression}': {str(e)}"
-                    )
+                    raise DirectiveParsingError(f"Error evaluating unless condition '{expression}': {str(e)}")
 
                 return "" if condition else slot
 
@@ -322,40 +248,36 @@ class DirectiveParser:
 
     def _parse_switch(self, template: str) -> str:
         """Process @switch, @case, and @default directives."""
-        
+
         def replace_switch(match: Match) -> str:
             try:
-                expression = match.group('expression')
-                cases_block = match.group('cases')
+                expression = match.group("expression")
+                cases_block = match.group("cases")
 
                 # Evaluate the switch expression
                 try:
                     switch_value = eval(expression, {}, self._context)
                 except Exception as e:
-                    raise DirectiveParsingError(
-                        f"Error evaluating switch expression '{expression}': {str(e)}"
-                    )
+                    raise DirectiveParsingError(f"Error evaluating switch expression '{expression}': {str(e)}")
 
                 # Find all cases
                 cases = self._CASE_PATTERN.finditer(cases_block)
                 default_match = self._DEFAULT_PATTERN.search(cases_block)
-                
+
                 # Check each case
                 for case in cases:
-                    case_value = case.group('value')
+                    case_value = case.group("value")
                     try:
                         case_result = eval(case_value, {}, self._context)
                     except Exception as e:
-                        raise DirectiveParsingError(
-                            f"Error evaluating case value '{case_value}': {str(e)}"
-                        )
+                        raise DirectiveParsingError(f"Error evaluating case value '{case_value}': {str(e)}")
 
                     if case_result == switch_value:
-                        return self.parse_directives(case.group('content'), self._context)
+                        return self.parse_directives(case.group("content"), self._context)
 
                 # If no case matched and there's a default, use it
                 if default_match:
-                    return self.parse_directives(default_match.group('content'), self._context)
+                    return self.parse_directives(default_match.group("content"), self._context)
 
                 return ""
 
@@ -368,14 +290,14 @@ class DirectiveParser:
         """Process both inline comments ({# #}) and block comments (@comment)."""
         # First process inline comments
         template = self._COMMENTS_PATTERN.sub("", template)
-        
+
         # Then process block comments
         def replace_comment(match: Match) -> str:
             try:
-                return ''  # Remove the comment and its content
+                return ""  # Remove the comment and its content
             except Exception as e:
                 raise DirectiveParsingError(f"Error in comment directive: {str(e)}")
-        
+
         return self._COMMENT_PATTERN.sub(replace_comment, template)
 
     def _parse_verbatim(self, template: str) -> str:
@@ -383,39 +305,41 @@ class DirectiveParser:
         Process both @verbatim blocks and shorthand verbatim (@{{ }}).
         The shorthand is processed first to prevent interference with block processing.
         """
+
         # First process shorthand verbatim (@{{ }})
         def replace_shorthand(match: Match) -> str:
             try:
                 return match.group(1)  # Return the content without the @ prefix
             except Exception as e:
                 raise DirectiveParsingError(f"Error in verbatim shorthand: {str(e)}")
-        
+
         template = self._VERBATIM_SHORTHAND_PATTERN.sub(replace_shorthand, template)
-        
+
         # Then process verbatim blocks
         def replace_verbatim(match: Match) -> str:
             try:
-                return match.group('content')  # Return the content without processing
+                return match.group("content")  # Return the content without processing
             except Exception as e:
                 raise DirectiveParsingError(f"Error in @verbatim directive: {str(e)}")
-        
+
         return self._VERBATIM_PATTERN.sub(replace_verbatim, template)
 
     def _parse_url(self, template: str) -> str:
         """Process @url directive with support for Django-style 'as' variable assignment."""
+
         def replace_url(match: Match) -> str:
             try:
-                url_pattern = match.group('pattern').strip('\'"')
-                params = match.group('params')
-                as_var = match.group('as_var')
-                
+                url_pattern = match.group("pattern").strip("'\"")
+                params = match.group("params")
+                as_var = match.group("as_var")
+
                 # Build URL parameters
                 url_params = []
                 if params:
-                    for param in params.split(','):
+                    for param in params.split(","):
                         param = param.strip()
-                        if '=' in param:
-                            key, value = param.split('=', 1)
+                        if "=" in param:
+                            key, value = param.split("=", 1)
                             key = key.strip()
                             value = value.strip()
                             try:
@@ -424,40 +348,43 @@ class DirectiveParser:
                                 url_params.append((key, evaluated_value))
                             except Exception as e:
                                 raise DirectiveParsingError(f"Error evaluating URL parameter '{value}': {str(e)}")
-                
+
                 # Get URL patterns from context
-                urlconf = self._context.get('urlconf', None)
+                urlconf = self._context.get("urlconf", None)
                 if not urlconf:
                     raise DirectiveParsingError("URL configuration not found in context")
-                
+
                 try:
                     # Resolve URL pattern
                     from django.urls import reverse
-                    url = reverse(url_pattern, args=[p[1] for p in url_params if not p[0]], 
-                                kwargs={p[0]: p[1] for p in url_params if p[0]})
-                    
+
+                    url = reverse(
+                        url_pattern,
+                        args=[p[1] for p in url_params if not p[0]],
+                        kwargs={p[0]: p[1] for p in url_params if p[0]},
+                    )
+
                     # If 'as' variable is specified, store in context and return empty string
                     if as_var:
                         self._context[as_var.strip()] = url
-                        return ''
+                        return ""
                     return url
-                    
+
                 except Exception as e:
                     raise DirectiveParsingError(f"Error resolving URL '{url_pattern}': {str(e)}")
-                
+
             except Exception as e:
                 raise DirectiveParsingError(f"Error in @url directive: {str(e)}")
 
         # Updated pattern to support 'as' variable assignment
         url_pattern = re.compile(
             r"@url\s*\(\s*(?P<pattern>['\"].*?['\"])\s*(?:,\s*(?P<params>.*?))?\s*(?:\s+as\s+(?P<as_var>\w+))?\s*\)",
-            re.DOTALL
+            re.DOTALL,
         )
-        
+
         return url_pattern.sub(replace_url, template)
 
-    @staticmethod
-    def _parse_break(template: str) -> Tuple[bool, str]:
+    def _parse_break(self, template: str) -> Tuple[bool, str]:
         """Process @break directives."""
         pattern = re.compile(r"@break(?:\s*\(\s*(?P<expression>.*?)\s*\))?", re.DOTALL)
         match = pattern.search(template)
@@ -474,8 +401,7 @@ class DirectiveParser:
                 raise DirectiveParsingError(f"Error in @break directive: {str(e)}")
         return False, template
 
-    @staticmethod
-    def _parse_continue(template: str) -> Tuple[bool, str]:
+    def _parse_continue(self, template: str) -> Tuple[bool, str]:
         """Process @continue directives."""
         pattern = re.compile(r"@continue(?:\s*\(\s*(?P<expression>.*?)\s*\))?", re.DOTALL)
         match = pattern.search(template)
@@ -492,18 +418,18 @@ class DirectiveParser:
                 raise DirectiveParsingError(f"Error in @continue directive: {str(e)}")
         return False, template
 
-
     # TODO : Update parsers
 
     def _parse_auth_or_guest(self, template):
         """
         Generalized method to parse @auth or @guest directives.
         """
+
         def handle_auth_or_guest(match):
             """
             Generalized handler for @auth and @guest directives.
             """
-            directive = match.group('directive')
+            directive = match.group("directive")
 
             is_authenticated = False
             request = self._context.get("request", None)
@@ -513,9 +439,7 @@ class DirectiveParser:
                 except Exception as e:
                     raise Exception(str(e))
 
-            should_render_first_block = (
-                is_authenticated if directive == "auth" else not is_authenticated
-            )
+            should_render_first_block = is_authenticated if directive == "auth" else not is_authenticated
 
             captures = [group for group in match.groups() if group not in (None, "")]
             for i, capture in enumerate(captures[:-1]):
@@ -531,7 +455,6 @@ class DirectiveParser:
         )
         return pattern.sub(lambda match: handle_auth_or_guest(match), template)
 
-    
     def _parse_auth(self, template):
         """Check if the user is authenticated."""
         return self._parse_auth_or_guest(template)
@@ -544,38 +467,38 @@ class DirectiveParser:
         """Check if the user is not authenticated. Same as @guest"""
         return self._parse_auth_or_guest(template)
 
-
     def _parse_include(self, template: str) -> str:
         """
         Process @include directives to include partial templates.
-        
+
         Example:
             @include("partials.header")
-            
+
         The path is dot-separated and will be converted to a file path:
         - "partials.header" -> "partials/header.html"
         - "components.navbar" -> "components/navbar.html"
-        
+
         Args:
             template: The template string
-            
+
         Returns:
             The processed template with included partials
         """
+
         def replace_include(match: Match) -> str:
             try:
                 # Get the dot-separated path and optional data
-                path = match.group('path').strip()
-                
+                path = match.group("path").strip()
+
                 try:
                     partial_template = loader.load_template(path)
                     return self.parse_directives(str(partial_template), self._context)
                 except Exception as e:
                     raise DirectiveParsingError(f"Error loading partial template {path}: {str(e)}")
-                    
+
             except Exception as e:
                 raise DirectiveParsingError(f"Error in @include directive: {str(e)}")
-        
+
         return self._INCLUDE_PATTERN.sub(replace_include, template)
 
     def _parse_extends(self, template):
@@ -707,163 +630,169 @@ class DirectiveParser:
     def _parse_class(self, template: str) -> str:
         """
         Process @class directives to conditionally apply HTML classes.
-        
+
         Example:
             @class({'active': isActive, 'disabled': isDisabled})
-            
+
         Args:
             template: The template string
-            
+
         Returns:
             The processed template with class attributes
         """
+
         def replace_class(match: Match) -> str:
             try:
                 # Get the classes dictionary from the directive
-                classes_str = match.group('classes').strip()
-                
+                classes_str = match.group("classes").strip()
+
                 # Evaluate the dictionary using eval for consistency with style directive
                 classes_dict = eval(classes_str, {}, self._context)
-                
+
                 if not isinstance(classes_dict, dict):
                     raise DirectiveParsingError("@class directive requires a dictionary")
-                
+
                 active_classes = []
                 for class_name, condition in classes_dict.items():
                     # Evaluate the condition if it's not already a boolean
                     if not isinstance(condition, bool):
                         condition = eval(str(condition), {}, self._context)
-                    
+
                     if condition:
                         # Clean up class name, removing quotes and extra spaces
-                        clean_class = class_name.strip().strip('"\'')
+                        clean_class = class_name.strip().strip("\"'")
                         if clean_class:
                             active_classes.append(clean_class)
-                
+
                 # If we have active classes, return them as a class attribute
                 if active_classes:
                     return f' class="{" ".join(active_classes)}"'
-                return ''
-                
+                return ""
+
             except Exception as e:
                 raise DirectiveParsingError(f"Error in @class directive: {str(e)}")
-        
+
         return self._CLASS_PATTERN.sub(replace_class, template)
 
     def _parse_style(self, template: str) -> str:
         """
         Process @style directives to conditionally apply inline styles.
-        
+
         Example:
             @style({'color: red;': isError, 'font-weight: bold;': isBold})
-            
+
         Args:
             template: The template string
-            
+
         Returns:
             The processed template with style attributes
         """
+
         def replace_style(match: Match) -> str:
             try:
                 # Get the styles dictionary from the directive
-                styles_str = match.group('styles').strip()
-                
-                styles_dict = eval(styles_str, {} ,self._context)
-                
+                styles_str = match.group("styles").strip()
+
+                styles_dict = eval(styles_str, {}, self._context)
+
                 if not isinstance(styles_dict, dict):
                     raise DirectiveParsingError("@style directive requires a dictionary")
-                
+
                 active_styles = []
                 for style, condition in styles_dict.items():
                     if not isinstance(condition, bool):
-                        condition = eval(str(condition), {} ,self._context)
-                    
+                        condition = eval(str(condition), {}, self._context)
+
                     if condition:
                         # Remove any existing 'style="' or '"' from the style string
-                        clean_style = style.strip().rstrip(';').strip('"\'')
+                        clean_style = style.strip().rstrip(";").strip("\"'")
                         if clean_style:
                             active_styles.append(clean_style)
-                
+
                 if active_styles:
                     return f' style="{"; ".join(active_styles)};"'
-                return ''
-                
+                return ""
+
             except Exception as e:
                 raise DirectiveParsingError(f"Error in @style directive: {str(e)}")
-        
+
         return self._STYLE_PATTERN.sub(replace_style, template)
 
     def _parse_autoescape(self, template: str) -> str:
         """Process @autoescape directive for controlling HTML escaping."""
+
         def replace_autoescape(match: Match) -> str:
             try:
-                mode = match.group('mode')
-                content = match.group('content')
-                
+                mode = match.group("mode")
+                content = match.group("content")
+
                 # Store current autoescape setting
-                current_autoescape = self._context.get('autoescape', True)
-                
+                current_autoescape = self._context.get("autoescape", True)
+
                 # Update context with new autoescape setting
-                self._context['autoescape'] = (mode == 'on')
-                
+                self._context["autoescape"] = mode == "on"
+
                 # Process content with new autoescape setting
                 result = self.parse_directives(content, self._context)
-                
+
                 # Restore previous autoescape setting
-                self._context['autoescape'] = current_autoescape
-                
+                self._context["autoescape"] = current_autoescape
+
                 return result
             except Exception as e:
                 raise DirectiveParsingError(f"Error in @autoescape directive: {str(e)}")
-        
+
         return self._AUTOESCAPE_PATTERN.sub(replace_autoescape, template)
 
     def _parse_cycle(self, template: str) -> str:
         """Process @cycle directive for cycling through a list of values."""
+
         def replace_cycle(match: Match) -> str:
             try:
-                values_str = match.group('values')
-                values = [v.strip() for v in values_str.split(',')]
-                
+                values_str = match.group("values")
+                values = [v.strip() for v in values_str.split(",")]
+
                 # Get or initialize cycle counter
-                cycle_counter = self._context.setdefault('_cycle_counter', {})
+                cycle_counter = self._context.setdefault("_cycle_counter", {})
                 cycle_key = f"cycle_{values_str}"
-                
+
                 if cycle_key not in cycle_counter:
                     cycle_counter[cycle_key] = 0
                 else:
                     cycle_counter[cycle_key] = (cycle_counter[cycle_key] + 1) % len(values)
-                
+
                 return str(values[cycle_counter[cycle_key]])
             except Exception as e:
                 raise DirectiveParsingError(f"Error in @cycle directive: {str(e)}")
-        
+
         return self._CYCLE_PATTERN.sub(replace_cycle, template)
 
     def _parse_debug(self, template: str) -> str:
         """Process @debug directive to output debugging information."""
+
         def replace_debug(match: Match) -> str:
             try:
                 debug_info = []
                 for key, value in sorted(self._context.items()):
-                    if not key.startswith('_'):  # Skip internal variables
+                    if not key.startswith("_"):  # Skip internal variables
                         debug_info.append(f"{key}: {repr(value)}")
-                return '\n'.join(debug_info)
+                return "\n".join(debug_info)
             except Exception as e:
                 raise DirectiveParsingError(f"Error in @debug directive: {str(e)}")
-        
+
         return self._DEBUG_PATTERN.sub(replace_debug, template)
 
     def _parse_filter(self, template: str) -> str:
         """Process @filter directive to apply filters to content."""
+
         def replace_filter(match: Match) -> str:
             try:
-                filters = match.group('filters').split('|')
-                content = match.group('content')
-                
+                filters = match.group("filters").split("|")
+                content = match.group("content")
+
                 # Process content first
                 result = self.parse_directives(content, self._context)
-                
+
                 # Apply each filter in sequence
                 for filter_name in filters:
                     filter_name = filter_name.strip()
@@ -872,251 +801,268 @@ class DirectiveParser:
                         result = filter_func(result)
                     else:
                         raise DirectiveParsingError(f"Unknown filter: {filter_name}")
-                
+
                 return result
             except Exception as e:
                 raise DirectiveParsingError(f"Error in @filter directive: {str(e)}")
-        
+
         return self._FILTER_PATTERN.sub(replace_filter, template)
 
     def _parse_firstof(self, template: str) -> str:
         """Process @firstof directive to output the first non-empty value."""
+
         def replace_firstof(match: Match) -> str:
             try:
-                values = [v.strip() for v in match.group('values').split(',')]
-                default = match.group('default')
-                
+                values = [v.strip() for v in match.group("values").split(",")]
+                default = match.group("default")
+
                 for value in values:
                     try:
                         result = eval(value, {}, self._context)
                         if result:
                             return str(result)
-                    except:
+                    except Exception:
                         continue
-                
-                return str(default) if default else ''
+
+                return str(default) if default else ""
             except Exception as e:
                 raise DirectiveParsingError(f"Error in @firstof directive: {str(e)}")
-        
+
         return self._FIRSTOF_PATTERN.sub(replace_firstof, template)
 
     def _parse_ifchanged(self, template: str) -> str:
         """Process @ifchanged directive to conditionally output content if it has changed."""
+
         def replace_ifchanged(match: Match) -> str:
             try:
-                expressions = match.group('expressions')
-                content = match.group('content')
-                else_content = match.group('else_content')
-                
+                expressions = match.group("expressions")
+                content = match.group("content")
+                else_content = match.group("else_content")
+
                 # Initialize storage for last values if not present
-                if '_ifchanged_last_values' not in self._context:
-                    self._context['_ifchanged_last_values'] = {}
-                
+                if "_ifchanged_last_values" not in self._context:
+                    self._context["_ifchanged_last_values"] = {}
+
                 # Generate a unique key for this ifchanged block
                 key = f"ifchanged_{hash(content)}"
-                
+
                 if expressions:
                     # Watch for changes in specific variables
-                    current_values = tuple(eval(expr.strip(), {}, self._context) 
-                                        for expr in expressions.split(','))
+                    current_values = tuple(eval(expr.strip(), {}, self._context) for expr in expressions.split(","))
                 else:
                     # Watch for changes in the rendered content
                     current_values = (self.parse_directives(content, self._context),)
-                
-                last_values = self._context['_ifchanged_last_values'].get(key)
-                
+
+                last_values = self._context["_ifchanged_last_values"].get(key)
+
                 if last_values != current_values:
-                    self._context['_ifchanged_last_values'][key] = current_values
+                    self._context["_ifchanged_last_values"][key] = current_values
                     return self.parse_directives(content, self._context)
                 elif else_content:
                     return self.parse_directives(else_content, self._context)
-                return ''
-                
+                return ""
+
             except Exception as e:
                 raise DirectiveParsingError(f"Error in @ifchanged directive: {str(e)}")
-        
+
         return self._IFCHANGED_PATTERN.sub(replace_ifchanged, template)
 
     def _parse_lorem(self, template: str) -> str:
         """Process @lorem directive to generate Lorem Ipsum text."""
         import random
-        
-        WORDS = ["lorem", "ipsum", "dolor", "sit", "amet", "consectetur", "adipiscing", 
-                "elit", "sed", "do", "eiusmod", "tempor", "incididunt", "ut", "labore",
-                "et", "dolore", "magna", "aliqua"]
-        
+
+        WORDS = [
+            "lorem",
+            "ipsum",
+            "dolor",
+            "sit",
+            "amet",
+            "consectetur",
+            "adipiscing",
+            "elit",
+            "sed",
+            "do",
+            "eiusmod",
+            "tempor",
+            "incididunt",
+            "ut",
+            "labore",
+            "et",
+            "dolore",
+            "magna",
+            "aliqua",
+        ]
+
         def generate_words(count: int, random_order: bool = False) -> str:
             words = WORDS.copy()
             if random_order:
                 random.shuffle(words)
             while len(words) < count:
                 words.extend(WORDS)
-            return ' '.join(words[:count])
-        
+            return " ".join(words[:count])
+
         def generate_paragraphs(count: int, random_order: bool = False) -> str:
             paragraphs = []
             for _ in range(count):
                 words = generate_words(random.randint(20, 100), random_order)
-                paragraphs.append(words.capitalize() + '.')
-            return '\n\n'.join(paragraphs)
-        
+                paragraphs.append(words.capitalize() + ".")
+            return "\n\n".join(paragraphs)
+
         def replace_lorem(match: Match) -> str:
             try:
-                count = int(match.group('count'))
-                method = match.group('method') or 'w'
-                random_order = bool(match.group('random'))
-                
-                if method == 'w':
+                count = int(match.group("count"))
+                method = match.group("method") or "w"
+                random_order = bool(match.group("random"))
+
+                if method == "w":
                     return generate_words(count, random_order)
-                elif method == 'p':
+                elif method == "p":
                     return generate_paragraphs(count, random_order)
-                elif method == 'b':
-                    return f'<p>{generate_paragraphs(count, random_order)}</p>'
+                elif method == "b":
+                    return f"<p>{generate_paragraphs(count, random_order)}</p>"
                 else:
                     raise DirectiveParsingError(f"Invalid lorem method: {method}")
-                
+
             except Exception as e:
                 raise DirectiveParsingError(f"Error in @lorem directive: {str(e)}")
-        
+
         return self._LOREM_PATTERN.sub(replace_lorem, template)
 
     def _parse_now(self, template: str) -> str:
         """Process @now directive to display the current date and time."""
         from datetime import datetime
-        
+
         def replace_now(match: Match) -> str:
             try:
-                format_string = match.group('format').strip('"\'')
+                format_string = match.group("format").strip("\"'")
                 return datetime.now().strftime(format_string)
             except Exception as e:
                 raise DirectiveParsingError(f"Error in @now directive: {str(e)}")
-        
+
         return self._NOW_PATTERN.sub(replace_now, template)
 
     def _parse_querystring(self, template: str) -> str:
         """Process @querystring directive to modify URL query parameters."""
         from urllib.parse import parse_qs, urlencode
-        
+
         def replace_querystring(match: Match) -> str:
             try:
-                updates_str = match.group('updates')
-                
+                updates_str = match.group("updates")
+
                 # Get current query string from context
-                current_query = self._context.get('request', {}).get('query_string', '')
+                current_query = self._context.get("request", {}).get("query_string", "")
                 query_dict = parse_qs(current_query)
-                
+
                 if updates_str:
                     # Parse and apply updates
                     updates = {}
-                    for pair in updates_str.split(','):
-                        key, value = pair.split('=')
+                    for pair in updates_str.split(","):
+                        key, value = pair.split("=")
                         updates[key.strip()] = value.strip()
-                    
+
                     # Update query parameters
                     for key, value in updates.items():
-                        if value == 'None':
+                        if value == "None":
                             query_dict.pop(key, None)
                         else:
                             query_dict[key] = [value]
-                
-                return '?' + urlencode(query_dict, doseq=True)
+
+                return "?" + urlencode(query_dict, doseq=True)
             except Exception as e:
                 raise DirectiveParsingError(f"Error in @querystring directive: {str(e)}")
-        
+
         return self._QUERYSTRING_PATTERN.sub(replace_querystring, template)
 
     def _parse_regroup(self, template: str) -> str:
         """Process @regroup directive to group a list of dictionaries by a common attribute."""
         from itertools import groupby
-        from operator import itemgetter
-        
+
         def replace_regroup(match: Match) -> str:
             try:
-                expression = match.group('expression')
-                grouper = match.group('grouper')
-                var_name = match.group('var_name')
-                
+                expression = match.group("expression")
+                grouper = match.group("grouper")
+                var_name = match.group("var_name")
+
                 # Evaluate the expression to get the list
                 items = eval(expression, {}, self._context)
-                
+
                 # Sort items by the grouper
-                items = sorted(items, key=lambda x: eval(grouper, {}, {'item': x}))
-                
+                items = sorted(items, key=lambda x: eval(grouper, {}, {"item": x}))
+
                 # Group items
                 groups = []
-                for key, group in groupby(items, key=lambda x: eval(grouper, {}, {'item': x})):
-                    groups.append({
-                        'grouper': key,
-                        'list': list(group)
-                    })
-                
+                for key, group in groupby(items, key=lambda x: eval(grouper, {}, {"item": x})):
+                    groups.append({"grouper": key, "list": list(group)})
+
                 # Store result in context
                 self._context[var_name] = groups
-                return ''
+                return ""
             except Exception as e:
                 raise DirectiveParsingError(f"Error in @regroup directive: {str(e)}")
-        
+
         return self._REGROUP_PATTERN.sub(replace_regroup, template)
 
     def _parse_spaceless(self, template: str) -> str:
         """Process @spaceless directive to remove whitespace from content."""
+
         def replace_spaceless(match: Match) -> str:
             try:
-                content = match.group('content')
-                return re.sub(r'\s+', '', content)
+                content = match.group("content")
+                return re.sub(r"\s+", "", content)
             except Exception as e:
                 raise DirectiveParsingError(f"Error in @spaceless directive: {str(e)}")
-        
+
         return self._SPACELESS_PATTERN.sub(replace_spaceless, template)
 
     def _parse_templatetag(self, template: str) -> str:
         """Process @templatetag directive to output a template tag."""
+
         def replace_templatetag(match: Match) -> str:
             try:
-                tag = match.group('tag')
+                tag = match.group("tag")
                 return f"{{% {tag} %}}"
             except Exception as e:
                 raise DirectiveParsingError(f"Error in @templatetag directive: {str(e)}")
-        
+
         return self._TEMPLATETAG_PATTERN.sub(replace_templatetag, template)
 
     def _parse_widthratio(self, template: str) -> str:
         """Process @widthratio directive to calculate a width ratio."""
+
         def replace_widthratio(match: Match) -> str:
             try:
-                value = int(match.group('value'))
-                max_value = int(match.group('max_value'))
-                max_width = int(match.group('max_width'))
+                value = int(match.group("value"))
+                max_value = int(match.group("max_value"))
+                max_width = int(match.group("max_width"))
                 return str(int(value / max_value * max_width))
             except Exception as e:
                 raise DirectiveParsingError(f"Error in @widthratio directive: {str(e)}")
-        
+
         return self._WIDTHRATIO_PATTERN.sub(replace_widthratio, template)
 
     def _parse_with(self, template: str) -> str:
         """Process @with directive to assign a value to a variable."""
+
         def replace_with(match: Match) -> str:
             try:
-                expressions = match.group('expressions')
-                content = match.group('content')
-                
+                expressions = match.group("expressions")
+                content = match.group("content")
+
                 # Evaluate expressions
                 try:
                     expressions = eval(expressions, {}, self._context)
                 except Exception as e:
-                    raise DirectiveParsingError(
-                        f"Error evaluating with expressions '{expressions}': {str(e)}"
-                    )
-                
+                    raise DirectiveParsingError(f"Error evaluating with expressions '{expressions}': {str(e)}")
+
                 # Assign values to variables
                 for var, value in expressions.items():
                     self._context[var] = value
-                
+
                 # Process content
                 return self.parse_directives(content, self._context)
             except Exception as e:
                 raise DirectiveParsingError(f"Error in @with directive: {str(e)}")
-        
+
         return self._WITH_PATTERN.sub(replace_with, template)
 
     def _parse_csrf(self, template):
@@ -1151,54 +1097,6 @@ class DirectiveParser:
             except ImproperlyConfigured as exc:
                 raise exc
 
-    def _parse_url(self, template):
-        pattern = re.compile(r"@url\s*\(\s*(?P<name>.*?)\s*(?:,(?P<params>.*?))?\)")
-
-        return pattern.sub(lambda match: self._handle_url(match), template)
-
-    def _handle_url(self, match):
-        # Check django installation
-        try:
-            from django.urls import resolve
-        except ImportError:
-            raise Exception("@url directive is currenctly supported by django only")
-        else:
-            resolver_match = resolve(self._context.get('request').path_info)
-
-            if resolver_match.url_name == match.group("name"):
-                return ""
-
-            route_name = match.group("name")
-            params = match.group("params")
-
-            # Check route name is a valid string
-            try:
-                route_name = ast.literal_eval(route_name)
-            except SyntaxError:
-                raise Exception(
-                    f"Syntax error: The route name must be a valid string. Got {route_name} near line "
-                    f"{self._get_line_number(match)}"
-                )
-
-            # Try return the route url or raise errors if bad configuration encountered
-            try:
-                if params:
-                    try:
-                        params = eval(params, {}, self._context)
-                        params = ast.literal_eval(str(params))
-                    except (SyntaxError, ValueError) as e:
-                        raise Exception(str(e))
-                    else:
-                        if isinstance(params, dict):
-                            return resolve(route_name, kwargs=params)
-                        elif isinstance(params, list):
-                            return resolve(route_name, args=params)
-                        else:
-                            raise Exception("The url parameters must be of type list or dict")
-                return resolve(route_name)
-            except Exception as e:
-                raise e
-
     def _checked_selected_required(self, template):
 
         def handle_csr(match):
@@ -1211,26 +1109,41 @@ class DirectiveParser:
         pattern = re.compile(r"@(?P<directive>checked|selected|required)\s*\(\s*(?P<expression>.*?)\s*\)", re.DOTALL)
         return pattern.sub(handle_csr, template)
 
-
     def _parse_error(self, template):
         """Check if an input form contains a validation error"""
-        pattern = re.compile(r"@error\s*\((?P<field>.*?)\)\s*(?P<slot>.*?)\s*@enderror", re.DOTALL)
 
-        return pattern.sub(lambda match: self._handle_error(match, self._context), template)
+        def handle_error(match):
+            field_path = match.group("field")
+            slot = match.group("slot")
 
-    def _handle_error(self, match):
-        field = match.group("field")
-        slot = match.group("slot")
+            # Get the form field using dot notation
+            parts = field_path.split(".")
+            if len(parts) < 2 or len(parts) > 2:
+                raise DirectiveParsingError(f"Invalid field : {field_path}. Must be in format 'form.field_name'")
+            else:
+                form_name, field_name = parts
 
-        message = eval(field, {}, self._context)
-        if message:
-            local_context = self._context.copy()
-            local_context["message"] = message
-            rendered = self.parse_directives(slot, local_context)
+            form = self._context.get(form_name)
+            if not form:
+                raise DirectiveParsingError(f"Form '{field_name}' not found in context")
 
-            return rendered
+            # Get the field
+            field = form.fields.get(field_name)
+            if not field:
+                raise DirectiveParsingError(f"Field '{field_name}' not found in the form")
 
-        return ""
+            # Check if the field got an error
+            error = form._errors.get(field_name)
+
+            if error:
+                local_context = self._context.copy()
+                local_context["message"] = error[0]  # always retrieve the first error message
+                slot = self._variable_parser.parse_variables(slot, local_context)
+                return slot
+
+            return ""
+
+        return self._ERROR_PATTERN.sub(handle_error, template)
 
     def _parse_active(self, template):
         """Use the @active('route_name', 'active_class') directive to set an active class in a nav link"""
@@ -1251,7 +1164,7 @@ class DirectiveParser:
         except ImportError:
             raise Exception("@active directive is currenctly supported by django only")
         else:
-            resolver_match = resolve(self._context.get('request').path_info)
+            resolver_match = resolve(self._context.get("request").path_info)
 
             if route == resolver_match.url_name:
                 return param
@@ -1260,25 +1173,25 @@ class DirectiveParser:
     def _parse_field(self, template: str) -> str:
         """
         Process @field directive to render Django form fields with HTML-like attributes.
-        
+
         Example:
             @field(form.email, class="form-control" id="email-input" required)
-            
+
         Args:
             template: The template string
-            
+
         Returns:
             The processed template with rendered form fields
         """
+
         def replace_field(match: Match) -> str:
             try:
                 # Get field path and attributes
-                field_path = match.group('field').strip()
-                attrs_str = match.group('attributes').strip()
+                field_path = match.group("field").strip()
+                attrs_str = match.group("attributes").strip()
 
-                
                 # Get the form field using dot notation
-                parts = field_path.split('.')
+                parts = field_path.split(".")
                 if len(parts) < 2 or len(parts) > 2:
                     raise DirectiveParsingError(f"Invalid field : {field_path}. Must be in format 'form.field_name'")
                 else:
@@ -1287,21 +1200,21 @@ class DirectiveParser:
                 form = self._context.get(form_name)
                 if not form:
                     raise DirectiveParsingError(f"Form '{field_name}' not found in context")
-                
+
                 # Get the field
                 field = form.fields.get(field_name)
                 if not field:
                     raise DirectiveParsingError(f"Field '{field_name}' not found in the form")
-                
+
                 # Parse HTML-like attributes
                 attributes = {}
                 if attrs_str:
                     attrs = attrs_str.split(" ")
                     for attr in attrs:
-                        if len(attr.split('=')) > 1:
-                            attributes[attr.split('=')[0]] = attr.split('=')[1].strip('"\'')
+                        if len(attr.split("=")) > 1:
+                            attributes[attr.split("=")[0]] = attr.split("=")[1].strip("\"'")
                         else:
-                            attributes[attr.split('=')[0]] = attr.split('=')[0]
+                            attributes[attr.split("=")[0]] = attr.split("=")[0]
 
                 # Update the field widget attributes
                 widget = field.widget
@@ -1309,14 +1222,10 @@ class DirectiveParser:
 
                 return form[field_name].as_widget()
 
-                
             except Exception as e:
                 raise DirectiveParsingError(f"Error in @field directive: {str(e)}")
-        
-        return self._FIELD_PATTERN.sub(replace_field, template)
 
-    def _parse_component(self):
-        pass
+        return self._FIELD_PATTERN.sub(replace_field, template)
 
     def _parse_liveblade(self, template, context):
         pattern = re.compile(r"@liveblade\s*\(\s*(?P<component>.*?)\s*\)")
@@ -1332,14 +1241,16 @@ class DirectiveParser:
 
                 m = re.search(tag_pattern, str(component_content))
                 attributes = m.group("attributes")
-                component_content = re.sub(attributes, f'{attributes} liveblade_id="{component}"', str(component_content))
+                component_content = re.sub(
+                    attributes, f'{attributes} liveblade_id="{component}"', str(component_content)
+                )
 
                 # Parse the content to include before replacement
                 try:
                     import importlib
 
                     module = importlib.import_module(f"components.{component}")
-                    cls = getattr(module, "".join([word.capitalize() for word in component.split('_')]))
+                    cls = getattr(module, "".join([word.capitalize() for word in component.split("_")]))
 
                     parsed = cls().render()
                     return re.sub(pattern, parsed, template)
@@ -1352,31 +1263,34 @@ class DirectiveParser:
 
         return template
 
-    def _parse_translations(slef, template, context):
+    def _parse_translations(self, template, context):
         """
         Process @translate, @trans, @blocktranslate, and @plural directives in PyBlade templates.
         """
 
+        from django.utils.translation import gettext_lazy as _
+        from django.utils.translation import ngettext, pgettext
+
         # Handle @translate and @trans with optional context
         def replace_trans(match):
-            text = match.group('text')
-            translation_context = match.group('context')
+            text = match.group("text")
+            translation_context = match.group("context")
             if translation_context:
                 return pgettext(translation_context.strip('"'), text.strip('"'))
             return _(text.strip('"'))
 
         # Handle @blocktranslate with @plural and @endblocktranslate
         def replace_blocktrans(match):
-            block_content = match.group('block')
-            count_var = match.group('count')
+            block_content = match.group("block")
+            count_var = match.group("count")
             plural = None
             singular = None
 
             # Parse the block for @plural
-            plural_match = re.search(r'(?P<singular>.*)@plural\s*(?P<plural>.*)', block_content, re.DOTALL)
+            plural_match = re.search(r"(?P<singular>.*)@plural\s*(?P<plural>.*)", block_content, re.DOTALL)
             if plural_match:
-                singular = plural_match.group('singular').strip()
-                plural = plural_match.group('plural').strip()
+                singular = plural_match.group("singular").strip()
+                plural = plural_match.group("plural").strip()
             else:
                 singular = block_content.strip()
 
@@ -1390,11 +1304,12 @@ class DirectiveParser:
 
         # Regex patterns
         translate_pattern = re.compile(
-            r"@(?:trans|translate)\(\s*(?P<text>'[^']+'|\"[^\"]+\")\s*(?:,\s*context\s*=\s*(?P<context>'[^']+'|\"[^\"]+\"))?\s*\)"
+            r"@(?:trans|translate)\(\s*(?P<text>'[^']+'|\"[^\"]+\")\s*"
+            r"(?:,\s*context\s*=\s*(?P<context>'[^']+'|\"[^\"]+\"))?\s*\)",
+            re.DOTALL,
         )
         blocktranslate_pattern = re.compile(
-            r"@blocktranslate(?:\s+count\s+(?P<count>\w+))?\s*\{(?P<block>.*?)@endblocktranslate\}",
-            re.DOTALL
+            r"@blocktranslate(?:\s+count\s+(?P<count>\w+))?\s*\{(?P<block>.*?)@endblocktranslate\}", re.DOTALL
         )
 
         # Replace directives in content
@@ -1416,16 +1331,10 @@ class DirectiveParser:
     def _parse_comment(self, template):
         return self._COMMENT_PATTERN.sub("", template)
 
-    def _parse_verbatim(self, template):
-        return self._VERBATIM_PATTERN.sub(lambda match: match.group("content"), template)
+    def _parse_liveblade_component(self, template):
+        return self._COMPONENT_PATTERN.sub(lambda match: self._handle_liveblade_component(match), template)
 
-    def _parse_verbatim_shortcut(self, template):
-        return self._VERBATIM_SHORTHAND_PATTERN.sub(lambda match: match.group(0)[1:-1], template)
-
-    def _parse_component(self, template):
-        return self._COMPONENT_PATTERN.sub(lambda match: self._handle_component(match), template)
-
-    def _handle_component(self, match):
+    def _handle_liveblade_component(self, match):
         name = match.group("name")
         data = match.group("data")
         slot = match.group("slot")
@@ -1434,7 +1343,7 @@ class DirectiveParser:
             import importlib
 
             module = importlib.import_module(f"components.{name}")
-            cls = getattr(module, "".join([word.capitalize() for word in name.split('_')]))
+            cls = getattr(module, "".join([word.capitalize() for word in name.split("_")]))
 
             props = {}
             if data:
@@ -1448,118 +1357,90 @@ class DirectiveParser:
         except Exception as e:
             raise e
 
-    def _parse_liveblade_scripts(self, template):
-        return self._LIVEBLADE_SCRIPTS_PATTERN.sub(lambda match: self._handle_liveblade_scripts(match), template)
-
-    def _handle_liveblade_scripts(self, match):
-        attributes = match.group("attributes")
-
-        try:
-            import importlib
-
-            module = importlib.import_module("liveblade_scripts")
-            cls = getattr(module, "LivebladeScripts")
-
-            props = {}
-            if attributes:
-                props = eval(attributes, {}, self._context)
-
-            return cls(props).render()
-        except ModuleNotFoundError as e:
-            raise e
-        except AttributeError as e:
-            raise e
-        except Exception as e:
-            raise e
-
     def _parse_verbatim_shorthand(self, template: str) -> str:
         """Process shorthand verbatim syntax (@{{ variable }})."""
+
         def replace_verbatim_shorthand(match: Match) -> str:
             try:
                 # Remove the @ and return the content as is
                 return match.group(1)
             except Exception as e:
                 raise DirectiveParsingError(f"Error in verbatim shorthand: {str(e)}")
-        
+
         return self._VERBATIM_SHORTHAND_PATTERN.sub(replace_verbatim_shorthand, template)
 
     def _parse_component(self, template: str) -> str:
         """Process @component directive for reusable template components."""
+
         def replace_component(match: Match) -> str:
             try:
-                name = self._validate_argument(match.group('name'))
-                data = match.group('data')
-                slot = match.group('slot')
-                
+                name = self._validate_argument(match.group("name"))
+                data = match.group("data")
+                slot = match.group("slot")
+
                 # Get the component template
-                component_path = f"components/{name}.html"
-                try:
-                    with open(component_path, 'r') as f:
-                        component_template = f.read()
-                except FileNotFoundError:
-                    raise DirectiveParsingError(f"Component not found: {component_path}")
-                
+                component_template = loader.load_template(name)
+
                 # Create component context
                 component_context = self._context.copy()
-                
+
                 # Add slot content to context
-                component_context['slot'] = slot
-                
+                component_context["slot"] = slot
+
                 # Process data arguments
                 if data:
                     try:
                         # Convert string data to dict
                         data_dict = {}
-                        for pair in data.split(','):
-                            key, value = pair.split('=')
+                        for pair in data.split(","):
+                            key, value = pair.split("=")
                             key = key.strip()
                             # Evaluate the value in the current context
                             data_dict[key] = eval(value, {}, self._context)
                         component_context.update(data_dict)
                     except Exception as e:
                         raise DirectiveParsingError(f"Error processing component data: {str(e)}")
-                
+
                 # Process the component template with the new context
-                return self.parse_directives(component_template, component_context)
-                
+                return self.parse_directives(str(component_template), component_context)
+
             except Exception as e:
                 raise DirectiveParsingError(f"Error in @component directive: {str(e)}")
-        
+
         return self._COMPONENT_PATTERN.sub(replace_component, template)
 
     def _parse_liveblade_scripts(self, template: str) -> str:
         """Process @liveblade_scripts directive to include Liveblade scripts."""
+
         def replace_liveblade_scripts(match: Match) -> str:
             try:
-                attributes = match.group('attributes') or ''
-                
+                attributes = match.group("attributes") or ""
+
                 # Base scripts needed for Liveblade functionality
                 scripts = [
                     '<script src="/static/js/liveblade.js"></script>',
-                    '<script>window.liveblade = new Liveblade();</script>'
+                    "<script>window.liveblade = new Liveblade();</script>",
                 ]
-                
+
                 # Add CSRF token for security
-                csrf_token = self._context.get('csrf_token', '')
+                csrf_token = self._context.get("csrf_token", "")
                 if csrf_token:
-                    scripts.append(
-                        f'<meta name="csrf-token" content="{csrf_token}">'
-                    )
-                
+                    scripts.append(f'<meta name="csrf-token" content="{csrf_token}">')
+
                 # Process additional attributes
                 if attributes:
                     attr_dict = {}
-                    for pair in attributes.split(','):
-                        key, value = pair.split('=')
-                        attr_dict[key.strip()] = value.strip(' \'"')
-                    
+                    for pair in attributes.split(","):
+                        key, value = pair.split("=")
+                        attr_dict[key.strip()] = value.strip(" '\"")
+
                     # Add initialization script with attributes
-                    init_script = f'<script>window.liveblade.init({json.dumps(attr_dict)});</script>'
+                    init_script = f"<script>window.liveblade.init({json.dumps(attr_dict)});</script>"
                     scripts.append(init_script)
-                
-                return '\n'.join(scripts)
-                
+
+                return "\n".join(scripts)
+
             except Exception as e:
                 raise DirectiveParsingError(f"Error in @liveblade_scripts directive: {str(e)}")
-        
+
         return self._LIVEBLADE_SCRIPTS_PATTERN.sub(replace_liveblade_scripts, template)
