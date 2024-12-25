@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contact Form</title>
+    {# <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"> #}
+    <style>
+        .form-container {
+            max-width: 600px;
+            margin: 2rem auto;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+        }
+        .radio-group {
+            display: flex;
+            gap: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="form-container">
+            <h2 class="mb-4">Contact Us</h2>
+            
+            <form method="post" enctype="multipart/form-data">
+                @csrf
+
+                <div class="mb-3">
+                    <label for="id_name" class="form-label">Name</label>
+                    @field(form.name, class="form-control" id="custom" selected @required(1 < 6))                    @error(form.name)
+                    <small style="color:red;">{{ message }}</small>
+                    @enderror
+                </div>
+                
+                <div class="mb-3">
+                    <label for="id_email" class="form-label">Email</label>
+                    @field(form.email, class="form-control" required)
+                    <b-error :field="form.name"/>
+                    @error(form.email)
+                        <small style="color:red;">{{ message }}</small>
+                    @enderror
+                </div>
+                
+                <div class="mb-3">
+                    <label for="id_phone" class="form-label">Phone (optional)</label>
+                    @field(form.phone, class="form-control")
+                    @error(form.phone)
+                        <small style="color:red;">{{ message }}</small>
+                    @enderror
+                </div>
+                
+                <div class="mb-3">
+                    <label for="id_subject" class="form-label">Subject</label>
+                    @field(form.subject, class="form-select")
+                    @error(form.subject)
+                        <small style="color:red;">{{ message }}</small>
+                    @enderror
+                </div>
+                
+                <div class="mb-3">
+                    <label for="id_message" class="form-label">Message</label>
+                    @field(form.message, class="form-control")
+                    @error(form.message)
+                        <small style="color:red;">{{ message }}</small>
+                    @enderror
+                </div>
+                
+                <div class="mb-3">
+                    <div class="form-check">
+                        @field(form.subscribe, class="form-check-input")
+                        <label class="form-check-label" for="id_subscribe">Subscribe to newsletter</label>
+                    </div>
+                    @error(form.subscribe)
+                        <small style="color:red;">{{ message }}</small>
+                    @enderror
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">Priority</label>
+                    <div class="radio-group">
+                        @field(form.priority, class="form-check-input")
+                    </div>
+                    @error(form.priority)
+                        <small style="color:red;">{{ message }}</small>
+                    @enderror
+                </div>
+                
+                <div class="mb-3">
+                    <label for="id_attachment" class="form-label">Attachment (optional)</label>
+                    @field(form.attachment, class="form-control")
+                    <div class="form-text">Max file size: 5MB</div>
+                    @error(form.attachment)
+                        <small style="color:red;">{{ message }}</small>
+                    @enderror
+                </div>
+                
+                <button type="submit" class="btn btn-primary">Send Message</button>
+            </form>
+        </div>
+    </div>
+    
+    {# <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script> #}
+</body>
+</html>

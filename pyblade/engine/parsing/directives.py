@@ -131,7 +131,7 @@ class DirectiveParser:
         re.DOTALL
     )
     _FIELD_PATTERN: Pattern = re.compile(
-        r"@field\s*\(\s*(?P<field_path>[\w.]+)\s*,\s*(?P<attributes>(?:[\w-]+(?:=(?:\"[^\"]*\"|'[^']*'))?(?:\s+|$))*)\s*\)",
+        r"@field\s*\((?P<field>.*?)\s*,\s*(?P<attributes>.*?)\)",
         re.DOTALL
     )
 
@@ -201,8 +201,8 @@ class DirectiveParser:
         # Form helpers
         template = self._checked_selected_required(template)
         template = self._parse_csrf(template)
-        # template = self._parse_error(template)
         template = self._parse_field(template)
+        # template = self._parse_error(template)
         
         # Components related
         template = self._parse_include(template)
@@ -1273,107 +1273,42 @@ class DirectiveParser:
         def replace_field(match: Match) -> str:
             try:
                 # Get field path and attributes
-                field_path = match.group('field_path').strip()
-                attrs_str = match.group('attributes')
+                field_path = match.group('field').strip()
+                attrs_str = match.group('attributes').strip()
+
                 
                 # Get the form field using dot notation
                 parts = field_path.split('.')
-                if len(parts) < 2:
-                    raise DirectiveParsingError(f"Invalid field path: {field_path}. Must be in format 'form.field_name'")
-                
-                # Get the form
-                form = self._context
-                for part in parts[:-1]:  # All parts except the last one (field name)
-                    form = form.get(part)
-                    if not form:
-                        raise DirectiveParsingError(f"Form '{'.'.join(parts[:-1])}' not found in context")
+                if len(parts) < 2 or len(parts) > 2:
+                    raise DirectiveParsingError(f"Invalid field : {field_path}. Must be in format 'form.field_name'")
+                else:
+                    form_name, field_name = parts
+
+                form = self._context.get(form_name)
+                if not form:
+                    raise DirectiveParsingError(f"Form '{field_name}' not found in context")
                 
                 # Get the field
-                field_name = parts[-1]
-                try:
-                    field = form[field_name]
-                except (KeyError, AttributeError):
-                    raise DirectiveParsingError(f"Field '{field_name}' not found in form")
+                field = form.fields.get(field_name)
+                if not field:
+                    raise DirectiveParsingError(f"Field '{field_name}' not found in the form")
                 
                 # Parse HTML-like attributes
-                attrs = {}
+                attributes = {}
                 if attrs_str:
-                    # Split by whitespace but preserve quoted values
-                    import shlex
-                    attr_tokens = shlex.split(attrs_str)
-                    for token in attr_tokens:
-                        if '=' in token:
-                            key, value = token.split('=', 1)
-                            # Remove quotes from value
-                            value = value.strip('"\'')
-                            attrs[key] = value
+                    attrs = attrs_str.split(" ")
+                    for attr in attrs:
+                        if len(attr.split('=')) > 1:
+                            attributes[attr.split('=')[0]] = attr.split('=')[1].strip('"\'')
                         else:
-                            # Boolean attribute
-                            attrs[token] = 'true'
-                
-                # Get field type and current value
-                field_type = field.field.widget.__class__.__name__.lower()
-                field_value = field.value() if hasattr(field, 'value') else ''
-                
-                # Build HTML attributes string
-                html_attrs = []
-                
-                # Add name and id attributes if not overridden
-                if 'name' not in attrs:
-                    html_attrs.append(f'name="{field_name}"')
-                if 'id' not in attrs:
-                    html_attrs.append(f'id="id_{field_name}"')
-                
-                # Add type attribute based on field type
-                input_type = {
-                    'textinput': 'text',
-                    'numberinput': 'number',
-                    'emailinput': 'email',
-                    'passwordinput': 'password',
-                    'dateinput': 'date',
-                    'datetimeinput': 'datetime-local',
-                    'timeinput': 'time',
-                    'urlinput': 'url',
-                    'telinput': 'tel',
-                    'checkboxinput': 'checkbox',
-                    'radioinput': 'radio',
-                    'fileinput': 'file'
-                }.get(field_type, 'text')
-                
-                if 'type' not in attrs:
-                    html_attrs.append(f'type="{input_type}"')
-                
-                # Add value attribute if present and not overridden
-                if field_value and 'value' not in attrs:
-                    html_attrs.append(f'value="{field_value}"')
-                
-                # Add required attribute if field is required and not overridden
-                if field.field.required and 'required' not in attrs:
-                    html_attrs.append('required')
-                
-                # Add custom attributes
-                for key, value in attrs.items():
-                    if value.lower() == 'true':
-                        html_attrs.append(key)
-                    elif value.lower() == 'false':
-                        continue
-                    else:
-                        html_attrs.append(f'{key}="{value}"')
-                
-                # Add error class if field has errors
-                if hasattr(field, 'errors') and field.errors:
-                    error_class = attrs.get('error-class', 'is-invalid')
-                    current_class = attrs.get('class', '')
-                    if current_class:
-                        html_attrs.append(f'class="{current_class} {error_class}"')
-                    else:
-                        html_attrs.append(f'class="{error_class}"')
-                elif 'class' in attrs:
-                    html_attrs.append(f'class="{attrs["class"]}"')
-                
-                # Render the input element
-                html_attrs_str = ' '.join(html_attrs)
-                return f'<input {html_attrs_str}>'
+                            attributes[attr.split('=')[0]] = attr.split('=')[0]
+
+                # Update the field widget attributes
+                widget = field.widget
+                widget.attrs.update(attributes)
+
+                return form[field_name].as_widget()
+
                 
             except Exception as e:
                 raise DirectiveParsingError(f"Error in @field directive: {str(e)}")
