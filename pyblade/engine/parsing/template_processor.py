@@ -1,11 +1,14 @@
 """
 Core template processing functionality.
 """
-from typing import Dict, Any, Optional
+
+import re
+from typing import Any, Dict, Pattern
+
+from ..exceptions import TemplateRenderingError
 from .cache import TemplateCache
 from .directives import DirectiveParser
 from .variables import VariableParser
-from ..exceptions import TemplateRenderingError
 
 
 class TemplateProcessor:
@@ -13,7 +16,9 @@ class TemplateProcessor:
     Main template processing class that coordinates parsing, caching,
     and rendering of templates.
     """
-    
+
+    _VERBATIM_PLACEHOLDER_PATTERN: Pattern = re.compile(r"@__verbatim__\((?P<id>\w+)\)", re.DOTALL)
+
     def __init__(self, cache_size: int = 1000, cache_ttl: int = 3600):
         self.cache = TemplateCache(max_size=cache_size, ttl=cache_ttl)
         self.directive_parser = DirectiveParser()
@@ -22,14 +27,14 @@ class TemplateProcessor:
     def render(self, template: str, context: Dict[str, Any]) -> str:
         """
         Render a template with the given context.
-        
+
         Args:
             template: The template string to render
             context: The context dictionary
-            
+
         Returns:
             The rendered template
-            
+
         Raises:
             TemplateRenderingError: If there's an error during rendering
         """
@@ -53,21 +58,23 @@ class TemplateProcessor:
     def _process_template(self, template: str, context: Dict[str, Any]) -> str:
         """
         Process a template by parsing directives and variables.
-        
+
         Args:
             template: The template string
             context: The context dictionary
-            
+
         Returns:
             The processed template
         """
         # First process all directives
         template = self.directive_parser.parse_directives(template, context)
-        
 
         # Then process variables
         template = self.variable_parser.parse_variables(template, context)
-        
+
+        # Then restore possible verbatim contents
+        template = self._restore_verbatim(template)
+
         return template
 
     def clear_cache(self) -> None:
@@ -77,9 +84,21 @@ class TemplateProcessor:
     def invalidate_template(self, template: str, context: Dict[str, Any]) -> None:
         """
         Invalidate a specific template in the cache.
-        
+
         Args:
             template: The template string
             context: The context dictionary
         """
         self.cache.invalidate(template, context)
+
+    def _restore_verbatim(self, template: str) -> str:
+        """
+        Process all @__verbatim__(<id>) placeholders in the template and replace them
+        with the corresponding verbatim content.
+        This function is called to restore the verbatim content after processing.
+        """
+
+        def replace_verbatim_placeholder(match):
+            return self.directive_parser.verbatims.pop(match.group("id"))
+
+        return self._VERBATIM_PLACEHOLDER_PATTERN.sub(replace_verbatim_placeholder, template)

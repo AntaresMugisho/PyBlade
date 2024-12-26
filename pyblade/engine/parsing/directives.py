@@ -6,6 +6,7 @@ import ast
 import json
 import re
 from typing import Any, Dict, Match, Pattern, Tuple
+from uuid import uuid4
 
 from pyblade.engine import loader
 
@@ -64,7 +65,7 @@ class DirectiveParser:
     _WITH_PATTERN: Pattern = re.compile(r"@with\s*\((?P<expressions>.*?)\)\s*(?P<content>.*?)@endwith", re.DOTALL)
     _COMMENT_PATTERN: Pattern = re.compile(r"@comment\s*(?P<content>.*?)@endcomment", re.DOTALL)
     _VERBATIM_PATTERN: Pattern = re.compile(r"@verbatim\s*(?P<content>.*?)@endverbatim", re.DOTALL)
-    _VERBATIM_SHORTHAND_PATTERN: Pattern = re.compile(r"@({[{%].*?[%}]})", re.DOTALL)
+    _VERBATIM_SHORTHAND_PATTERN: Pattern = re.compile(r"@(?P<content>{{.*?}})", re.DOTALL)
     _COMPONENT_PATTERN: Pattern = re.compile(
         r"@component\s*\(\s*(?P<name>['\"].*?['\"])\s*(?:,\s*(?P<data>.*?))?\s*\)(?P<slot>.*?)@endcomponent", re.DOTALL
     )
@@ -79,6 +80,7 @@ class DirectiveParser:
         self._context: Dict[str, Any] = {}
         self._line_map: Dict[str, int] = {}  # Maps directive positions to line numbers
         self._variable_parser = VariableParser()
+        self.verbatims = {}
 
     def _get_line_number(self, template: str, position: int) -> int:
         """Get the line number for a position in the template."""
@@ -158,6 +160,7 @@ class DirectiveParser:
         template = self._parse_component(template)
         template = self._parse_url(template)
 
+        # Process liveblade
         template = self._parse_liveblade_scripts(template)
         return template
 
@@ -306,21 +309,17 @@ class DirectiveParser:
         The shorthand is processed first to prevent interference with block processing.
         """
 
-        # First process shorthand verbatim (@{{ }})
-        def replace_shorthand(match: Match) -> str:
-            try:
-                return match.group(1)  # Return the content without the @ prefix
-            except Exception as e:
-                raise DirectiveParsingError(f"Error in verbatim shorthand: {str(e)}")
-
-        template = self._VERBATIM_SHORTHAND_PATTERN.sub(replace_shorthand, template)
-
-        # Then process verbatim blocks
         def replace_verbatim(match: Match) -> str:
             try:
-                return match.group("content")  # Return the content without processing
+                verbatim_content = match.group("content")
+                verbatim_id = uuid4().hex
+                self.verbatims[verbatim_id] = verbatim_content
+                return f"@__verbatim__({verbatim_id})"
+
             except Exception as e:
                 raise DirectiveParsingError(f"Error in @verbatim directive: {str(e)}")
+
+        template = self._VERBATIM_SHORTHAND_PATTERN.sub(replace_verbatim, template)
 
         return self._VERBATIM_PATTERN.sub(replace_verbatim, template)
 
@@ -1106,7 +1105,9 @@ class DirectiveParser:
                 return ""
             return directive
 
-        pattern = re.compile(r"@(?P<directive>checked|selected|required)\s*\(\s*(?P<expression>.*?)\s*\)", re.DOTALL)
+        pattern = re.compile(
+            r"@(?P<directive>checked|selected|required|disabled)\s*\(\s*(?P<expression>.*?)\s*\)", re.DOTALL
+        )
         return pattern.sub(handle_csr, template)
 
     def _parse_error(self, template):

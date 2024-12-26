@@ -1,8 +1,10 @@
 from django.shortcuts import render
+
 from .forms import ContactForm
 
+
 def index(request):
-    if request.method == 'POST':
+    if request.method == "POST":
         form = ContactForm(request.POST, request.FILES)
 
         if form.is_valid():
@@ -14,5 +16,4 @@ def index(request):
         form = ContactForm()
         # print(form.email)
 
-    
-    return render(request, 'django_backend.index', {'form': form, "message": "Test"})
+    return render(request, "django_backend.index", {"form": form, "name": "Antares"})
