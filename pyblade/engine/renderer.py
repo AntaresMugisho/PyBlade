@@ -1,7 +1,8 @@
 """
 PyBlade template rendering engine.
 """
-from typing import Dict, List, Optional, Union
+
+from typing import Dict, List, Optional
 
 from . import loader
 from .exceptions import TemplateNotFoundError
@@ -14,7 +15,7 @@ class PyBlade:
     def __init__(self, dirs: Optional[List[str]] = None, cache_size: int = 1000, cache_ttl: int = 3600):
         """
         Initialize the PyBlade template engine.
-        
+
         Args:
             dirs: List of template directories
             cache_size: Maximum number of templates to cache
@@ -26,14 +27,15 @@ class PyBlade:
     def render(self, template: str, context: Optional[Dict] = None) -> str:
         """
         Render a template with the given context.
-        
+
         Args:
             template: The template string to render
             context: The context dictionary
-            
+
         Returns:
             The rendered template string
         """
+
         if context is None:
             context = {}
 
@@ -42,30 +44,30 @@ class PyBlade:
     def render_file(self, template_name: str, context: Optional[Dict] = None) -> str:
         """
         Load and render a template file.
-        
+
         Args:
             template_name: Name of the template file
             context: The context dictionary
-            
+
         Returns:
             The rendered template
-            
+
         Raises:
             TemplateNotFoundError: If the template file cannot be found
         """
         template = self.get_template(template_name)
-        return self.render(str(template), context)
+        return self.render(template.content, context)
 
     def get_template(self, template_name: str) -> str:
         """
         Load a template file by name.
-        
+
         Args:
             template_name: Name of the template file
-            
+
         Returns:
             The template content
-            
+
         Raises:
             TemplateNotFoundError: If the template file cannot be found
         """
@@ -86,7 +88,7 @@ class PyBlade:
     def invalidate_template(self, template: str, context: Optional[Dict] = None) -> None:
         """
         Invalidate a specific template in the cache.
-        
+
         Args:
             template: The template string
             context: The context dictionary used with the template

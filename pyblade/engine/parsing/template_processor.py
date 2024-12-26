@@ -44,6 +44,10 @@ class TemplateProcessor:
             if cached_result is not None:
                 return cached_result
 
+            # Set the original template before processing to handle line numbers on template parsing error
+            self.directive_parser.initial_template = template
+            self.variable_parser.initial_template = template
+
             # Process template
             result = self._process_template(template, context)
 

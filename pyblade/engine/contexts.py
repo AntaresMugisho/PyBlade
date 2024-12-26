@@ -1,3 +1,7 @@
+from ast import List
+from uuid import uuid4
+
+
 class LoopContext:
     """Holds context information for loops."""
 
@@ -141,3 +145,31 @@ class ClassContext:
 
     def __str__(self):
         return f'class="{self._class.strip()}"'
+
+
+class CycleContext:
+    def __init__(self, values: List, alias: str | None = None) -> None:
+        self._id = alias or uuid4().hex
+        self._values = values
+
+    def __eq__(self, other: object) -> bool:
+        return self._id == other._id
+
+    def __str__(self) -> str:
+        return "something"
+
+    @property
+    def current(self):
+        return self.current
+
+    @current.setter
+    def current(self, value):
+        self._current = value
+
+    @property
+    def next(self):
+        return self.next
+
+    @property
+    def previous(self):
+        return self.previous

@@ -5,6 +5,7 @@ Directive parsing implementation for the template engine.
 import ast
 import json
 import re
+from pprint import pprint  # noqa
 from typing import Any, Dict, Match, Pattern, Tuple
 from uuid import uuid4
 
@@ -19,6 +20,7 @@ class DirectiveParser:
     """Handles parsing and processing of template directives."""
 
     # Cached regex patterns
+    _ESCAPED_VAR_PATTERN: Pattern = re.compile(r"{{\s*(.*?)\s*}}")
     _FOR_PATTERN: Pattern = re.compile(r"@for\s*\((.*?)\s+in\s+(.*?)\)\s*(.*?)(?:@empty\s*(.*?))?@endfor", re.DOTALL)
     _IF_PATTERN: Pattern = re.compile(
         r"@(if)\s*\((.*?\)?)\)\s*(.*?)\s*(?:@(elif)\s*\((.*?\)?)\)\s*(.*?))*(?:@(else)\s*(.*?))?@(endif)", re.DOTALL
@@ -35,9 +37,11 @@ class DirectiveParser:
 
     # New Django-like directive patterns
     _AUTOESCAPE_PATTERN: Pattern = re.compile(
-        r"@autoescape\s*\((?P<mode>on|off)\)\s*(?P<content>.*?)@endautoescape", re.DOTALL
+        r"@autoescape\s*\((?P<mode>True|False|on|off)\)\s*(?P<content>.*?)@endautoescape", re.DOTALL
     )
-    _CYCLE_PATTERN: Pattern = re.compile(r"@cycle\s*\((?P<values>.*?)\)", re.DOTALL)
+    _CYCLE_PATTERN: Pattern = re.compile(
+        r"@cycle\s*\((?P<values>.*?)(?:(?P<alias>\s*as\s*)(?P<variable>\w+))?\)", re.DOTALL
+    )
     _DEBUG_PATTERN: Pattern = re.compile(r"@debug", re.DOTALL)
     _FILTER_PATTERN: Pattern = re.compile(r"@filter\s*\((?P<filters>.*?)\)\s*(?P<content>.*?)@endfilter", re.DOTALL)
     _FIRSTOF_PATTERN: Pattern = re.compile(
@@ -72,7 +76,7 @@ class DirectiveParser:
     _LIVEBLADE_SCRIPTS_PATTERN: Pattern = re.compile(
         r"@liveblade_scripts(?:\s*\(\s*(?P<attributes>.*?)\s*\))?", re.DOTALL
     )
-    _INCLUDE_PATTERN: Pattern = re.compile(r"@include\s*\(\s*[\"'](?P<path>[\w.]+)[\"']\s*\)", re.DOTALL)
+    _INCLUDE_PATTERN: Pattern = re.compile(r"@include\s*\(\s*(?P<path>.*?)\s*\)", re.DOTALL)
     _FIELD_PATTERN: Pattern = re.compile(r"@field\s*\((?P<field>.*?)\s*,\s*(?P<attributes>.*?)\)", re.DOTALL)
     _ERROR_PATTERN: Pattern = re.compile(r"@error\s*\((?P<field>.*?)\s*\)\s*(?P<slot>.*?)\s*@enderror", re.DOTALL)
 
@@ -81,10 +85,11 @@ class DirectiveParser:
         self._line_map: Dict[str, int] = {}  # Maps directive positions to line numbers
         self._variable_parser = VariableParser()
         self.verbatims = {}
+        self.initial_template = ""
 
-    def _get_line_number(self, template: str, position: int) -> int:
+    def _get_line_number(self, match: Match) -> int:
         """Get the line number for a position in the template."""
-        return template.count("\n", 0, position) + 1
+        return self.initial_template.count("\n", 0, match.start()) + 1
 
     def _check_unclosed_tags(self, template: str) -> None:
         """Check for unclosed directive tags and report their line numbers."""
@@ -102,7 +107,7 @@ class DirectiveParser:
                     # Count matching end tags before this position
                     matching_ends = sum(1 for end_pos in end_positions if end_pos > pos)
                     if matching_ends < 1:
-                        line_number = self._get_line_number(template, pos)
+                        line_number = 0  # TODO: use regex match
                         raise DirectiveParsingError(f"Unclosed {start_tag} directive at line {line_number}")
 
     def parse_directives(self, template: str, context: Dict[str, Any]) -> str:
@@ -171,8 +176,8 @@ class DirectiveParser:
     def _handle_for(self, match: Match) -> str:
         """Handle @for loop logic with proper error handling."""
         try:
-            variable = match.group(1)
-            iterable_expression = match.group(2)
+            variable = match.group(1).strip()
+            iterable_expression = match.group(2).strip()
             block = match.group(3)
             empty_block = match.group(4)
 
@@ -190,12 +195,17 @@ class DirectiveParser:
 
             for index, item in enumerate(iterable):
                 loop.index = index
-                self._context.update({variable: item, "loop": loop})
 
-                parsed_block = self._variable_parser.parse_variables(block, self._context)
+                local_context = self._context.copy()
+                local_context.update({variable: item, "loop": loop})
 
-                should_break, parsed_block = self._parse_break(parsed_block)
-                should_continue, parsed_block = self._parse_continue(parsed_block)
+                pprint(local_context)
+
+                parsed_block = self.parse_directives(block, local_context)
+                parsed_block = self._variable_parser.parse_variables(block, local_context)
+
+                should_break, parsed_block = self._parse_break(parsed_block, local_context)
+                should_continue, parsed_block = self._parse_continue(parsed_block, local_context)
 
                 if should_break:
                     break
@@ -383,7 +393,7 @@ class DirectiveParser:
 
         return url_pattern.sub(replace_url, template)
 
-    def _parse_break(self, template: str) -> Tuple[bool, str]:
+    def _parse_break(self, template: str, context: Dict[str, Any]) -> Tuple[bool, str]:
         """Process @break directives."""
         pattern = re.compile(r"@break(?:\s*\(\s*(?P<expression>.*?)\s*\))?", re.DOTALL)
         match = pattern.search(template)
@@ -394,13 +404,13 @@ class DirectiveParser:
             if not expression:
                 return True, template
             try:
-                if eval(expression, {}, self._context):
+                if eval(expression, {}, context):
                     return True, template
             except Exception as e:
                 raise DirectiveParsingError(f"Error in @break directive: {str(e)}")
         return False, template
 
-    def _parse_continue(self, template: str) -> Tuple[bool, str]:
+    def _parse_continue(self, template: str, context: Dict[str, Any]) -> Tuple[bool, str]:
         """Process @continue directives."""
         pattern = re.compile(r"@continue(?:\s*\(\s*(?P<expression>.*?)\s*\))?", re.DOTALL)
         match = pattern.search(template)
@@ -411,13 +421,11 @@ class DirectiveParser:
             if not expression:
                 return True, template
             try:
-                if eval(expression, {}, self._context):
+                if eval(expression, {}, context):
                     return True, template
             except Exception as e:
                 raise DirectiveParsingError(f"Error in @continue directive: {str(e)}")
         return False, template
-
-    # TODO : Update parsers
 
     def _parse_auth_or_guest(self, template):
         """
@@ -489,9 +497,11 @@ class DirectiveParser:
                 # Get the dot-separated path and optional data
                 path = match.group("path").strip()
 
+                path = self._validate_argument(match)
+
                 try:
                     partial_template = loader.load_template(path)
-                    return self.parse_directives(str(partial_template), self._context)
+                    return self.parse_directives(partial_template.content, self._context)
                 except Exception as e:
                     raise DirectiveParsingError(f"Error loading partial template {path}: {str(e)}")
 
@@ -516,8 +526,8 @@ class DirectiveParser:
 
             try:
                 layout = loader.load_template(layout_name)
-                self.parse(str(layout), self._context)
-                return self._parse_section(template, str(layout))
+                # self.parse(str(layout), self._context)
+                return self._parse_section(template, layout.content)
             except Exception as e:
                 raise e
 
@@ -599,7 +609,7 @@ class DirectiveParser:
 
             attributes[name] = value
 
-        component, props = self._parse_props(str(component))
+        component, props = self._parse_props(component.content)
         component_context.update(attributes)
         attributes = AttributesContext(props, attributes, component_context)
 
@@ -725,19 +735,12 @@ class DirectiveParser:
                 mode = match.group("mode")
                 content = match.group("content")
 
-                # Store current autoescape setting
-                current_autoescape = self._context.get("autoescape", True)
+                mode = True if str(mode) == ("on" or "True") else False
+                if not mode:
+                    return re.sub(self._ESCAPED_VAR_PATTERN, r"{!! \1 !!}", content)
 
-                # Update context with new autoescape setting
-                self._context["autoescape"] = mode == "on"
+                return content
 
-                # Process content with new autoescape setting
-                result = self.parse_directives(content, self._context)
-
-                # Restore previous autoescape setting
-                self._context["autoescape"] = current_autoescape
-
-                return result
             except Exception as e:
                 raise DirectiveParsingError(f"Error in @autoescape directive: {str(e)}")
 
@@ -749,7 +752,12 @@ class DirectiveParser:
         def replace_cycle(match: Match) -> str:
             try:
                 values_str = match.group("values")
-                values = [v.strip() for v in values_str.split(",")]
+                values = [eval(v.strip(), {}, self._context) for v in values_str.split(",")]
+                alias = match.group("alias") or None
+                variable = match.group("variable")
+
+                if alias and str(alias) != " as ":
+                    raise DirectiveParsingError("Syntax error in @cycle directive: alias must be ' as '")
 
                 # Get or initialize cycle counter
                 cycle_counter = self._context.setdefault("_cycle_counter", {})
@@ -760,7 +768,13 @@ class DirectiveParser:
                 else:
                     cycle_counter[cycle_key] = (cycle_counter[cycle_key] + 1) % len(values)
 
-                return str(values[cycle_counter[cycle_key]])
+                cycle_value = values[cycle_counter[cycle_key]]
+
+                if variable:
+                    self._context[variable] = cycle_value
+
+                return cycle_value
+
             except Exception as e:
                 raise DirectiveParsingError(f"Error in @cycle directive: {str(e)}")
 
@@ -1403,7 +1417,7 @@ class DirectiveParser:
                         raise DirectiveParsingError(f"Error processing component data: {str(e)}")
 
                 # Process the component template with the new context
-                return self.parse_directives(str(component_template), component_context)
+                return self.parse_directives(component_template.content, component_context)
 
             except Exception as e:
                 raise DirectiveParsingError(f"Error in @component directive: {str(e)}")

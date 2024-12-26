@@ -1,31 +1,34 @@
 """
 Variable parsing and handling for the template engine.
 """
+
 import html
 import re
-from typing import Any, Dict, Match, Optional, Pattern
+from typing import Any, Dict, Match, Pattern
+
+from ..contexts import AttributesContext, ClassContext, SlotContext
 from ..exceptions import UndefinedVariableError
-from ..contexts import SlotContext, AttributesContext, ClassContext
 
 
 class VariableParser:
     """Handles parsing and rendering of template variables."""
-    
+
     # Cached regex patterns
-    _ESCAPED_VAR_PATTERN: Pattern = re.compile(r"{{\s*(.*?(?:\.?.*?)*)\s*}}")
-    _UNESCAPED_VAR_PATTERN: Pattern = re.compile(r"{!!\s*(.*?(?:\.?.*?)*)\s*!!}")
+    _ESCAPED_VAR_PATTERN: Pattern = re.compile(r"{{\s*(.*?)\s*}}")
+    _UNESCAPED_VAR_PATTERN: Pattern = re.compile(r"{!!\s*(.*?)\s*!!}")
 
     def __init__(self):
         self._context: Dict[str, Any] = {}
+        self.initial_template: str = ""
 
     def parse_variables(self, template: str, context: Dict[str, Any]) -> str:
         """
         Parse all variables within a template.
-        
+
         Args:
             template: The template string
             context: The context dictionary
-            
+
         Returns:
             The template with all variables replaced
         """
@@ -38,44 +41,38 @@ class VariableParser:
     def _render_escaped_variables(self, template: str) -> str:
         """
         Replace variables in {{ }} with escaped values.
-        
+
         Args:
             template: The template string
-            
+
         Returns:
             The template with escaped variables replaced
         """
-        return self._ESCAPED_VAR_PATTERN.sub(
-            lambda match: self._replace_variable(match, escape=True),
-            template
-        )
+        return self._ESCAPED_VAR_PATTERN.sub(lambda match: self._replace_variable(match, escape=True), template)
 
     def _render_unescaped_variables(self, template: str) -> str:
         """
         Replace variables in {!! !!} with unescaped values.
-        
+
         Args:
             template: The template string
-            
+
         Returns:
             The template with unescaped variables replaced
         """
-        return self._UNESCAPED_VAR_PATTERN.sub(
-            lambda match: self._replace_variable(match, escape=False),
-            template
-        )
+        return self._UNESCAPED_VAR_PATTERN.sub(lambda match: self._replace_variable(match, escape=False), template)
 
     def _replace_variable(self, match: Match, escape: bool) -> str:
         """
         Replace a variable with its value from the context.
-        
+
         Args:
             match: The regex match object
             escape: Whether to HTML escape the value
-            
+
         Returns:
             The replaced variable value
-            
+
         Raises:
             UndefinedVariableError: If the variable is not found in context
         """
@@ -83,18 +80,14 @@ class VariableParser:
         variable_name = expression[0]
 
         if variable_name not in self._context:
-            raise UndefinedVariableError(
-                f"Undefined variable '{variable_name}' on line {self._get_line_number(match)}"
-            )
+            raise UndefinedVariableError(f"Undefined variable '{variable_name}' on line {self._get_line_number(match)}")
 
         # Handle nested attributes and method calls
         if len(expression) > 1:
             try:
                 variable_value = eval(".".join(expression), {}, self._context)
             except Exception as e:
-                raise UndefinedVariableError(
-                    f"Error evaluating expression '{'.'.join(expression)}': {str(e)}"
-                )
+                raise UndefinedVariableError(f"Error evaluating expression '{'.'.join(expression)}': {str(e)}")
         else:
             variable_value = self._context[variable_name]
 
@@ -104,9 +97,8 @@ class VariableParser:
 
         # Convert to string and escape if needed
         result = str(variable_value)
-        return html.escape(result) if escape else result
+        return html.escape(str(result)) if escape else str(result)
 
-    @staticmethod
-    def _get_line_number(match: Match) -> int:
-        """Get the line number for a regex match."""
-        return match.string.count('\n', 0, match.start()) + 1
+    def _get_line_number(self, match: Match) -> int:
+        """Get the line number for a position in the template."""
+        return self.initial_template.count("\n", 0, match.start()) + 1

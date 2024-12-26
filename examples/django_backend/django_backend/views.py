@@ -16,4 +16,11 @@ def index(request):
         form = ContactForm()
         # print(form.email)
 
-    return render(request, "django_backend.index", {"form": form, "name": "Antares"})
+    context = {
+        "form": form,
+        "name": "Antares",
+        "html": "<strong>Bold</strong> text.",
+        "items": ["a", "b", "c", "d", "f"],
+    }
+
+    return render(request, "django_backend.index", context)

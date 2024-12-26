@@ -30,12 +30,69 @@
 
     Hello @{{ name }}
 
+    @autoescape(False)
+        {{ html }}
+    @endautoescape
+
+
+    @comment(Optional note)
+        <p>Commented out text</p>
+    @endcomment
+
+    <p></p>
+    {# @cycle('row1', 'row2', 'row3')
+    @cycle('row1', 'row2', 'row3')
+    @cycle('row1', 'row2', 'row3')
+    @cycle('row1', 'row2', 'row3')
+    @cycle('row1', 'row2', 'row3')
+    @cycle('row1', 'row2', 'row3') #}
+
+<h2>Test</h2>
+<tr>
+    <p class="@cycle('row1', 'row2' as rowcolors)">...</p>
+    <p class="{{ rowcolors }}">...</p>
+</tr>
+<tr>
+    <p class="@cycle(rowcolors)">...</p>
+    <p class="{{ rowcolors }}">...</p>
+</tr>
+<hr>
+
+
+    <table>
+        <thead>
+            <th>#</th>
+            <th>Item</th>
+            <th>Current class</th>
+        </thead>
+        <tbody>
+            {# @for( i in items)
+            <tr class="@cycle('row1', 'row2', 'row3' as current_class)">
+                <td>{{ loop.iteration }}</td>
+                <td>{{ i }}</td>
+                <td>{{ current_class }}</td>
+            </tr>
+            @endfor #}
+        </tbody>
+    </table>
+
+
     <div class="container">
         <div class="form-container">
             <h2 class="mb-4">Contact Us</h2>
 
             <form method="post" enctype="multipart/form-data" novalidate>
+
+                <hr>
                 @csrf
+
+                <hr>
+                @selected(True)
+                @checked(True)
+                @required(True)
+                @disabled(True)
+
+                <hr>
 
                 <div class="mb-3">
                     <label for="id_name" class="form-label">Name</label>
@@ -111,6 +168,8 @@
             </form>
         </div>
     </div>
+
+    @include("partials.footer")
 
     {# <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script> #}
 </body>

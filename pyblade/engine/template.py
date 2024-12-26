@@ -1,11 +1,13 @@
 """
 Template class for representing loaded templates.
 """
+
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
 try:
     from django.template.backends.utils import csrf_input_lazy, csrf_token_lazy
+
     DJANGO_AVAILABLE = True
 except ImportError:
     DJANGO_AVAILABLE = False
@@ -20,11 +22,11 @@ class Template:
         template_path: Union[str, Path],
         template_string: Optional[str] = None,
         backend: Optional[Any] = None,
-        engine: Optional[Any] = None
+        engine: Optional[Any] = None,
     ):
         """
         Initialize a template.
-        
+
         Args:
             template_name: Name of the template
             template_path: Path to the template file
@@ -34,25 +36,25 @@ class Template:
         """
         self.name = template_name
         self.path = Path(template_path)
-        self.template_string = template_string
+        self.content = template_string
         self.backend = backend
         self.engine = engine
 
     def __str__(self) -> str:
         """Return the template content."""
-        return self.template_string or ""
+        return self.content or ""
 
     def render(self, context: Optional[Dict[str, Any]] = None, request: Optional[Any] = None) -> str:
         """
         Render the template with the given context.
-        
+
         Args:
             context: The context dictionary
             request: Optional request object (for Django integration)
-            
+
         Returns:
             The rendered template
-            
+
         Raises:
             ValueError: If no engine is set
         """
@@ -70,25 +72,20 @@ class Template:
             context["request"] = request
             context["csrf_input"] = csrf_input_lazy(request)
             context["csrf_token"] = csrf_token_lazy(request)
-            
+
             if self.backend and hasattr(self.backend, "template_context_processors"):
                 for processor in self.backend.template_context_processors:
                     context.update(processor(request))
 
-        return self.engine.render(self.template_string, context)
-
-    @property
-    def content(self) -> str:
-        """Get the template content."""
-        return self.template_string or ""
+        return self.engine.render(self.content, context)
 
     def get_relative_path(self, base_dir: Optional[Union[str, Path]] = None) -> str:
         """
         Get the template path relative to a base directory.
-        
+
         Args:
             base_dir: Optional base directory path
-            
+
         Returns:
             The relative path as a string
         """
@@ -98,7 +95,7 @@ class Template:
             except ValueError:
                 pass
         return str(self.path)
-    
+
     def set_engine(self, engine):
         self.engine = engine
 
