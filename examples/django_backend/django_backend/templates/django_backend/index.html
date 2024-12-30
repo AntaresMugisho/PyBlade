@@ -40,22 +40,23 @@
     @endcomment
 
     <p></p>
-    {# @cycle('row1', 'row2', 'row3')
-    @cycle('row1', 'row2', 'row3')
-    @cycle('row1', 'row2', 'row3')
-    @cycle('row1', 'row2', 'row3')
-    @cycle('row1', 'row2', 'row3')
-    @cycle('row1', 'row2', 'row3') #}
+
+    @cycle('cycle1', 'cycle2', html)
+    @cycle('cycle1', 'cycle2', html)
+    @cycle('cycle1', 'cycle2', html)
+    @cycle('cycle1', 'cycle2', html)
+    @cycle('cycle1', 'cycle2', html)
+
 
 <h2>Test</h2>
-<tr>
-    <p class="@cycle('row1', 'row2' as rowcolors)">...</p>
-    <p class="{{ rowcolors }}">...</p>
-</tr>
-<tr>
-    <p class="@cycle(rowcolors)">...</p>
-    <p class="{{ rowcolors }}">...</p>
-</tr>
+{# <tr>
+    <p> @cycle('row1', 'row2', 'row3' as rowcolors)</p>
+    <p> {{ rowcolors }}</p>
+</tr> #}
+{# <tr>
+    <p> @cycle(rowcolors)</p>
+    <p> {{ rowcolors }} </p>
+</tr> #}
 <hr>
 
 
@@ -66,13 +67,13 @@
             <th>Current class</th>
         </thead>
         <tbody>
-            {# @for( i in items)
-            <tr class="@cycle('row1', 'row2', 'row3' as current_class)">
+            @for( i in items)
+            <tr class="@cycle('row1', 'row2' as current_class)">
                 <td>{{ loop.iteration }}</td>
                 <td>{{ i }}</td>
                 <td>{{ current_class }}</td>
             </tr>
-            @endfor #}
+            @endfor
         </tbody>
     </table>
 

@@ -149,27 +149,32 @@ class ClassContext:
 
 class CycleContext:
     def __init__(self, values: List, alias: str | None = None) -> None:
-        self._id = alias or uuid4().hex
-        self._values = values
+        self.alias = alias or uuid4().hex
+        self.values = values
+        self._current_index = 0
 
-    def __eq__(self, other: object) -> bool:
-        return self._id == other._id
+    # def __eq__(self, other: object) -> bool:
+    #     return self._id == other._id
 
     def __str__(self) -> str:
-        return "something"
+        return self.current
+
+    @property
+    def index(self):
+        return self._current_index % len(self.values)
+
+    @index.setter
+    def index(self, value):
+        self._current_index = value
 
     @property
     def current(self):
-        return self.current
-
-    @current.setter
-    def current(self, value):
-        self._current = value
+        return self.values[self.index]
 
     @property
     def next(self):
-        return self.next
+        return self.values[(self.index + 1) % len(self.values)]
 
     @property
     def previous(self):
-        return self.previous
+        return self.values[(self.index - 1) % len(self.values)]

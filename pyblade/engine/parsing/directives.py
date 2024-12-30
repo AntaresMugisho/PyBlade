@@ -11,7 +11,7 @@ from uuid import uuid4
 
 from pyblade.engine import loader
 
-from ..contexts import AttributesContext, LoopContext, SlotContext
+from ..contexts import AttributesContext, CycleContext, LoopContext, SlotContext
 from ..exceptions import DirectiveParsingError
 from .variables import VariableParser
 
@@ -148,7 +148,6 @@ class DirectiveParser:
         template = self._parse_include(template)
 
         # Django-like directives
-        template = self._parse_autoescape(template)
         template = self._parse_cycle(template)
         template = self._parse_debug(template)
         template = self._parse_filter(template)
@@ -164,6 +163,7 @@ class DirectiveParser:
         template = self._parse_with(template)
         template = self._parse_component(template)
         template = self._parse_url(template)
+        template = self._parse_autoescape(template)
 
         # Process liveblade
         template = self._parse_liveblade_scripts(template)
@@ -735,7 +735,7 @@ class DirectiveParser:
                 mode = match.group("mode")
                 content = match.group("content")
 
-                mode = True if str(mode) == ("on" or "True") else False
+                mode = True if str(mode) in ("on", "True") else False
                 if not mode:
                     return re.sub(self._ESCAPED_VAR_PATTERN, r"{!! \1 !!}", content)
 
@@ -752,28 +752,67 @@ class DirectiveParser:
         def replace_cycle(match: Match) -> str:
             try:
                 values_str = match.group("values")
-                values = [eval(v.strip(), {}, self._context) for v in values_str.split(",")]
+                var_name = match.group("variable")
                 alias = match.group("alias") or None
-                variable = match.group("variable")
 
                 if alias and str(alias) != " as ":
                     raise DirectiveParsingError("Syntax error in @cycle directive: alias must be ' as '")
 
-                # Get or initialize cycle counter
-                cycle_counter = self._context.setdefault("_cycle_counter", {})
-                cycle_key = f"cycle_{values_str}"
+                # Parse the values
+                values = []
+                for val in values_str.split(","):
+                    val = val.strip().strip("'\"")
+                    if val:
+                        if val in self._context.keys():
+                            values.append(f"{{{{ {val} }}}}")
+                            continue
+                        values.append(val)
 
-                if cycle_key not in cycle_counter:
-                    cycle_counter[cycle_key] = 0
-                else:
-                    cycle_counter[cycle_key] = (cycle_counter[cycle_key] + 1) % len(values)
+                if not values:
+                    raise DirectiveParsingError("Cycle values cannot be empty")
 
-                cycle_value = values[cycle_counter[cycle_key]]
+                # Initialize cycle tracking in context if not exists
+                self._context.setdefault("__cycle_vars__", {})
 
-                if variable:
-                    self._context[variable] = cycle_value
+                # If this is a named cycle
+                if var_name:
+                    if var_name not in self._context["__cycle_vars__"]:
+                        cycle = CycleContext(values, var_name)
+                        self._context["__cycle_vars__"][var_name] = cycle
+                    else:
+                        cycle = self._context["__cycle_vars__"][var_name]
 
-                return cycle_value
+                    current_value = cycle.current
+                    # Store current value in context for direct access
+                    self._context[var_name] = cycle
+                    return current_value
+
+                # If this is not a named cycle
+
+                # Check if this is a reference to an existing cycle
+                if len(values) == 1:
+                    if isinstance(values[0], CycleContext):
+                        cycle: CycleContext = values[0]
+                        cycle.index += 1
+                        self._context[str(values_str)] = cycle.current
+                        return cycle.current
+
+                # If not
+                cycle = CycleContext(values, values_str)
+                if cycle.alias in self._context.get("__cycle_vars__").keys():
+                    # TODO: Fix issues : parse alias variables on every call
+                    cycle = self._context.get("__cycle_vars__").get(cycle.alias)
+                    cycle.index += 1
+                    current_value = cycle.current
+                    return current_value
+
+                current_value = cycle.current
+                cycle.index += 1
+
+                # Store current value in context for direct access
+                self._context["__cycle_vars__"][cycle.alias] = cycle
+
+                return current_value
 
             except Exception as e:
                 raise DirectiveParsingError(f"Error in @cycle directive: {str(e)}")
