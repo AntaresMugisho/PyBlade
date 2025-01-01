@@ -54,7 +54,9 @@ class DirectiveParser:
     _LOREM_PATTERN: Pattern = re.compile(
         r"@lorem\s*\((?P<count>\d+)(?:\s*,\s*(?P<method>w|p|b))?(?:\s*,\s*(?P<random>random))?\)", re.DOTALL
     )
-    _NOW_PATTERN: Pattern = re.compile(r"@now\s*\((?P<format>.*?)\)", re.DOTALL)
+    _NOW_PATTERN: Pattern = re.compile(
+        r"@now\s*\((?P<format>.*?)(?:(?P<alias>\s*as\s*)(?P<variable>\w+))?\)", re.DOTALL
+    )
     _QUERYSTRING_PATTERN: Pattern = re.compile(r"@querystring(?:\s*\((?P<updates>.*?)\))?", re.DOTALL)
     _REGROUP_PATTERN: Pattern = re.compile(
         r"@regroup\s*\((?P<expression>.*?)\s+by\s+(?P<grouper>.*?)\s+as\s+(?P<var_name>.*?)\)", re.DOTALL
@@ -148,13 +150,13 @@ class DirectiveParser:
         template = self._parse_include(template)
 
         # Django-like directives
+        template = self._parse_now(template)
         template = self._parse_cycle(template)
         template = self._parse_debug(template)
         template = self._parse_filter(template)
         template = self._parse_firstof(template)
         template = self._parse_ifchanged(template)
         template = self._parse_lorem(template)
-        template = self._parse_now(template)
         template = self._parse_querystring(template)
         template = self._parse_regroup(template)
         template = self._parse_spaceless(template)
@@ -800,7 +802,6 @@ class DirectiveParser:
                 raise DirectiveParsingError(f"Error in @cycle directive: {str(e)}")
 
         content = self._CYCLE_PATTERN.sub(replace_cycle, template)
-        # content = self._variable_parser.parse_variables(content, self._context)
         return content
 
     def _parse_debug(self, template: str) -> str:
@@ -970,8 +971,19 @@ class DirectiveParser:
 
         def replace_now(match: Match) -> str:
             try:
-                format_string = match.group("format").strip("\"'")
-                return datetime.now().strftime(format_string)
+                format_string = match.group("format").strip("\"'") or "%Y-%m-%d %H:%M:%S"
+                alias = match.group("alias") or None
+                var_name = match.group("variable")
+
+                if alias and str(alias) != " as ":
+                    raise DirectiveParsingError("Syntax error in @now directive: alias must be ' as '")
+
+                now = datetime.now().strftime(format_string)
+                if var_name:
+                    self._context[var_name] = now
+
+                return now
+
             except Exception as e:
                 raise DirectiveParsingError(f"Error in @now directive: {str(e)}")
 

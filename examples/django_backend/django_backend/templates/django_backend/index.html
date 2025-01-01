@@ -20,6 +20,8 @@
     </style>
 </head>
 <body>
+
+<p>Verbatim:</p>
     @verbatim
         @auth
             <p>You are authenticated.</p>
@@ -28,25 +30,37 @@
         @endauth
     @endverbatim
 
-    Hello @{{ name }}
+   <p></p>
+<hr>
 
+<p>Autoescape:</p>
     @autoescape(False)
         {{ html }}
     @endautoescape
+<hr>
 
-
+<p>Comments:</p>
     @comment Optional
         <p>Commented out text</p>
     @endcomment
+<hr>
 
-    <p></p>
+<p>Now:</p>
+    Copyright 2012-@now("%Y")
+<hr>
 
-    @cycle('cycle1', 'cycle2', html)
-    @cycle('cycle1', 'cycle2', html)
-    @cycle('cycle1', 'cycle2', html)
-    @cycle('cycle1', 'cycle2', html)
-    @cycle('cycle1', 'cycle2', html)
+<p>Debug:</p>
+    @debug
+<hr>
 
+
+<p>Cycle:</p>
+    @cycle('cycle1', 'cycle2', html)
+    @cycle('cycle1', 'cycle2', html)
+    @cycle('cycle1', 'cycle2', html)
+    @cycle('cycle1', 'cycle2', html)
+    @cycle('cycle1', 'cycle2', html)
+<hr>
 
 <h2>Test</h2>
 {# <tr>
