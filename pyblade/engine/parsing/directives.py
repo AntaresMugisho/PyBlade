@@ -199,8 +199,6 @@ class DirectiveParser:
                 local_context = self._context.copy()
                 local_context.update({variable: item, "loop": loop})
 
-                pprint(local_context)
-
                 parsed_block = self.parse_directives(block, local_context)
                 parsed_block = self._variable_parser.parse_variables(block, local_context)
 
@@ -752,8 +750,8 @@ class DirectiveParser:
         def replace_cycle(match: Match) -> str:
             try:
                 values_str = match.group("values")
-                var_name = match.group("variable")
                 alias = match.group("alias") or None
+                var_name = match.group("variable")
 
                 if alias and str(alias) != " as ":
                     raise DirectiveParsingError("Syntax error in @cycle directive: alias must be ' as '")
@@ -774,50 +772,36 @@ class DirectiveParser:
                 # Initialize cycle tracking in context if not exists
                 self._context.setdefault("__cycle_vars__", {})
 
-                # If this is a named cycle
-                if var_name:
-                    if var_name not in self._context["__cycle_vars__"]:
-                        cycle = CycleContext(values, var_name)
-                        self._context["__cycle_vars__"][var_name] = cycle
-                    else:
-                        cycle = self._context["__cycle_vars__"][var_name]
-
-                    current_value = cycle.current
-                    # Store current value in context for direct access
-                    self._context[var_name] = cycle
-                    return current_value
-
                 # If this is not a named cycle
 
                 # Check if this is a reference to an existing cycle
-                if len(values) == 1:
-                    if isinstance(values[0], CycleContext):
-                        cycle: CycleContext = values[0]
-                        cycle.index += 1
-                        self._context[str(values_str)] = cycle.current
-                        return cycle.current
+                # if len(values) == 1:
+                #     if isinstance(values[0], CycleContext):
+                #         cycle: CycleContext = values[0]
+                #         cycle.index += 1
+                #         self._context[str(values_str)] = cycle.current
+                #         return cycle.current
 
-                # If not
-                cycle = CycleContext(values, values_str)
-                if cycle.alias in self._context.get("__cycle_vars__").keys():
-                    # TODO: Fix issues : parse alias variables on every call
-                    cycle = self._context.get("__cycle_vars__").get(cycle.alias)
-                    cycle.index += 1
-                    current_value = cycle.current
-                    return current_value
+                cycle_key = var_name or values_str
 
+                cycle = self._context.get("__cycle_vars__").get(cycle_key, CycleContext(values, values_str))
                 current_value = cycle.current
-                cycle.index += 1
+
+                # If this is a named cycle, store the variable in the context
+                if var_name:
+                    self._context[var_name] = current_value
 
                 # Store current value in context for direct access
-                self._context["__cycle_vars__"][cycle.alias] = cycle
-
+                self._context["__cycle_vars__"].setdefault(cycle_key, cycle)
+                cycle.index += 1
                 return current_value
 
             except Exception as e:
                 raise DirectiveParsingError(f"Error in @cycle directive: {str(e)}")
 
-        return self._CYCLE_PATTERN.sub(replace_cycle, template)
+        content = self._CYCLE_PATTERN.sub(replace_cycle, template)
+        # content = self._variable_parser.parse_variables(content, self._context)
+        return content
 
     def _parse_debug(self, template: str) -> str:
         """Process @debug directive to output debugging information."""
