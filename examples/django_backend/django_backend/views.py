@@ -23,6 +23,12 @@ def index(request):
         "items": ["a", "b", "c", "d", "f"],
         "online": True,
         "repetitives": ["a", "a", "a", "b", "c", "c", "c", "d", "d"],
+        "countries": [
+            {"name": "DRC", "continent": "Africa", "population": 1000},
+            {"name": "France", "continent": "Europe", "population": 3000},
+            {"name": "Rwanda", "continent": "Africa", "population": 500},
+            {"name": "Chine", "continent": "Asia", "population": 5000},
+        ],
     }
 
     return render(request, "django_backend.index", context)

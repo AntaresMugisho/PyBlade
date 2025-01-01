@@ -20,6 +20,13 @@
     </style>
 </head>
 <body>
+<p>Liveblade component</p>
+    @liveblade("counter")
+<hr>
+
+<p>Liveblade scripts:</p>
+    @livebladeScripts
+<hr>
 
 <p>Verbatim:</p>
     @verbatim
@@ -73,6 +80,35 @@
 
 <p>Query string</p>
     @querystring(color="red", size="M")
+<hr>
+
+<p>Spaceless:</p>
+    @spaceless
+        <p>Space less </p>
+    @endspaceless
+<hr>
+
+
+<p>Regroup:</p>
+    @regroup(countries by 'continent' as country)
+        @for(country in countries)
+        <li>{{ country.get("name") }}</li>
+        @endfor
+    @endregroup
+<hr>
+
+<p>Templatetag:</p>
+    @templatetag(now)
+<hr>
+
+<p>With:</p>
+    {# @with(2+5 as total)
+        {{ total }}
+    @endwith #}
+<hr>
+
+<p>Widthratio:</p>
+    @widthratio(2, 5, 10)
 <hr>
 
 <p>Cycle:</p>

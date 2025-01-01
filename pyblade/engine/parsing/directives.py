@@ -76,7 +76,7 @@ class DirectiveParser:
         r"@component\s*\(\s*(?P<name>['\"].*?['\"])\s*(?:,\s*(?P<data>.*?))?\s*\)(?P<slot>.*?)@endcomponent", re.DOTALL
     )
     _LIVEBLADE_SCRIPTS_PATTERN: Pattern = re.compile(
-        r"@liveblade_scripts(?:\s*\(\s*(?P<attributes>.*?)\s*\))?", re.DOTALL
+        r"@(?:liveblade_scripts|livebladeScripts)(?:\s*\(\s*(?P<attributes>.*?)\s*\))?", re.DOTALL
     )
     _INCLUDE_PATTERN: Pattern = re.compile(r"@include\s*\(\s*(?P<path>.*?)\s*\)", re.DOTALL)
     _FIELD_PATTERN: Pattern = re.compile(r"@field\s*\((?P<field>.*?)\s*,\s*(?P<attributes>.*?)\)", re.DOTALL)
@@ -153,7 +153,7 @@ class DirectiveParser:
         template = self._parse_now(template)
         template = self._parse_cycle(template)
         template = self._parse_debug(template)
-        # template = self._parse_filter(template)
+        template = self._parse_filter(template)
         template = self._parse_firstof(template)
         template = self._parse_ifchanged(template)
         template = self._parse_lorem(template)
@@ -169,6 +169,7 @@ class DirectiveParser:
 
         # Process liveblade
         template = self._parse_liveblade_scripts(template)
+        template = self._parse_liveblade(template)
         return template
 
     def _parse_for(self, template: str) -> str:
@@ -1068,7 +1069,7 @@ class DirectiveParser:
         def replace_templatetag(match: Match) -> str:
             try:
                 tag = match.group("tag")
-                return f"{{% {tag} %}}"
+                return f"@{tag}"
             except Exception as e:
                 raise DirectiveParsingError(f"Error in @templatetag directive: {str(e)}")
 
@@ -1277,7 +1278,7 @@ class DirectiveParser:
 
         return self._FIELD_PATTERN.sub(replace_field, template)
 
-    def _parse_liveblade(self, template, context):
+    def _parse_liveblade(self, template):
         pattern = re.compile(r"@liveblade\s*\(\s*(?P<component>.*?)\s*\)")
         match = re.search(pattern, template)
 
@@ -1380,32 +1381,6 @@ class DirectiveParser:
 
     def _parse_comment(self, template):
         return self._COMMENT_PATTERN.sub("", template)
-
-    def _parse_liveblade_component(self, template):
-        return self._COMPONENT_PATTERN.sub(lambda match: self._handle_liveblade_component(match), template)
-
-    def _handle_liveblade_component(self, match):
-        name = match.group("name")
-        data = match.group("data")
-        slot = match.group("slot")
-
-        try:
-            import importlib
-
-            module = importlib.import_module(f"components.{name}")
-            cls = getattr(module, "".join([word.capitalize() for word in name.split("_")]))
-
-            props = {}
-            if data:
-                props = eval(data, {}, self._context)
-
-            return cls(props).render(slot)
-        except ModuleNotFoundError as e:
-            raise e
-        except AttributeError as e:
-            raise e
-        except Exception as e:
-            raise e
 
     def _parse_verbatim_shorthand(self, template: str) -> str:
         """Process shorthand verbatim syntax (@{{ variable }})."""
