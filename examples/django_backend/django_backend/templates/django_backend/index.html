@@ -53,6 +53,27 @@
     @debug
 <hr>
 
+<p>Firstof:</p>
+    @firstof(some_var, other_var, online, default="offline")
+<hr>
+
+<p>If changed:</p>
+    @for(letter in repetitives)
+        @ifchanged()
+            {{ letter }}
+        @else
+            "Not changed"
+        @endifchanged
+    @endfor
+<hr>
+
+<p>Lorem:</p>
+    @lorem(1, p)
+<hr>
+
+<p>Query string</p>
+    @querystring(color="red", size="M")
+<hr>
 
 <p>Cycle:</p>
     @cycle('cycle1', 'cycle2', html)

@@ -52,7 +52,7 @@ class DirectiveParser:
         re.DOTALL,
     )
     _LOREM_PATTERN: Pattern = re.compile(
-        r"@lorem\s*\((?P<count>\d+)(?:\s*,\s*(?P<method>w|p|b))?(?:\s*,\s*(?P<random>random))?\)", re.DOTALL
+        r"@lorem\s*\((?P<count>\d+)?(?:\s*,\s*(?P<method>w|p|b))?(?:\s*,\s*(?P<random>random))?\)", re.DOTALL
     )
     _NOW_PATTERN: Pattern = re.compile(
         r"@now\s*\((?P<format>.*?)(?:(?P<alias>\s*as\s*)(?P<variable>\w+))?\)", re.DOTALL
@@ -153,7 +153,7 @@ class DirectiveParser:
         template = self._parse_now(template)
         template = self._parse_cycle(template)
         template = self._parse_debug(template)
-        template = self._parse_filter(template)
+        # template = self._parse_filter(template)
         template = self._parse_firstof(template)
         template = self._parse_ifchanged(template)
         template = self._parse_lorem(template)
@@ -943,7 +943,7 @@ class DirectiveParser:
             for _ in range(count):
                 words = generate_words(random.randint(20, 100), random_order)
                 paragraphs.append(words.capitalize() + ".")
-            return "\n\n".join(paragraphs)
+            return paragraphs
 
         def replace_lorem(match: Match) -> str:
             try:
@@ -953,10 +953,10 @@ class DirectiveParser:
 
                 if method == "w":
                     return generate_words(count, random_order)
-                elif method == "p":
-                    return generate_paragraphs(count, random_order)
                 elif method == "b":
-                    return f"<p>{generate_paragraphs(count, random_order)}</p>"
+                    return "\n\n".join(generate_paragraphs(count, random_order))
+                elif method == "p":
+                    return "".join([f"<p>{p}</p>" for p in generate_paragraphs(count, random_order)])
                 else:
                     raise DirectiveParsingError(f"Invalid lorem method: {method}")
 
@@ -998,7 +998,7 @@ class DirectiveParser:
                 updates_str = match.group("updates")
 
                 # Get current query string from context
-                current_query = self._context.get("request", {}).get("query_string", "")
+                current_query = self._context.get("request", {}).GET.urlencode()
                 query_dict = parse_qs(current_query)
 
                 if updates_str:
@@ -1006,7 +1006,7 @@ class DirectiveParser:
                     updates = {}
                     for pair in updates_str.split(","):
                         key, value = pair.split("=")
-                        updates[key.strip()] = value.strip()
+                        updates[key.strip()] = value.strip().strip("'\"")
 
                     # Update query parameters
                     for key, value in updates.items():

@@ -21,6 +21,8 @@ def index(request):
         "name": "Antares",
         "html": "<strong>Bold</strong> text.",
         "items": ["a", "b", "c", "d", "f"],
+        "online": True,
+        "repetitives": ["a", "a", "a", "b", "c", "c", "c", "d", "d"],
     }
 
     return render(request, "django_backend.index", context)
