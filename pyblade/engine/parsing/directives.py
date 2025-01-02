@@ -12,7 +12,7 @@ from uuid import uuid4
 from pyblade.engine import loader
 
 from ..contexts import AttributesContext, CycleContext, LoopContext, SlotContext
-from ..exceptions import DirectiveParsingError
+from ..exceptions import DirectiveParsingError, TemplateRenderingError
 from .variables import VariableParser
 
 
@@ -81,6 +81,7 @@ class DirectiveParser:
     _INCLUDE_PATTERN: Pattern = re.compile(r"@include\s*\(\s*(?P<path>.*?)\s*\)", re.DOTALL)
     _FIELD_PATTERN: Pattern = re.compile(r"@field\s*\((?P<field>.*?)\s*,\s*(?P<attributes>.*?)\)", re.DOTALL)
     _ERROR_PATTERN: Pattern = re.compile(r"@error\s*\((?P<field>.*?)\s*\)\s*(?P<slot>.*?)\s*@enderror", re.DOTALL)
+    _OPENING_TAG_PATTERN: Pattern = re.compile(r"<(?P<tag>\w+)\s*(?P<attributes>.*?)>")
 
     def __init__(self):
         self._context: Dict[str, Any] = {}
@@ -1279,6 +1280,22 @@ class DirectiveParser:
         return self._FIELD_PATTERN.sub(replace_field, template)
 
     def _parse_liveblade(self, template):
+        """
+        Parse @liveblade directive to render a live blade component.
+
+        Example:
+            @liveblade('components.button', {'text': 'Click me', 'class': 'btn btn-primary'})
+
+        Args:
+            template (Template): The template string
+
+        Returns:
+            Template: The processed template with rendered live blade component
+
+        Raises:
+            DirectiveParsingError: If the component is not found
+            TemplateRenderingError: If the component template has more than one root nodes
+        """
         pattern = re.compile(r"@liveblade\s*\(\s*(?P<component>.*?)\s*\)")
         match = re.search(pattern, template)
 
@@ -1315,43 +1332,36 @@ class DirectiveParser:
             return False
 
         if match is not None:
-            component = ast.literal_eval(match.group("component"))
-            component_content = loader.load_template(f"liveblade.{component}") if component else None
+            component_name = ast.literal_eval(match.group("component"))
+            component = loader.load_template(f"liveblade.{component_name}") if component_name else None
 
-            if component_content:
+            if component:
                 # Remove comments
-                html_content = re.sub(r"<!--.*?-->", "", component_content.content, flags=re.DOTALL)
+                html_content = re.sub(r"<!--.*?-->", "", component.content, flags=re.DOTALL)
                 html_content = re.sub(self._COMMENT_PATTERN, "", html_content)
                 html_content = re.sub(self._COMMENTS_PATTERN, "", html_content)
 
                 # Ensure the component has only one root node
                 if not validate_single_root_node(html_content):
-                    raise Exception("LiveBlade component must have a single root node.")
+                    raise TemplateRenderingError("LiveBlade component must have a single root node.")
 
-                # Add pyblade id to the parent tag of the component
-                tag_pattern = re.compile(r"<(?P<tag>\w+)\s*(?P<attributes>.*?)>(.*)</(?P=tag)", re.DOTALL)
+                # Add pyblade id to the root node tag of the component
+                match = re.search(self._OPENING_TAG_PATTERN, component.content)
+                attributes = match.group("attributes")
+                component = re.sub(attributes, f'{attributes} liveblade_id="{component_name}"', component.content)
 
-                m = re.search(tag_pattern, str(component_content))
-                attributes = m.group("attributes")
-                component_content = re.sub(
-                    attributes, f'{attributes} liveblade_id="{component}"', str(component_content)
-                )
-
-                # Parse the content to include before replacement
+                # Render the template content
                 try:
                     import importlib
 
-                    module = importlib.import_module(f"components.{component}")
-                    cls = getattr(module, "".join([word.capitalize() for word in component.split("_")]))
+                    module = importlib.import_module(f"components.{component_name}")
+                    cls = getattr(module, "".join([word.capitalize() for word in re.split("[-_]", component_name)]))
 
                     parsed = cls().render()
                     return re.sub(pattern, parsed, template)
-                except ModuleNotFoundError as e:
-                    raise e
-                except AttributeError as e:
-                    raise e
+
                 except Exception as e:
-                    raise e
+                    raise TemplateRenderingError(str(e))
 
         return template
 
