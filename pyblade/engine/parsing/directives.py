@@ -1282,11 +1282,52 @@ class DirectiveParser:
         pattern = re.compile(r"@liveblade\s*\(\s*(?P<component>.*?)\s*\)")
         match = re.search(pattern, template)
 
+        def validate_single_root_node(html_content):
+            """
+            Validate that an HTML component template has a single root node.
+
+            Args:
+                html_content (str): HTML content as a string
+
+            Returns:
+                bool: True if single root node, False otherwise
+            """
+
+            tags = []
+            depth = 0
+
+            # Simple state machine to track tag depth
+            for match in re.finditer(r"<(/)?(\w+)[^>]*>", html_content):
+                is_closing = match.group(1) == "/"
+                tag = match.group(2)
+
+                if not is_closing:
+                    depth += 1
+                    if depth == 1:
+                        tags.append(tag)
+                else:
+                    depth -= 1
+
+            # Ignore single-tag templates or templates with only whitespace
+            if len(tags) <= 1:
+                return True
+
+            return False
+
         if match is not None:
             component = ast.literal_eval(match.group("component"))
             component_content = loader.load_template(f"liveblade.{component}") if component else None
 
             if component_content:
+                # Remove comments
+                html_content = re.sub(r"<!--.*?-->", "", component_content.content, flags=re.DOTALL)
+                html_content = re.sub(self._COMMENT_PATTERN, "", html_content)
+                html_content = re.sub(self._COMMENTS_PATTERN, "", html_content)
+
+                # Ensure the component has only one root node
+                if not validate_single_root_node(html_content):
+                    raise Exception("LiveBlade component must have a single root node.")
+
                 # Add pyblade id to the parent tag of the component
                 tag_pattern = re.compile(r"<(?P<tag>\w+)\s*(?P<attributes>.*?)>(.*)</(?P=tag)", re.DOTALL)
 
