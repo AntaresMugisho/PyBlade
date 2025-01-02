@@ -1350,9 +1350,14 @@ class DirectiveParser:
 
                 # Add pyblade id to the root node tag of the component
                 match = re.search(self._OPENING_TAG_PATTERN, component.content)
-                print("\n\n#########", match.groups())
-                attributes = match.group("attributes")  # noqa
-                component_content = self._OPENING_TAG_PATTERN.sub(lambda match: ins_id(match), component.content)
+                tag = match.group("tag")
+                attributes = match.group("attributes")
+                component_content = re.sub(
+                    rf"{tag}\s*{attributes}",
+                    f'{tag} {attributes} liveblade_id="{component_name}"',
+                    component.content,
+                    1,
+                )
 
                 # Update the component content
                 component.content = component_content
