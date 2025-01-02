@@ -1331,6 +1331,9 @@ class DirectiveParser:
 
             return False
 
+        def ins_id(match):
+            return "test"
+
         if match is not None:
             component_name = ast.literal_eval(match.group("component"))
             component = loader.load_template(f"liveblade.{component_name}") if component_name else None
@@ -1347,8 +1350,12 @@ class DirectiveParser:
 
                 # Add pyblade id to the root node tag of the component
                 match = re.search(self._OPENING_TAG_PATTERN, component.content)
-                attributes = match.group("attributes")
-                component = re.sub(attributes, f'{attributes} liveblade_id="{component_name}"', component.content)
+                print("\n\n#########", match.groups())
+                attributes = match.group("attributes")  # noqa
+                component_content = self._OPENING_TAG_PATTERN.sub(lambda match: ins_id(match), component.content)
+
+                # Update the component content
+                component.content = component_content
 
                 # Render the template content
                 try:
@@ -1357,11 +1364,14 @@ class DirectiveParser:
                     module = importlib.import_module(f"components.{component_name}")
                     cls = getattr(module, "".join([word.capitalize() for word in re.split("[-_]", component_name)]))
 
-                    parsed = cls().render()
+                    parsed = cls(id=component_name, template=component).render()
                     return re.sub(pattern, parsed, template)
 
-                except Exception as e:
-                    raise TemplateRenderingError(str(e))
+                except ModuleNotFoundError:
+                    raise DirectiveParsingError(f"Component module not found: components.{component_name}")
+
+                except AttributeError:
+                    raise DirectiveParsingError(f"Component class not found: {cls}")
 
         return template
 

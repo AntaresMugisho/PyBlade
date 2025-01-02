@@ -72,8 +72,7 @@ class PyBlade:
             TemplateNotFoundError: If the template file cannot be found
         """
         try:
-            template = loader.load_template(template_name, self._template_dirs)
-            template.set_engine(self)
+            template = loader.load_template(template_name, self._template_dirs, self)
             return template
         except Exception as e:
             raise TemplateNotFoundError(template_name) from e

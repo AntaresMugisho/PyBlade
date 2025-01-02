@@ -1,13 +1,16 @@
-from django.template import loader
-from django.http import HttpResponseRedirect
+from typing import Any, Dict
+
+from pyblade.engine.exceptions import TemplateNotFoundError
+
 
 class Component:
     instances = {}
 
-    def __init__(self, id):
-        self.id = id
-        self.state = {}
-        Component.instances[id] = self
+    def __init__(self, **kwargs):
+        self._id = kwargs.get("id", id(self))
+        self._template = kwargs.get("template", None)
+        self._state = {}
+        Component.register_component(self)
 
     @classmethod
     def get_instance(cls, id):
@@ -15,7 +18,7 @@ class Component:
 
     @classmethod
     def register_component(cls, component):
-        cls.instances[component.id] = component
+        cls.instances[component._id] = component
 
     def render(self):
         raise NotImplementedError()
@@ -24,23 +27,39 @@ class Component:
         return self.render()
 
     def get_context(self):
-        return {**self.state, **{method: getattr(self, method) for method in dir(self) if callable(getattr(self, method)) and not method.startswith("__")}}
+        context = {}
+        methods = {
+            **self._state,
+            **{
+                method: getattr(self, method)
+                for method in dir(self)
+                if callable(getattr(self, method)) and not method.startswith("__")
+            },
+        }
 
-def view(template, context):
+        for attr in dir(self):
+            if not callable(getattr(self, attr)) and not attr.startswith("_"):
+                context[attr] = getattr(self, attr)
+        return {**context, **methods}
+
+
+def view(template_name: str, context: Dict[str, Any] = None):
     """Rend le template avec le contexte donné."""
-    template_ = loader.get_template(f"liveblade.{template}")
-    return template_.render(context)  
+    if not context:
+        context = {}
+
+    component = Component.instances.get(template_name, None)
+    if not component:
+        raise TemplateNotFoundError(f"No component named {template_name}")
+
+    template = component._template
+    context = {**context, **component.get_context()}
+    return template.render(context)
+
 
 def bladeRedirect(route):
-         return {
-              'redirect':True,
-              'url':route
-         }
+    return {"redirect": True, "url": route}
+
+
 def bladeNavigate(route):
-         return {
-              'navigate':True,
-              'url':route
-         }
-
-
-
+    return {"navigate": True, "url": route}

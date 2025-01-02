@@ -5,6 +5,8 @@ Template class for representing loaded templates.
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
+from .parsing.template_processor import TemplateProcessor
+
 try:
     from django.template.backends.utils import csrf_input_lazy, csrf_token_lazy
 
@@ -58,11 +60,6 @@ class Template:
         Raises:
             ValueError: If no engine is set
         """
-        if self.engine is None:
-            raise ValueError("No template engine set")
-
-        if self.backend is None:
-            raise ValueError("No template backend set")
 
         if context is None:
             context = {}
@@ -76,6 +73,10 @@ class Template:
             if self.backend and hasattr(self.backend, "template_context_processors"):
                 for processor in self.backend.template_context_processors:
                     context.update(processor(request))
+
+        if not self.engine:
+            self._processor = TemplateProcessor()
+            return self._processor.render(self.content, context)
 
         return self.engine.render(self.content, context)
 

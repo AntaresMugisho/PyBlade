@@ -3,8 +3,9 @@ from pyblade import liveblade
 
 class Counter(liveblade.Component):
 
-    def __init__(self):
-        super().__init__(self)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
         self.count = 1
 
     def increase(self):
@@ -14,4 +15,4 @@ class Counter(liveblade.Component):
         self.count -= 1
 
     def render(self):
-        return liveblade.view("counter", {"count": self.count})
+        return liveblade.view("counter")
