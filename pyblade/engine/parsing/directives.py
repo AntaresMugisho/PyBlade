@@ -1331,9 +1331,6 @@ class DirectiveParser:
 
             return False
 
-        def ins_id(match):
-            return "test"
-
         if match is not None:
             component_name = ast.literal_eval(match.group("component"))
             component = loader.load_template(f"liveblade.{component_name}") if component_name else None
