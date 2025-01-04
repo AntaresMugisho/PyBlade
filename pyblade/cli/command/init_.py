@@ -87,11 +87,6 @@ def configure_framework(framework, project_name):
             print(f"[✔️ INFO] {framework_name} has been installed. You need to configure it manually.")
 
 
-def choose_framework():
-    """Choose a CSS framework with Questionary."""
-    return questionary.select("Choose a CSS framework:", choices=["TailwindCSS", "Bootstrap", "Other", "None"]).ask()
-
-
 def install_and_configure_bootstrap(project_name):
     """Installs and configures Bootstrap."""
     print("[✔️ INFO] Installing Bootstrap...")

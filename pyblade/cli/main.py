@@ -1,6 +1,6 @@
 import click
 import questionary
-from questionary import Style as QStyle
+from questionary import Choice, Style
 from rich.console import Console
 from rich.table import Table
 
@@ -8,7 +8,7 @@ from rich.table import Table
 # from pyblade.cli.command.migrate import migrate
 
 # Custom theme for questionary
-custom_style = QStyle(
+custom_style = Style(
     [
         ("qmark", "fg:#673ab7 bold"),  # token in front of the question
         ("question", "bold"),  # question text
@@ -83,12 +83,12 @@ def init():
         ),
         css_framework=questionary.select(
             "Would you like to install a CSS framework?",
-            choices=["Tailwind CSS", "Bootstrap 5", questionary.Choice("Not sure", None)],
+            choices=["Tailwind CSS", "Bootstrap 5", Choice("Not sure", False)],
             style=custom_style,
         ),
         use_liveblade=questionary.select(
             "Would you like to use LiveBlade for interactive UI?",
-            choices=[questionary.Choice("Yes", True), questionary.Choice("No", False)],
+            choices=[Choice("Yes", True), Choice("No", False)],
             style=custom_style,
         ),
     ).ask()
