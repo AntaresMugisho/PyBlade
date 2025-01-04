@@ -1,11 +1,11 @@
 from typing import Any, Dict, List
 
 import click
-from core.exceptions import PyBladeException
+from exceptions import PyBladeException
 from utils.console import console
 
 
-class PyBladeCommand:
+class BaseCommand:
     name: str = ""
     description: str = ""
     arguments: List[str] = []

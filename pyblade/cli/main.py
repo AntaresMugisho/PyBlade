@@ -4,31 +4,33 @@ from questionary import Choice, Style
 from rich.console import Console
 from rich.table import Table
 
+import pkgutil
+import importlib
+from pathlib import Path
+from commands.base_command import BaseCommand
+
 # from pyblade.cli.command.add import liveblade
 # from pyblade.cli.command.migrate import migrate
 
-# Custom theme for questionary
-custom_style = Style(
-    [
-        ("qmark", "fg:#673ab7 bold"),  # token in front of the question
-        ("question", "bold"),  # question text
-        ("answer", "fg:#673ab7 bold"),  # submitted answer text behind the question
-        ("pointer", "fg:yellow bold"),  # pointer used in select and checkbox prompts
-        ("highlighted", "fg:#673ab7 bold"),  # pointed-at choice in select and checkbox prompts
-        ("selected", "fg:#673ab7"),  # style for a selected item of a checkbox
-        ("separator", "fg:#cc5454"),  # separator in lists
-        ("instruction", "fg:gray"),  # user instructions for select, rawselect, checkbox
-        ("text", ""),  # plain text
-        ("disabled", "fg:#858585 italic"),  # disabled choices for select and checkbox prompts
-        ("placeholder", "fg:#858585 italic"),
-    ]
-)
+def load_commands():
+    commands = []
+    commands_path = Path(__file__).parent / "commands"
 
+    # Load built-in commands
+    for _, name, _ in pkgutil.iter_modules([str(commands_path)]):
+        module = importlib.import_module(f"commands.{name}")
+        for item_name in dir(module):
+            item = getattr(module, item_name)
+            if isinstance(item, type) and issubclass(item, BaseCommand) and item != BaseCommand:
+                commands.append(item)
 
-class PyBladeCLI:
-    def __init__(self):
-        self.config = {"project_name": None, "framework": None, "css_framework": None, "use_liveblade": False}
+    # Load project commands if they exist
+    project_commands_path = Path.cwd() / "pyblade_commands"
+    if project_commands_path.exists():
+        # Similar loading logic for project commands
+        pass
 
+    return commands
 
 class CommandGroup(click.Group):
     def format_help(self, ctx, formatter):
@@ -69,36 +71,6 @@ def cli():
     """PyBlade - Modern Template Engine for Python web frameworks"""
     pass
 
-
-@cli.command()
-def init():
-    """Initialize a new PyBlade project"""
-
-    answers = questionary.form(
-        project_name=questionary.text("What is your project name?", default="my_project", style=custom_style),
-        framework=questionary.select(
-            "Which Python web framework would you like to use?",
-            choices=["Django", "Flask"],
-            style=custom_style,
-        ),
-        css_framework=questionary.select(
-            "Would you like to install a CSS framework?",
-            choices=["Tailwind CSS", "Bootstrap 5", Choice("Not sure", False)],
-            style=custom_style,
-        ),
-        use_liveblade=questionary.select(
-            "Would you like to use LiveBlade for interactive UI?",
-            choices=[Choice("Yes", True), Choice("No", False)],
-            style=custom_style,
-        ),
-    ).ask()
-
-    # Save configuration
-    blade = PyBladeCLI()
-    blade.config.update(answers)
-
-    print(blade.config)
-
     # framework = choose_framework()
 
     # ensure_django_installed()
@@ -112,6 +84,11 @@ def init():
     # configure_framework(framework, project_name)
 
     # print("[🎉 SUCCESS] The Django project has been successfully initialized.")
+
+
+# Register all commands
+for command_class in load_commands():
+    cli.add_command(command_class.create_click_command())
 
 
 if __name__ == "__main__":

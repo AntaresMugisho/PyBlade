@@ -7,15 +7,15 @@ from utils.styles import PYBLADE_STYLE
 
 class ProjectService:
     def __init__(self):
-        self.project_data = self._get_project_info()
+        self.project_data = self.get_project_info()
 
-    def create_project(self):
+    def create_project(self, project_data):
         """Create a new PyBlade project"""
         self._create_directory_structure(project_data)
         self._install_dependencies(project_data)
 
     @staticmethod
-    def _get_project_info():
+    def get_project_info():
         """Get project information from user"""
         return questionary.form(
             project_name=questionary.text("What is your project name?", default="my_project", style=custom_style),

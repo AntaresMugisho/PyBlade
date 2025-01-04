@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Test Template</title>
+    <link rel="stylesheet" href="@static("style.css")">
+</head>
+<body>
+    <h1>PyBlade</h1>
+
+    <h2>Variable binding</h2>
+
+    <p>Hello, {{ name }} !</p>
+
+    <p>Escaped html: {{ html }}</p>
+
+    <p>Unescaped html : {!! html !!}</p>
+
+    <h2>Conditional statements</h2>
+
+
+    @if(age <= 18)
+        <p>You are young !</p>
+    @endif
+
+    @if(age <= 18)
+        <p>If block.</p>
+    @elif(age < 50)
+        <p>Elif block.</p>
+    @else
+        <p>Else block.</p>
+    @endif
+
+    <h2>For loops</h2>
+
+    <h3>With no-empty iterable</h3>
+    <ul>
+        @for(item in items)
+            @if( loop.first )
+                <p>This is the first iteration</p>
+            @endif
+            <li>Item: {{ item }}</li>
+        @endfor
+    </ul>
+
+    <h3>With empty iterable and the @empty directive</h3>
+    <ul>
+        @for(item in favorites)
+            <li>Favorite: {{item}}</li>
+        @empty
+            <p>No favorite item</p>
+        @endfor
+    </ul>
+
+    <h2>Form related directives</h2>
+    <form action="">
+        @csrf
+        @method("POST")
+
+        <h3>Checked directive</h3>
+        <div><label for=""><input type="radio" name="gender" value="F" @checked(False)
+            >Female</label></div>
+        <div><label for=""><input type="radio" @checked(True) name="gender" value="Apple">Male</label></div>
+
+        <div><label for=""><input type="checkbox" name="fruits[]" value="M" @checked(name == "Antares")
+            >Mango</label></div>
+        <div><label for=""><input type="checkbox" @checked(False) name="fruits[]" value="Apple">Apple</label></div>
+
+        @error("This field is required.")
+            <small class="text-red-500">{{ message }}</small>
+        @enderror
+
+        <a href="@url("route_name", {"id": 2, "name": name })" class="nav-link @active('name')">Url one</a>
+
+        <a href="@url("route_name", [2, name])">Url 2</a>
+
+        <a href="@url("route_name")">Url 3</a>
+
+        <h3>Selected directive</h3>
+        <div>
+            <select name="gender">
+                <option value="">Choose your gender</option>
+                <option value="M" @selected(1==3)>Male</option>
+                <option value="F" @selected(True)>Female</option>
+            </select>
+        </div>
+        <img src="@static("app/images/image.jpg")" alt="">
+    </form>
+
+    @auth
+        <p>Authenticated</p>
+    @else
+        <p>Not Authenticated</p>
+    @endauth
+
+    @auth
+        <p>2 Authenticated</p>
+    @endauth
+</body>
+</html>

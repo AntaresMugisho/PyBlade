@@ -1,0 +1,18 @@
+@props({
+    "name" : "Olivier",
+    "active" : True
+})
+
+<p {{ attributes.class_({"p4": True, "mt": False}) }}>This is a paragraph</p>
+
+
+<li {{ attributes.merge({"class": "nav-item"}) }}>
+    <a class="nav-link" href="{{ attributes.get('href') }}">{{ slot }}</a>
+    @if(active)
+        <p>Active</p>
+    @endif
+
+    @if(attributes.has("class", "active"))
+        <div>Attributes exists</div>
+    @endif
+</li>
