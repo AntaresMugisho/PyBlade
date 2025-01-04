@@ -1,5 +1,5 @@
-from pathlib import Path
 import subprocess
+from pathlib import Path
 
 import questionary
 from commands.base_command import BaseCommand
