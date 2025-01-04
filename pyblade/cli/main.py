@@ -1,16 +1,13 @@
-import click
-import questionary
-from questionary import Choice, Style
-from rich.console import Console
-from rich.table import Table
-
-import pkgutil
 import importlib
+import pkgutil
 from pathlib import Path
-from commands.base_command import BaseCommand
 
-# from pyblade.cli.command.add import liveblade
-# from pyblade.cli.command.migrate import migrate
+import click
+from rich.table import Table
+from utils.console import console
+
+from .commands.base_command import BaseCommand
+
 
 def load_commands():
     commands = []
@@ -18,23 +15,39 @@ def load_commands():
 
     # Load built-in commands
     for _, name, _ in pkgutil.iter_modules([str(commands_path)]):
-        module = importlib.import_module(f"commands.{name}")
-        for item_name in dir(module):
-            item = getattr(module, item_name)
-            if isinstance(item, type) and issubclass(item, BaseCommand) and item != BaseCommand:
-                commands.append(item)
+        if name != "base_command":  # Skip the base command
+            try:
+                module = importlib.import_module(f"pyblade.cli.commands.{name}")
+                for item_name in dir(module):
+                    item = getattr(module, item_name)
+                    if isinstance(item, type) and issubclass(item, BaseCommand) and item != BaseCommand:
+                        commands.append(item)
+            except ImportError as e:
+                print(f"Warning: Failed to load command module {name}: {e}")
 
     # Load project commands if they exist
     project_commands_path = Path.cwd() / "pyblade_commands"
-    if project_commands_path.exists():
-        # Similar loading logic for project commands
-        pass
+    if project_commands_path.exists() and project_commands_path.is_dir():
+        # Add project commands directory to Python path
+        import sys
+
+        sys.path.append(str(project_commands_path.parent))
+
+        for _, name, _ in pkgutil.iter_modules([str(project_commands_path)]):
+            try:
+                module = importlib.import_module(f"pyblade_commands.{name}")
+                for item_name in dir(module):
+                    item = getattr(module, item_name)
+                    if isinstance(item, type) and issubclass(item, BaseCommand) and item != BaseCommand:
+                        commands.append(item)
+            except ImportError as e:
+                print(f"Warning: Failed to load project command {name}: {e}")
 
     return commands
 
+
 class CommandGroup(click.Group):
     def format_help(self, ctx, formatter):
-        console = Console()
 
         # Project header
         console.print(
@@ -86,9 +99,27 @@ def cli():
     # print("[🎉 SUCCESS] The Django project has been successfully initialized.")
 
 
-# Register all commands
+# Register default commands
+default_commands = {
+    "init": "pyblade.cli.commands.init_command.InitCommand",
+    "serve": "pyblade.cli.commands.serve_command.ServeCommand",
+}
+
+# Register all discovered commands
 for command_class in load_commands():
     cli.add_command(command_class.create_click_command())
+
+# Register default commands that weren't already registered
+registered_commands = {cmd.name: cmd for cmd in cli.commands.values()}
+for cmd_name, cmd_path in default_commands.items():
+    if cmd_name not in registered_commands:
+        try:
+            module_path, class_name = cmd_path.rsplit(".", 1)
+            module = importlib.import_module(module_path)
+            command_class = getattr(module, class_name)
+            cli.add_command(command_class.create_click_command())
+        except (ImportError, AttributeError) as e:
+            print(f"Warning: Failed to load default command {cmd_name}: {e}")
 
 
 if __name__ == "__main__":
