@@ -1,4 +1,5 @@
 from pathlib import Path
+import subprocess
 
 import questionary
 from commands.base_command import BaseCommand
@@ -14,15 +15,19 @@ class InitCommand(BaseCommand):
     def handle(self, **kwargs):
 
         # Get project configuration
-        project_data = self.get_project_info()
+        self.project_data = self.get_project_info()
 
+        if not project_data:
+            return
+
+        # Confirm project details
         console.print(
             f"""
-            Here are your project configuration
-             - Project name : {project_data['project_name']}
-             - Web framework : {project_data['framework']}
-             - CSS framework : {project_data['css_framework']}
-             - Use LiveBlade : {"Yes" if project_data['use_liveblade'] else "No"}
+            Project details :
+                - Project name : [bold]{self.project_data['project_name']}[/bold]
+                - Framework : [bold]{self.project_data['framework']}[/bold]
+                - CSS framework : [bold]{self.project_data['css_framework'] or 'None'}[/bold]
+                - Use LiveBlade : [bold]{'Yes' if self.project_data['use_liveblade'] else 'No'}[/bold]
             """
         )
 
@@ -30,8 +35,6 @@ class InitCommand(BaseCommand):
             self.error("Project creation cancelled.")
             return
 
-        # Create directory structure
-        # Create project
         self.info("Creating project structure...")
 
         # Configure project
@@ -67,9 +70,10 @@ class InitCommand(BaseCommand):
             ),
         ).ask()
 
-    def _create_directory_structure(self, project_data):
+    def _create_directory_structure(self):
         """Create project directory structure"""
-        project_path = Path(project_data["project_name"])
+
+        project_path = Path(self.project_data["project_name"])
 
         # Create directories
         directories = [
@@ -80,10 +84,20 @@ class InitCommand(BaseCommand):
             "static/js",
         ]
 
-        for directory in directories:
-            (project_path / directory).mkdir(parents=True, exist_ok=True)
+        # for directory in directories:
+        #     (project_path / directory).mkdir(parents=True, exist_ok=True)
 
-    def _install_dependencies(self, project_data):
+    def _install_dependencies(self):
         """Install project dependencies based on configuration"""
-        # Implementation for installing dependencies
-        pass
+
+        # Install framework-specific dependencies
+        if self.project_data["framework"].lower() == "django":
+            subprocess.check_call(["pip", "install", "django"])
+        elif self.project_data["framework"].lower() == "flask":
+            subprocess.check_call(["pip", "install", "flask"])
+
+        # Install CSS framework-specific dependencies
+        if self.project_data["css_framework"].lower().conains("tailwind"):
+            subprocess.check_call(["pip", "install", "django-tailwind"])
+        elif self.project_data["css_framework"].lower().contains("bootstrap"):
+            subprocess.check_call(["pip", "install", "django-bootstrap-v5"])
