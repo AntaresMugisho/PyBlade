@@ -3,10 +3,9 @@ import pkgutil
 from pathlib import Path
 
 import click
+from commands.base_command import BaseCommand
 from rich.table import Table
 from utils.console import console
-
-from .commands.base_command import BaseCommand
 
 
 def load_commands():
@@ -101,8 +100,8 @@ def cli():
 
 # Register default commands
 default_commands = {
-    "init": "pyblade.cli.commands.init_command.InitCommand",
-    "serve": "pyblade.cli.commands.serve_command.ServeCommand",
+    "init": "commands.init_command.InitCommand",
+    "serve": "commands.serve_command.ServeCommand",
 }
 
 # Register all discovered commands

@@ -1,4 +1,4 @@
-from .base_command import BaseCommand
+from commands.base_command import BaseCommand
 
 
 class ServeCommand(BaseCommand):

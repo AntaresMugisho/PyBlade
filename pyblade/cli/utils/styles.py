@@ -4,7 +4,7 @@ PYBLADE_STYLE = Style(
     [
         ("qmark", "fg:#673ab7 bold"),  # token in front of the question
         ("question", "bold"),  # question text
-        ("answer", "fg:blue bold"),  # submitted answer text behind the question
+        ("answer", "fg:blue"),  # submitted answer text behind the question
         ("pointer", "fg:yellow bold"),  # pointer used in select and checkbox prompts
         ("highlighted", "fg:blue bold"),  # pointed-at choice in select and checkbox prompts
         ("selected", "fg:blue"),  # style for a selected item of a checkbox

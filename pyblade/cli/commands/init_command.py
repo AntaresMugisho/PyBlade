@@ -1,11 +1,10 @@
 from pathlib import Path
 
 import questionary
+from commands.base_command import BaseCommand
 from questionary import Choice
-
-from ..utils.console import console
-from ..utils.styles import PYBLADE_STYLE
-from .base_command import BaseCommand
+from utils.console import console
+from utils.styles import PYBLADE_STYLE
 
 
 class InitCommand(BaseCommand):
@@ -21,9 +20,9 @@ class InitCommand(BaseCommand):
             f"""
             Here are your project configuration
              - Project name : {project_data['project_name']}
-             - Framework : {project_data['framework']}
+             - Web framework : {project_data['framework']}
              - CSS framework : {project_data['css_framework']}
-             - Use LiveBlade : {project_data['use_liveblade']}
+             - Use LiveBlade : {"Yes" if project_data['use_liveblade'] else "No"}
             """
         )
 
