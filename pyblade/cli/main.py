@@ -83,25 +83,11 @@ def cli():
     """PyBlade - Modern Template Engine for Python web frameworks"""
     pass
 
-    # framework = choose_framework()
-
-    # ensure_django_installed()
-
-    # print(f"[✔️ INFO] Creating a new Django project: {project_name}")
-    # subprocess.check_call(['django-admin', 'startproject', project_name])
-
-    # if questionary.confirm("Do you want to use liveBlade?").ask():
-    #     configure_pyblade(project_name)
-
-    # configure_framework(framework, project_name)
-
-    # print("[🎉 SUCCESS] The Django project has been successfully initialized.")
-
 
 # Register default commands
 default_commands = {
-    "init": "commands.init_command.InitCommand",
-    "serve": "commands.serve_command.ServeCommand",
+    "init": "InitCommand",
+    "serve": "ServeCommand",
 }
 
 # Register all discovered commands
@@ -110,15 +96,14 @@ for command_class in load_commands():
 
 # Register default commands that weren't already registered
 registered_commands = {cmd.name: cmd for cmd in cli.commands.values()}
-for cmd_name, cmd_path in default_commands.items():
-    if cmd_name not in registered_commands:
-        try:
-            module_path, class_name = cmd_path.rsplit(".", 1)
-            module = importlib.import_module(module_path)
-            command_class = getattr(module, class_name)
-            cli.add_command(command_class.create_click_command())
-        except (ImportError, AttributeError) as e:
-            print(f"Warning: Failed to load default command {cmd_name}: {e}")
+for cmd_name, class_name in default_commands.items():
+    # if cmd_name not in registered_commands:
+    try:
+        module = importlib.import_module("commands")
+        command_class = getattr(module, class_name)
+        cli.add_command(command_class.create_click_command())
+    except (ImportError, AttributeError) as e:
+        pass
 
 
 if __name__ == "__main__":
