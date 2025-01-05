@@ -17,7 +17,7 @@ class InitCommand(BaseCommand):
         # Get project configuration
         self.project_data = self.get_project_info()
 
-        if not project_data:
+        if not self.project_data:
             return
 
         # Confirm project details
@@ -35,10 +35,10 @@ class InitCommand(BaseCommand):
             self.error("Project creation cancelled.")
             return
 
-        self.info("Creating project structure...")
+        # self.info("Creating project structure...")
 
-        # Configure project
-        self.info("Configuring project...")
+        # # Configure project
+        # self.info("Configuring project...")
 
         # self.success(f"Project {project_data['name']} created successfully!")
 

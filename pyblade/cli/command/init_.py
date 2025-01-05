@@ -19,7 +19,6 @@ def init():
     ensure_django_installed()
 
     print(f"[✔️ INFO] Creating a new Django project: {project_name}")
-    subprocess.check_call(["django-admin", "startproject", project_name])
 
     if questionary.confirm("Do you want to use liveBlade?").ask():
         configure_pyblade(project_name)
@@ -27,16 +26,6 @@ def init():
     configure_framework(framework, project_name)
 
     print("[🎉 SUCCESS] The Django project has been successfully initialized.")
-
-
-def ensure_django_installed():
-    """Checks if Django is installed, installs it if not."""
-    try:
-        subprocess.check_call(["python", "-m", "django", "--version"], stdout=subprocess.DEVNULL)
-        print("[✔️ INFO] Django is already installed.")
-    except subprocess.CalledProcessError:
-        print("[⚠️ WARNING] Django is not installed. Installing now...")
-        subprocess.check_call(["pip", "install", "django"])
 
 
 def configure_pyblade(project_name):
