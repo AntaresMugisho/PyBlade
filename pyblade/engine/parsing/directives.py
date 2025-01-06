@@ -83,6 +83,14 @@ class DirectiveParser:
     _ERROR_PATTERN: Pattern = re.compile(r"@error\s*\((?P<field>.*?)\s*\)\s*(?P<slot>.*?)\s*@enderror", re.DOTALL)
     _OPENING_TAG_PATTERN: Pattern = re.compile(r"<(?P<tag>\w+)\s*(?P<attributes>.*?)>")
 
+    # Bootstrap directive patterns
+    _BOOTSTRAP_CSS_PATTERN: Pattern = re.compile(r"@bootstrap_css", re.DOTALL)
+    _BOOTSTRAP_JS_PATTERN: Pattern = re.compile(r"@bootstrap_javascript", re.DOTALL)
+
+    # Tailwind directive patterns
+    _TAILWIND_CSS_PATTERN: Pattern = re.compile(r"@tailwind_css", re.DOTALL)
+    _TAILWIND_PRELOAD_CSS_PATTERN: Pattern = re.compile(r"@tailwind_preload_css", re.DOTALL)
+
     def __init__(self):
         self._context: Dict[str, Any] = {}
         self._line_map: Dict[str, int] = {}  # Maps directive positions to line numbers
@@ -171,6 +179,15 @@ class DirectiveParser:
         # Process liveblade
         template = self._parse_liveblade_scripts(template)
         template = self._parse_liveblade(template)
+
+        # Process Bootstrap directives
+        template = self._process_bootstrap_css(template, context)
+        template = self._process_bootstrap_javascript(template, context)
+
+        # Process Tailwind directives
+        template = self._process_tailwind_preload_css(template, context)
+        template = self._process_tailwind_css(template, context)
+
         return template
 
     def _parse_for(self, template: str) -> str:
@@ -339,53 +356,49 @@ class DirectiveParser:
         """Process @url directive with support for Django-style 'as' variable assignment."""
 
         def replace_url(match: Match) -> str:
+            url_pattern = match.group("pattern").strip("'\"")
+            params = match.group("params")
+            as_var = match.group("as_var")
+
+            # Build URL parameters
+            url_params = []
+            if params:
+                for param in params.split(","):
+                    param = param.strip()
+                    if "=" in param:
+                        key, value = param.split("=", 1)
+                        key = key.strip()
+                        value = value.strip()
+                        try:
+                            # Evaluate the value in the current context
+                            evaluated_value = eval(value, {}, self._context)
+                            url_params.append((key, evaluated_value))
+                        except Exception as e:
+                            raise DirectiveParsingError(f"Error evaluating URL parameter '{value}': {str(e)}")
+
+            # Get URL patterns from context
+            urlconf = self._context.get("urlconf", None)
+            if not urlconf:
+                raise DirectiveParsingError("URL configuration not found in context")
+
             try:
-                url_pattern = match.group("pattern").strip("'\"")
-                params = match.group("params")
-                as_var = match.group("as_var")
+                # Resolve URL pattern
+                from django.urls import reverse
 
-                # Build URL parameters
-                url_params = []
-                if params:
-                    for param in params.split(","):
-                        param = param.strip()
-                        if "=" in param:
-                            key, value = param.split("=", 1)
-                            key = key.strip()
-                            value = value.strip()
-                            try:
-                                # Evaluate the value in the current context
-                                evaluated_value = eval(value, {}, self._context)
-                                url_params.append((key, evaluated_value))
-                            except Exception as e:
-                                raise DirectiveParsingError(f"Error evaluating URL parameter '{value}': {str(e)}")
+                url = reverse(
+                    url_pattern,
+                    args=[p[1] for p in url_params if not p[0]],
+                    kwargs={p[0]: p[1] for p in url_params if p[0]},
+                )
 
-                # Get URL patterns from context
-                urlconf = self._context.get("urlconf", None)
-                if not urlconf:
-                    raise DirectiveParsingError("URL configuration not found in context")
-
-                try:
-                    # Resolve URL pattern
-                    from django.urls import reverse
-
-                    url = reverse(
-                        url_pattern,
-                        args=[p[1] for p in url_params if not p[0]],
-                        kwargs={p[0]: p[1] for p in url_params if p[0]},
-                    )
-
-                    # If 'as' variable is specified, store in context and return empty string
-                    if as_var:
-                        self._context[as_var.strip()] = url
-                        return ""
-                    return url
-
-                except Exception as e:
-                    raise DirectiveParsingError(f"Error resolving URL '{url_pattern}': {str(e)}")
+                # If 'as' variable is specified, store in context and return empty string
+                if as_var:
+                    self._context[as_var.strip()] = url
+                    return ""
+                return url
 
             except Exception as e:
-                raise DirectiveParsingError(f"Error in @url directive: {str(e)}")
+                raise DirectiveParsingError(f"Error resolving URL '{url_pattern}': {str(e)}")
 
         # Updated pattern to support 'as' variable assignment
         url_pattern = re.compile(
@@ -1532,3 +1545,53 @@ class DirectiveParser:
                 raise DirectiveParsingError(f"Error in @liveblade_scripts directive: {str(e)}")
 
         return self._LIVEBLADE_SCRIPTS_PATTERN.sub(replace_liveblade_scripts, template)
+
+    def _process_bootstrap_css(self, template: str, context: Dict[str, Any]) -> str:
+        """Process Bootstrap CSS directives."""
+
+        def _get_bootstrap_css(match: Match) -> str:
+            try:
+                # Use static template tag for loading the CSS
+                return '{% static "bootstrap/css/bootstrap.min.css" %}'
+            except Exception as e:
+                raise DirectiveParsingError(f"Error in bootstrap_css directive: {str(e)}")
+
+        return self._BOOTSTRAP_CSS_PATTERN.sub(_get_bootstrap_css, template)
+
+    def _process_bootstrap_javascript(self, template: str, context: Dict[str, Any]) -> str:
+        """Process Bootstrap JavaScript directives."""
+
+        def _get_bootstrap_js(match: Match) -> str:
+            try:
+                # Use static template tag for loading the JavaScript
+                return '{% static "bootstrap/js/bootstrap.bundle.min.js" %}'
+            except Exception as e:
+                raise DirectiveParsingError(f"Error in bootstrap_javascript directive: {str(e)}")
+
+        return self._BOOTSTRAP_JS_PATTERN.sub(_get_bootstrap_js, template)
+
+    def _process_tailwind_css(self, template: str, context: Dict[str, Any]) -> str:
+        """Process Tailwind CSS directive."""
+
+        def _get_tailwind_css(match: Match) -> str:
+            try:
+                # Get the TAILWIND_APP_NAME from context or use default 'theme'
+                app_name = context.get("TAILWIND_APP_NAME", "theme")
+                return f'<link rel="stylesheet" href="@static(\'{app_name}/css/dist/styles.css\')">'
+            except Exception as e:
+                raise DirectiveParsingError(f"Error in tailwind_css directive: {str(e)}")
+
+        return self._TAILWIND_CSS_PATTERN.sub(_get_tailwind_css, template)
+
+    def _process_tailwind_preload_css(self, template: str, context: Dict[str, Any]) -> str:
+        """Process Tailwind preload CSS directive."""
+
+        def _get_tailwind_preload_css(match: Match) -> str:
+            try:
+                # Get the TAILWIND_APP_NAME from context or use default 'theme'
+                app_name = context.get("TAILWIND_APP_NAME", "theme")
+                return f'<link rel="preload" href="{{% static(\'{app_name}/css/dist/styles.css\' %}}" as="style">'
+            except Exception as e:
+                raise DirectiveParsingError(f"Error in tailwind_preload_css directive: {str(e)}")
+
+        return self._TAILWIND_PRELOAD_CSS_PATTERN.sub(_get_tailwind_preload_css, template)

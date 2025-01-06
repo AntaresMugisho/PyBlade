@@ -32,7 +32,7 @@ class BaseCommand:
         self.console.print(f"[blue]{message}[/blue]")
 
     def success(self, message: str):
-        self.console.print(f"[green]✨ {message}[/green]")
+        self.console.print(f"[green]✔️ {message}[/green]")
 
     def error(self, message: str):
         self.console.print(f"[red]❌ {message}[/red]")

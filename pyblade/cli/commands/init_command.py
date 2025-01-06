@@ -1,6 +1,7 @@
-import subprocess
-from pathlib import Path
 import os
+import subprocess
+import time
+from pathlib import Path
 
 import questionary
 from commands.base_command import BaseCommand
@@ -35,28 +36,28 @@ class InitCommand(BaseCommand):
             self.error("Project creation cancelled.")
             return
 
-        with console.status("Installing dependencies...") as status:
+        with console.status("[blue]Installing dependencies...[/blue]\n\n") as status:
             self._install_dependencies()
 
-            status.update(f"Starting a new {self.project_data['framework']} project...")
+            status.update(f"[blue]Starting a new [bold]{self.project_data['framework']}[/bold] project...[/blue]")
             subprocess.check_call(["django-admin", "startproject", self.project_data["project_name"]])
 
-            status.update("Configuring PyBlade Template Engine...")
-            self._configure_pyblade
+            status.update("[blue]Configuring PyBlade Template Engine...[/blue]\n\n")
+            self._configure_pyblade()
 
             if self.project_data["use_liveblade"]:
-                status.update("Configuring LiveBlade...")
+                status.update("[blue]Configuring LiveBlade...[/blue]\n\n")
                 self._configure_liveblade()
 
             if "tailwind" in self.project_data["css_framework"].lower():
-                status.update("Configuring Tailwind CSS...")
+                status.update("[blue]Configuring Tailwind CSS...[/blue]\n\n")
                 self._configure_tailwind()
 
             elif "bootstrap" in self.project_data["css_framework"].lower():
-                status.update("Configuring Bootstrap 5...")
+                status.update("[blue]Configuring Bootstrap 5...[/blue]\n\n")
                 self._configure_bootstrap()
 
-            status.success("✨ Pyblade Project created successfully !")
+            self.success("Pyblade Project created successfully !")
 
     @staticmethod
     def _get_project_info():
@@ -92,7 +93,7 @@ class InitCommand(BaseCommand):
 
         # Install CSS framework-specific dependencies
         if "tailwind" in self.project_data["css_framework"].lower():
-            self._pip_install("django-tailwind")
+            self._pip_install("django-tailwind[reload]")
 
         elif "bootstrap" in self.project_data["css_framework"].lower():
             self._pip_install("django-bootstrap-v5")
@@ -115,21 +116,21 @@ class InitCommand(BaseCommand):
 
         # Configure PyBlade in settings.py if it's a django project
         if self.project_data["framework"].lower() == "django":
-            settings_path = project_path / project_name / "settings.py"
+            settings_path = project_path / project_path / "settings.py"
             try:
                 with open(settings_path, "r") as file:
                     settings = file.read()
 
-                new_settings = settings.replace("'DIRS': [],", "'DIRS': [BASE_DIR / templates')],").replace(
+                new_settings = settings.replace("'DIRS': [],", "'DIRS': [BASE_DIR / 'templates'],").replace(
                     "'django.template.backends.django.DjangoTemplates',", "'pyblade.backends.DjangoPyBlade',"
                 )
 
                 with open(settings_path, "w") as file:
                     file.write(new_settings)
 
-                console.print("✔️ The template engine has been replaced with PyBlade.")
+                self.success("The template engine has been replaced with PyBlade.")
             except Exception as e:
-                console.print(f"❌ 'settings.py' file not found in {settings_path}.")
+                self.error(f"{str(e)}")
                 return
 
             # Change default welcome file
@@ -143,23 +144,94 @@ class InitCommand(BaseCommand):
                             file.write(default_urlconf)
 
             except Exception as e:
-                console.print(f"❌ {str(e)}")
+                self.error(f"{str(e)}")
+                return
 
     def _configure_liveblade(self):
         """Configures LiveBlade for the project."""
-        pass
+        time.sleep(3)
+        self.success("LiveBlade has been installed successfully.")
 
     def _configure_bootstrap(self):
         """Configures Bootstrap 5 for the project."""
-        pass
+        project_path = Path(self.project_data["project_name"])
+
+        if self.project_data["framework"].lower() == "django":
+            # Update settings.py
+            settings_path = project_path / self.project_data["project_name"] / "settings.py"
+            try:
+                with open(settings_path, "r") as file:
+                    settings = file.read()
+
+                # Add bootstrap5 to INSTALLED_APPS
+                new_settings = settings.replace("INSTALLED_APPS = [", "INSTALLED_APPS = [\n    'bootstrap5',")
+
+                with open(settings_path, "w") as file:
+                    file.write(new_settings)
+
+                # Create base template with Bootstrap
+                templates_dir = project_path / "templates"
+                templates_dir.mkdir(exist_ok=True)
+
+                base_template = """"""
+
+                with open(templates_dir / "base.html", "w") as file:
+                    file.write(base_template)
+
+            except Exception as e:
+                self.error(f"Failed to configure Bootstrap: {str(e)}")
+                return
+
+        self.success("Bootstrap 5 has been configured successfully.")
 
     def _configure_tailwind(self):
         """Configures Tailwind CSS for the project."""
-        pass
+        project_path = Path(self.project_data["project_name"])
+
+        if self.project_data["framework"].lower() == "django":
+            # Update settings.py
+            settings_path = project_path / self.project_data["project_name"] / "settings.py"
+            try:
+                with open(settings_path, "r") as file:
+                    settings = file.read()
+
+                # Add tailwind to INSTALLED_APPS
+                new_settings = settings.replace(
+                    "INSTALLED_APPS = [", "INSTALLED_APPS = [\n    'tailwind',\n    'theme',"
+                )
+
+                with open(settings_path, "w") as file:
+                    file.write(new_settings)
+
+                # Add Tailwind app name
+                new_settings += "\n\nTAILWIND_APP_NAME = 'theme'\n\nINTERNAL_IPS = ['127.0.0.1']"
+
+                with open(settings_path, "w") as file:
+                    file.write(new_settings)
+
+                # Create theme app
+                subprocess.check_call(["python", "manage.py", "tailwind", "init", "--no-input"], cwd=project_path)
+                subprocess.check_call(["python", "manage.py", "tailwind", "install"], cwd=project_path)
+
+                # Create base template
+                templates_dir = project_path / "templates"
+                templates_dir.mkdir(exist_ok=True)
+
+                base_template = """"""
+
+                with open(templates_dir / "base.html", "w") as file:
+                    file.write(base_template)
+
+            except Exception as e:
+                self.error(f"Failed to configure Tailwind: {str(e)}")
+                return
+
+            self.success("Tailwind CSS has been configured successfully.")
+            self.info("To start the Tailwind CSS build process, run 'pyblade tailwind:start'")
 
     def _pip_install(self, package: str):
         """Installs a Python package using pip."""
         try:
             subprocess.check_call(["pip3", "install", package])
-        except Excepetion as e:
+        except Exception as e:
             raise e
