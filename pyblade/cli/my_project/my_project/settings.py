@@ -20,7 +20,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "django-insecure-2^+on-_a(+1ty9hooq__cyu2u+0^d9*ps&2v4mk8gj6=g+$2+y"
+SECRET_KEY = "django-insecure-2p3_2wjah%coth2$ok962b6d=b8+b3r)mhqsfkydahy$vnmhas"
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -126,3 +126,5 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 
 TAILWIND_APP_NAME = "theme"
+
+INTERNAL_IPS = ["127.0.0.1"]

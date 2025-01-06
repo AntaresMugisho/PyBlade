@@ -105,7 +105,7 @@ class InitCommand(BaseCommand):
         project_path = Path(self.project_data["project_name"])
 
         directories = [
-            "templates",
+            f"{self.project_data["project_name"]}/templates",
             "components",
             "static/css",
             "static/js",
@@ -196,12 +196,7 @@ class InitCommand(BaseCommand):
                     settings = file.read()
 
                 # Add tailwind to INSTALLED_APPS
-                new_settings = settings.replace(
-                    "INSTALLED_APPS = [", "INSTALLED_APPS = [\n    'tailwind',\n    'theme',"
-                )
-
-                with open(settings_path, "w") as file:
-                    file.write(new_settings)
+                new_settings = settings.replace("INSTALLED_APPS = [", "INSTALLED_APPS = [\n\t'tailwind',\n\t'theme',")
 
                 # Add Tailwind app name
                 new_settings += "\n\nTAILWIND_APP_NAME = 'theme'\n\nINTERNAL_IPS = ['127.0.0.1']"
