@@ -1,11 +1,10 @@
 from commands.base_command import BaseCommand
+from utils.runner import command
 
 
 class ServeCommand(BaseCommand):
     name = "serve"
-    description = "Serve the PyBlade application"
+    description = "Serve the Django application"
 
     def handle(self, **kwargs):
-        self.info("Starting PyBlade development server...")
-        # TODO: Implement server functionality
-        self.success("Server is running on http://localhost:8000")
+        command("python manage.py runserver")

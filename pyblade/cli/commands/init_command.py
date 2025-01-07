@@ -129,7 +129,7 @@ class InitCommand(BaseCommand):
                 # TODO: Add PyBlade to TEMPLATES
 
                 new_temp_settings = """{
-        "BACKEND": "pyblade.backends.DjangoPyBlade"
+        "BACKEND": "pyblade.backends.DjangoPyBlade",
         "DIRS": [BASE_DIR / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
