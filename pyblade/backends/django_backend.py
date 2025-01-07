@@ -5,7 +5,7 @@ from django.utils.functional import cached_property
 from django.utils.module_loading import import_string
 
 from pyblade import PyBlade
-
+from  pyblade.liveblade import liveBlade
 
 class DjangoPyBlade(BaseEngine):
 
@@ -48,6 +48,7 @@ class Template:
             context = {}
 
         if request is not None:
+            liveBlade.LiveBlade(request)
             context["request"] = request
             context["csrf_input"] = csrf_input_lazy(request)
             context["csrf_token"] = csrf_token_lazy(request)

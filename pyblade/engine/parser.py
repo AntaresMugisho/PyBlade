@@ -589,37 +589,37 @@ class Parser:
     def _parse_match(self):
         pass
 
+    i = 1
     def _parse_liveblade(self, template, context):
         pattern = re.compile(r"@liveblade\s*\(\s*(?P<component>.*?)\s*\)")
         match = re.search(pattern, template)
 
         if match is not None:
             component = ast.literal_eval(match.group("component"))
-            component_content = loader.load_template(f"liveblade.{component}") if component else None
 
-            if component_content:
                 # Add pyblade id to the parent tag of the component
-                tag_pattern = re.compile(r"<(?P<tag>\w+)\s*(?P<attributes>.*?)>(.*)</(?P=tag)", re.DOTALL)
+            tag_pattern = re.compile(r"<(?P<tag>\w+)\s*(?P<attributes>.*?)>(.*)</(?P=tag)", re.DOTALL)
 
-                m = re.search(tag_pattern, str(component_content))
-                attributes = m.group("attributes")
-                component_content = re.sub(attributes, f'{attributes} liveblade_id="{component}"', str(component_content))
 
-                # Parse the content to include before replacement
-                try:
-                    import importlib
+            # Parse the content to include before replacement
+            try:
+                import importlib
+                module = importlib.import_module(f"components.{component}")
+                cls = getattr(module, "".join([word.capitalize() for word in component.split('_')]))
+                instance =  cls(id=component)
+                parsed = instance.render()
+                matches = []
+                matches.append(tag_pattern.match(str(parsed)))
 
-                    module = importlib.import_module(f"components.{component}")
-                    cls = getattr(module, "".join([word.capitalize() for word in component.split('_')]))
-
-                    parsed = cls().render()
-                    return re.sub(pattern, parsed, template)
-                except ModuleNotFoundError as e:
-                    raise e
-                except AttributeError as e:
-                    raise e
-                except Exception as e:
-                    raise e
+                attributes = matches[0].group("attributes")
+                component_content = re.sub(attributes, f'  liveblade_id="{component}">', str(parsed))
+                return re.sub(pattern, parsed, template)
+            except ModuleNotFoundError as e:
+                raise e
+            except AttributeError as e:
+                raise e
+            except Exception as e:
+                raise e
 
         return template
 
