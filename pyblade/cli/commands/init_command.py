@@ -3,10 +3,11 @@ import subprocess
 from pathlib import Path
 
 import questionary
-from commands.base_command import BaseCommand
 from questionary import Choice
-from utils.console import console
-from utils.styles import PYBLADE_STYLE
+
+from pyblade.cli.commands.base_command import BaseCommand
+from pyblade.cli.utils.console import console
+from pyblade.cli.utils.styles import PYBLADE_STYLE
 
 _SETTINGS_PATERN = re.compile(
     r"\"\"\"(?P<banner>.*?)\"\"\"\s*.*?\s*INSTALLED_APPS\s=\s\[\s*(?P<installed_apps>.*?)\s*\]\s*.*?\s*MIDDLEWARE\s=\s\[\s*(?P<middleware>.*?)\s*\]\s*.*?\s*TEMPLATES\s=\s*\[\s*(?P<templates>\{.*?\},)\n\]",  # noqa E501
@@ -161,7 +162,6 @@ class InitCommand(BaseCommand):
                     settings = file.read()
 
                 match = re.search(_SETTINGS_PATERN, settings)
-                print(match)
                 if match:
                     new_temp_settings = settings.replace(match.group("templates"), new_temp_settings)
 

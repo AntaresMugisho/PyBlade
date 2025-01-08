@@ -3,9 +3,10 @@ import pkgutil
 from pathlib import Path
 
 import click
-from commands.base_command import BaseCommand
 from rich.table import Table
-from utils.console import console
+
+from pyblade.cli.commands.base_command import BaseCommand
+from pyblade.cli.utils.console import console
 
 
 def load_commands():
@@ -40,7 +41,7 @@ def load_commands():
                     if isinstance(item, type) and issubclass(item, BaseCommand) and item != BaseCommand:
                         commands.append(item)
             except ImportError as e:
-                print(f"Warning: Failed to load project command {name}: {e}")
+                console.print(f"Warning: Failed to load project command {name}: {e}")
 
     return commands
 
@@ -88,6 +89,7 @@ def cli():
 default_commands = {
     "init": "InitCommand",
     "serve": "ServeCommand",
+    "migrate": "MigrateCommand",
 }
 
 # Register all discovered commands
@@ -103,7 +105,7 @@ for cmd_name, class_name in default_commands.items():
         command_class = getattr(module, class_name)
         cli.add_command(command_class.create_click_command())
     except (ImportError, AttributeError) as e:
-        pass
+        console.print(f"Warning: Failed to load default command {cmd_name}: {e}")
 
 
 if __name__ == "__main__":
