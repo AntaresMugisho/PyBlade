@@ -6,6 +6,12 @@ import click
 from rich.table import Table
 
 from pyblade.cli.commands.base_command import BaseCommand
+from pyblade.cli.commands.collectstatic_command import CollectstaticCommand
+from pyblade.cli.commands.db_makemigrations_command import DbMakemigrationsCommand
+from pyblade.cli.commands.db_migrate_command import DbMigrateCommand
+from pyblade.cli.commands.db_shell_command import DbShellCommand
+from pyblade.cli.commands.shell_command import ShellCommand
+from pyblade.cli.commands.startapp_command import StartappCommand
 from pyblade.cli.utils.console import console
 
 
@@ -85,28 +91,41 @@ def cli():
     pass
 
 
-# Register default commands
-default_commands = {
-    "init": "InitCommand",
-    "serve": "ServeCommand",
-    "migrate": "MigrateCommand",
-}
-
-# Register all discovered commands
-for command_class in load_commands():
-    cli.add_command(command_class.create_click_command())
-
-# Register default commands that weren't already registered
-registered_commands = {cmd.name: cmd for cmd in cli.commands.values()}
-for cmd_name, class_name in default_commands.items():
-    # if cmd_name not in registered_commands:
-    try:
-        module = importlib.import_module("commands")
-        command_class = getattr(module, class_name)
+def register_commands(cli):
+    """Register all available commands."""
+    commands = [
+        InitCommand,
+        ServeCommand,
+        MigrateCommand,
+        DbMigrateCommand,
+        DbMakemigrationsCommand,
+        DbShellCommand,
+        ShellCommand,
+        StartappCommand,
+        CollectstaticCommand,
+    ]
+    for command_class in commands:
         cli.add_command(command_class.create_click_command())
-    except (ImportError, AttributeError) as e:
-        console.print(f"Warning: Failed to load default command {cmd_name}: {e}")
+
+    # Load project commands if they exist
+    project_commands_path = Path.cwd() / "pyblade_commands"
+    if project_commands_path.exists() and project_commands_path.is_dir():
+        # Add project commands directory to Python path
+        import sys
+
+        sys.path.append(str(project_commands_path.parent))
+
+        for _, name, _ in pkgutil.iter_modules([str(project_commands_path)]):
+            try:
+                module = importlib.import_module(f"pyblade_commands.{name}")
+                for item_name in dir(module):
+                    item = getattr(module, item_name)
+                    if isinstance(item, type) and issubclass(item, BaseCommand) and item != BaseCommand:
+                        cli.add_command(item.create_click_command())
+            except ImportError as e:
+                console.print(f"Warning: Failed to load project command {name}: {e}")
 
 
 if __name__ == "__main__":
+    register_commands(cli)
     cli()
