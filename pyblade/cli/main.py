@@ -8,7 +8,20 @@ from .utils.version import __version__
 
 DEFAULT_COMMANDS = {
     "Project commands": ["init", "migrate", "serve"],
-    "Django commands": ["db:migrate", "db:shell", "shell", "app:start", "static:collect", "make:migrations"],
+    "Component commands": [
+        "make:component",
+        "liveblade:component",
+    ],
+    "Django commands": [
+        "db:migrate",
+        "db:shell",
+        "shell",
+        "app:start",
+        "static:collect",
+        "make:migrations",
+        "make:messages",
+        "compile:messages",
+    ],
 }
 
 _CACHED_COMMANDS = {}

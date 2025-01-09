@@ -5,9 +5,9 @@ from pathlib import Path
 import questionary
 from questionary import Choice
 
-from pyblade.cli.commands.base_command import BaseCommand
-from pyblade.cli.utils.console import console
-from pyblade.cli.utils.styles import PYBLADE_STYLE
+from ..commands.base_command import BaseCommand
+from ..utils.console import console
+from ..utils.styles import PYBLADE_STYLE
 
 _SETTINGS_PATERN = re.compile(
     r"\"\"\"(?P<banner>.*?)\"\"\"\s*.*?\s*INSTALLED_APPS\s=\s\[\s*(?P<installed_apps>.*?)\s*\]\s*.*?\s*MIDDLEWARE\s=\s\[\s*(?P<middleware>.*?)\s*\]\s*.*?\s*TEMPLATES\s=\s*\[\s*(?P<templates>\{.*?\},)\n\]",  # noqa E501

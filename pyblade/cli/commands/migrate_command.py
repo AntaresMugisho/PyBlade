@@ -5,8 +5,8 @@ import subprocess
 
 import questionary
 
-from pyblade.cli.commands.base_command import BaseCommand
-from pyblade.cli.utils.console import console
+from ..commands.base_command import BaseCommand
+from ..utils.console import console
 
 
 class MigrateCommand(BaseCommand):
