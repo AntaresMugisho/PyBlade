@@ -18,7 +18,9 @@ class DjangoCommand(BaseCommand):
         """Check if we're in a Django project directory."""
         manage_py = Path("manage.py")
         if not manage_py.exists():
-            raise FileNotFoundError("manage.py not found. Please run this command from your Django project directory.")
+            raise FileNotFoundError(
+                "manage.py not found. Please run this command from your Django project root directory."
+            )
 
     def _run_django_command(self, args: Optional[List[str]] = None, capture_output: bool = False) -> Optional[str]:
         """Run a Django management command."""

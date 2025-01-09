@@ -34,7 +34,4 @@ class MakemigrationsCommand(DjangoCommand):
             args.append("--merge")
         args.extend(app_names)
 
-        try:
-            self._run_django_command(args, capture_output=False)
-        except Exception as e:
-            self.error(f"Failed to create migrations: {str(e)}")
+        self._run_django_command(args, capture_output=False)
