@@ -1,7 +1,7 @@
 from .django_command import DjangoCommand
 
 
-class StartappCommand(DjangoCommand):
+class AppStartCommand(DjangoCommand):
     name = "app:start"
     description = "Create a new Django app"
     aliases = ["startapp"]

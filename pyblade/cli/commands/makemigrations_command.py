@@ -3,10 +3,10 @@ from typing import List
 from .django_command import DjangoCommand
 
 
-class MakemigrationsCommand(DjangoCommand):
+class MakeMigrationsCommand(DjangoCommand):
     name = "make:migrations"
     description = "Create new database migrations"
-    aliases = ["makemigrations", "make:migration", "makemigration"]
+    aliases = ["makemigrations", "db:makemigrations"]
     arguments = ["app"]
     options = {
         "empty": {

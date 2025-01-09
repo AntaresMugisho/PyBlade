@@ -4,32 +4,11 @@ import click
 from rich.table import Table
 
 from .utils.console import console
+from .utils.version import __version__
 
 DEFAULT_COMMANDS = {
-    "Project Commands": [
-        {
-            "name": "init",
-            "class": "InitCommand",
-        },
-        {
-            "name": "migrate",
-            "class": "MigrateCommand",
-        },
-        {
-            "name": "serve",
-            "class": "ServeCommand",
-        },
-    ],
-    "Django Commands": [
-        {
-            "name": "db:migrate",
-            "class": "DbMigrateCommand",
-        },
-        {
-            "name": "shell",
-            "class": "ShellCommand",
-        },
-    ],
+    "Project commands": ["init", "migrate", "serve"],
+    "Django commands": ["db:migrate", "db:shell", "shell", "app:start", "static:collect", "make:migrations"],
 }
 
 _CACHED_COMMANDS = {}
@@ -37,12 +16,16 @@ _CACHED_COMMANDS = {}
 
 def load_commands():
     for category, commands in DEFAULT_COMMANDS.items():
-        for cmd in commands:
-            cmd_name = cmd["name"]
+        commands = sorted(commands)
+        for cmd_name in commands:
             if cmd_name in _CACHED_COMMANDS.get(category, []):
                 continue
-            module = importlib.import_module(f"pyblade.cli.commands.{cmd_name.lower().replace(":", "")}_command")
-            cmd_cls = getattr(module, cmd["class"])
+
+            class_name = "".join([word.capitalize() for word in cmd_name.split(":")]) + "Command"
+            module = importlib.import_module(
+                f"pyblade.cli.commands.{class_name.removesuffix('Command')}_command".lower()
+            )
+            cmd_cls = getattr(module, class_name)
             cmd_instance = cmd_cls.create_click_command()
             cli.add_command(cmd_instance)
 
@@ -80,9 +63,10 @@ class CommandGroup(click.Group):
 
 
 @click.group(cls=CommandGroup)
+@click.version_option("", "-v", "--version", message=f"\npyblade {__version__}\n")
+@click.help_option("-h", "--help")
 def cli():
     """PyBlade - Modern Template Engine for Python web frameworks"""
-    pass
 
 
 load_commands()

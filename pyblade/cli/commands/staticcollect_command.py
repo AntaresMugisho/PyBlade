@@ -3,10 +3,11 @@ import click
 from .django_command import DjangoCommand
 
 
-class CollectstaticCommand(DjangoCommand):
-    name = "collectstatic"
+class StaticCollectCommand(DjangoCommand):
+    name = "static:collect"
     description = "Collect static files"
     django_command = "collectstatic"
+    aliases = ["collectstatic"]
     arguments = []
     options = {
         "no_input": {
