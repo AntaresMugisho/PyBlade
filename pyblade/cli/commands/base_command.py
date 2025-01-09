@@ -2,8 +2,8 @@ from typing import Any, Dict, List
 
 import click
 
-from pyblade.cli.exceptions import PyBladeException
-from pyblade.cli.utils.console import console
+from ..exceptions import PyBladeException
+from ..utils.console import console
 
 
 class BaseCommand:

@@ -12,7 +12,6 @@ class DjangoCommand(BaseCommand):
 
     def __init__(self):
         super().__init__()
-        self._check_django_project()
 
     def _check_django_project(self):
         """Check if we're in a Django project directory."""
@@ -26,6 +25,8 @@ class DjangoCommand(BaseCommand):
         """Run a Django management command."""
         if not self.django_command:
             raise ValueError("django_command must be set in the command class")
+
+        self._check_django_project()
 
         cmd = ["python", "manage.py", self.django_command]
         if args:

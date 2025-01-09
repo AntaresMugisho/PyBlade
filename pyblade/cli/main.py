@@ -1,88 +1,82 @@
 import importlib
-import pkgutil
-from pathlib import Path
 
 import click
 from rich.table import Table
 
-from pyblade.cli.commands.base_command import BaseCommand
-from pyblade.cli.commands.collectstatic_command import CollectstaticCommand
-from pyblade.cli.commands.db_makemigrations_command import DbMakemigrationsCommand
-from pyblade.cli.commands.db_migrate_command import DbMigrateCommand
-from pyblade.cli.commands.db_shell_command import DbShellCommand
-from pyblade.cli.commands.shell_command import ShellCommand
-from pyblade.cli.commands.startapp_command import StartappCommand
-from pyblade.cli.utils.console import console
+from .utils.console import console
+
+DEFAULT_COMMANDS = {
+    "Project Commands": [
+        {
+            "name": "init",
+            "class": "InitCommand",
+        },
+        {
+            "name": "migrate",
+            "class": "MigrateCommand",
+        },
+        {
+            "name": "serve",
+            "class": "ServeCommand",
+        },
+    ],
+    "Django Commands": [
+        {
+            "name": "db:migrate",
+            "class": "DbMigrateCommand",
+        },
+        {
+            "name": "shell",
+            "class": "ShellCommand",
+        },
+    ],
+}
+
+_CACHED_COMMANDS = {}
 
 
 def load_commands():
-    commands = []
-    commands_path = Path(__file__).parent / "commands"
+    for category, commands in DEFAULT_COMMANDS.items():
+        for cmd in commands:
+            cmd_name = cmd["name"]
+            if cmd_name in _CACHED_COMMANDS.get(category, []):
+                continue
+            module = importlib.import_module(f"pyblade.cli.commands.{cmd_name.lower().replace(":", "")}_command")
+            cmd_cls = getattr(module, cmd["class"])
+            cmd_instance = cmd_cls.create_click_command()
+            cli.add_command(cmd_instance)
 
-    # Load built-in commands
-    for _, name, _ in pkgutil.iter_modules([str(commands_path)]):
-        if name != "base_command":  # Skip the base command
-            try:
-                module = importlib.import_module(f"pyblade.cli.commands.{name}")
-                for item_name in dir(module):
-                    item = getattr(module, item_name)
-                    if isinstance(item, type) and issubclass(item, BaseCommand) and item != BaseCommand:
-                        commands.append(item)
-            except ImportError as e:
-                print(f"Warning: Failed to load command module {name}: {e}")
-
-    # Load project commands if they exist
-    project_commands_path = Path.cwd() / "pyblade_commands"
-    if project_commands_path.exists() and project_commands_path.is_dir():
-        # Add project commands directory to Python path
-        import sys
-
-        sys.path.append(str(project_commands_path.parent))
-
-        for _, name, _ in pkgutil.iter_modules([str(project_commands_path)]):
-            try:
-                module = importlib.import_module(f"pyblade_commands.{name}")
-                for item_name in dir(module):
-                    item = getattr(module, item_name)
-                    if isinstance(item, type) and issubclass(item, BaseCommand) and item != BaseCommand:
-                        commands.append(item)
-            except ImportError as e:
-                console.print(f"Warning: Failed to load project command {name}: {e}")
-
-    return commands
+            _CACHED_COMMANDS.setdefault(category, []).append(cmd_instance)
 
 
 class CommandGroup(click.Group):
     def format_help(self, ctx, formatter):
 
-        # Project header
         console.print(
-            "\n[bold blue]PyBlade CLI[/bold blue]\n[italic] Modern Template Engine for Python web frameworks [/italic]"
+            """
+[bold]Welcome in the [blue]PyBlade CLI[/blue][/bold]
+
+[bold italic]Usage[/bold italic]: [blue]pyblade COMMAND [ARGUMENTS] [OPTIONS] [/blue]
+
+[bold italic]Options[/bold italic]:
+  [blue]-h, --help[/blue]\tShow this message and exit.
+
+[bold italic]Available commands[/bold italic]:
+"""
         )
 
-        # Group commands by category
-        categories = {
-            "Project Commands": ["init", "serve", "migrate"],
-            "Generator Commands": ["make:component", "make:layout"],
-            "Database Commands": ["db:migrate", "db:rollback", "db:seed", "db:reset", "db:refresh"],
-            "Utility Commands": ["cache:clear", "view:clear"],
-        }
+        table = Table(show_header=True, header_style="white", box=None)
+        table.add_column("Command", justify="left")
+        table.add_column("Description", justify="left")
+        for category, commands in _CACHED_COMMANDS.items():
 
-        for category, commands in categories.items():
-            table = Table(show_header=True, header_style="bold magenta", box=None)
-            table.add_column("Command", style="cyan")
-            table.add_column("Description", style="white")
+            table.add_row(f"\n[yellow]{category}[/yellow]")
+            for cmd in commands:
+                table.add_row(f"  [blue]{cmd.name}[/blue]", cmd.help)
 
-            console.print(f"\n[bold yellow]{category}[/bold yellow]")
+        console.print(table)
 
-            for cmd_name in commands:
-                cmd = self.get_command(ctx, cmd_name)
-                if cmd:
-                    table.add_row(cmd_name, cmd.help or "")
-
-            console.print(table)
-
-        console.print("\nUse [cyan]pyblade COMMAND --help[/cyan] for more information about a command.\n")
+        console.print("\nUse [blue]pyblade COMMAND --help[/blue] for more information about a specific command.\n")
 
 
 @click.group(cls=CommandGroup)
@@ -91,41 +85,7 @@ def cli():
     pass
 
 
-def register_commands(cli):
-    """Register all available commands."""
-    commands = [
-        InitCommand,
-        ServeCommand,
-        MigrateCommand,
-        DbMigrateCommand,
-        DbMakemigrationsCommand,
-        DbShellCommand,
-        ShellCommand,
-        StartappCommand,
-        CollectstaticCommand,
-    ]
-    for command_class in commands:
-        cli.add_command(command_class.create_click_command())
-
-    # Load project commands if they exist
-    project_commands_path = Path.cwd() / "pyblade_commands"
-    if project_commands_path.exists() and project_commands_path.is_dir():
-        # Add project commands directory to Python path
-        import sys
-
-        sys.path.append(str(project_commands_path.parent))
-
-        for _, name, _ in pkgutil.iter_modules([str(project_commands_path)]):
-            try:
-                module = importlib.import_module(f"pyblade_commands.{name}")
-                for item_name in dir(module):
-                    item = getattr(module, item_name)
-                    if isinstance(item, type) and issubclass(item, BaseCommand) and item != BaseCommand:
-                        cli.add_command(item.create_click_command())
-            except ImportError as e:
-                console.print(f"Warning: Failed to load project command {name}: {e}")
-
+load_commands()
 
 if __name__ == "__main__":
-    register_commands(cli)
     cli()
