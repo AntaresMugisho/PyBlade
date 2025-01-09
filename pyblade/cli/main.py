@@ -38,6 +38,7 @@ class CommandGroup(click.Group):
         console.print(
             """
 [bold]Welcome in the [blue]PyBlade CLI[/blue][/bold]
+[italic]- The modern Python web frameworks development toolkit -[/italic]
 
 [bold italic]Usage[/bold italic]: [blue]pyblade COMMAND [ARGUMENTS] [OPTIONS] [/blue]
 
@@ -66,7 +67,7 @@ class CommandGroup(click.Group):
 @click.version_option("", "-v", "--version", message=f"\npyblade {__version__}\n")
 @click.help_option("-h", "--help")
 def cli():
-    """PyBlade - Modern Template Engine for Python web frameworks"""
+    """PyBlade CLI - The modern Python web frameworks development toolkit"""
 
 
 load_commands()

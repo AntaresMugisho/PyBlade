@@ -27,6 +27,7 @@ class InitCommand(BaseCommand):
         self.project_name, self.framework, self.css_framework, self.use_liveblade = self.project_data.values()
         self.default_app_path = Path(self.project_name) / self.project_name
         self.settings_path = self.default_app_path / "settings.py"
+        self.cli_path = Path(__file__).parent.parent
 
         if not self.project_data:
             return
@@ -34,12 +35,12 @@ class InitCommand(BaseCommand):
         # Confirm project details
         console.print(
             f"""
-            Project details :
-                - Project name : [bold]{self.project_name}[/bold]
-                - Framework : [bold]{self.framework}[/bold]
-                - CSS framework : [bold]{self.css_framework or 'None'}[/bold]
-                - Use LiveBlade : [bold]{'Yes' if self.use_liveblade else 'No'}[/bold]
-            """
+    Project details :
+        - Project name : [bold]{self.project_name}[/bold]
+        - Framework : [bold]{self.framework}[/bold]
+        - CSS framework : [bold]{self.css_framework or 'None'}[/bold]
+        - Use LiveBlade : [bold]{'Yes' if self.use_liveblade else 'No'}[/bold]
+    """
         )
 
         if not questionary.confirm("Is this correct?").ask():
@@ -195,7 +196,7 @@ class InitCommand(BaseCommand):
                 with open(self.settings_path, "w") as file:
                     file.write(new_settings)
 
-                with open("templates/bootstrap_layout.html", "r") as file:
+                with open(self.cli_path / "templates/bootstrap_layout.html", "r") as file:
                     base_template = file.read()
 
                 with open(self.default_app_path / "templates" / "layout.html", "w") as file:
@@ -222,16 +223,24 @@ class InitCommand(BaseCommand):
                 with open(self.settings_path, "w") as file:
                     file.write(new_settings)
 
-                # Create theme app
-                # subprocess.check_call(["python", "manage.py", "tailwind", "init", "--no-input"])
-                # subprocess.check_call(["python", "manage.py", "tailwind", "install"])
-
                 # Create tailwind layout
-                with open("templates/tailwind_layout.html", "r") as file:
+                with open(self.cli_path / "templates/tailwind_layout.html", "r") as file:
                     base_template = file.read()
 
                 with open(self.default_app_path / "templates" / "layout.html", "w") as file:
                     file.write(base_template)
+
+                try:
+                    # Create theme app
+                    subprocess.check_call(["python", "manage.py", "tailwind", "init", "--no-input"])
+                    subprocess.check_call(["python", "manage.py", "tailwind", "install"])
+                except Exception as e:
+                    self.error(
+                        f"Failed to configure Tailwind: {str(e)}\n",
+                        "Please Configure manually by running 'python manage.py tailwind init'",
+                        " and 'python manage.py tailwind install'",
+                    )
+                    return
 
             except Exception as e:
                 self.error(f"Failed to configure Tailwind: {str(e)}")
