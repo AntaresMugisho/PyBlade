@@ -9,21 +9,32 @@ class MakeComponentCommand(BaseCommand):
     arguments = ["name"]
 
     def handle(self, **kwargs):
-        """Create a new component."""
+        """Create a new component in the templates directory."""
+        component_name = kwargs.get("name")
+        templates_dir = Path("templates")
+        components_dir = templates_dir / "components"
 
-        dst = Path(kwargs.get("name"))
-        if dst.exists():
-            self.error(f"Component '{dst}' already exists.")
-            return
+        # Ensure templates directory exists
+        if not components_dir.exists():
+            components_dir.mkdir(parents=True)
 
-        with open(dst, "w") as f:
+        # Create component path
+        component_path = components_dir / f"{component_name}.html"
+
+        if component_path.exists():
+            self.error(f"Component '{component_name}' already exists at {component_path}")
+            overwrite = self.confirm("Do you want to overwrite it?", default=False)
+            if not overwrite:
+                return
+
+        # Create component with template
+        with open(component_path, "w") as f:
             f.write(
-                """
-@props({})
+                """@props({})
 
 <div>
-   {# slot #}
+    {# Component content goes here #}
 </div>
-            """
+"""
             )
-        self.info(f"Creating component '{dst}'")
+        self.info(f"Component created successfully at '{component_path}'")
