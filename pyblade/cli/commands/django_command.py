@@ -1,7 +1,7 @@
-import subprocess
 from typing import List, Optional
 
 from .base_command import BaseCommand
+from ..utils import command
 
 
 class DjangoCommand(BaseCommand):
@@ -33,12 +33,7 @@ class DjangoCommand(BaseCommand):
             cmd.extend(args)
 
         try:
-            if capture_output:
-                result = subprocess.run(cmd, capture_output=True, text=True, check=True, cwd=self.settings.pyblade_root)
-                return result.stdout
-            else:
-                subprocess.run(cmd, check=True, cwd=self.settings.pyblade_root)
-                return None
-        except subprocess.CalledProcessError as e:
-            self.error(f"Command failed: {e.stderr if e.stderr else str(e)}")
-            raise
+            return command.run(cmd, cwd=self.settings.pyblade_root)
+        except command.RunError as e:
+            self.error(e.stderr)
+            return

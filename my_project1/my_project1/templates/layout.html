@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@yield("title")</title>
+    <link rel="stylesheet" href="@static('css/dist/style.css')">
+    @tailwind_preload_css
+    @tailwind_css
+    @yield("extra_css")
+</head>
+<body>
+    <div class="container mx-auto px-4">
+        @yield("header")
+        @yield("main")
+        @yield("footer")
+    </div>
+    @yield("extra_js")
+</body>
+</html>

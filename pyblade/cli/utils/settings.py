@@ -19,7 +19,6 @@ class PyBladeSettingsManager:
         return settings
 
     def serialize(self, settings):
-        print(f"####\n\n{self.pyblade_root}\n\n")
         pyblade_dir = self.pyblade_root
         with open(pyblade_dir / "pyblade.json", "w") as f:
             json.dump(settings, f, indent=4)

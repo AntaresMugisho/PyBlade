@@ -1,5 +1,4 @@
 import re
-import subprocess
 from pathlib import Path
 
 import questionary
@@ -9,6 +8,7 @@ from ..commands.base_command import BaseCommand
 from ..utils.console import console
 from ..utils.styles import PYBLADE_STYLE
 from ..utils.version import __version__
+from ..utils import command
 
 _SETTINGS_PATERN = re.compile(
     r"\"\"\"(?P<banner>.*?)\"\"\"\s*.*?\s*INSTALLED_APPS\s=\s\[\s*(?P<installed_apps>.*?)\s*\]\s*.*?\s*MIDDLEWARE\s=\s\[\s*(?P<middleware>.*?)\s*\]\s*.*?\s*TEMPLATES\s=\s*\[\s*(?P<templates>\{.*?\},)\n\]",  # noqa E501
@@ -52,7 +52,11 @@ class InitCommand(BaseCommand):
             self._install_dependencies()
 
             status.update(f"[blue]Starting a new [bold]{self.framework}[/bold] project...[/blue]")
-            subprocess.check_call(["django-admin", "startproject", self.project_name])
+            try:
+                command.run(["django-admin", "startproject", self.project_name])
+            except command.RunError as e:
+                self.error(e.stderr)
+                return
 
             status.update("[blue]Configuring PyBlade Template Engine...[/blue]\n\n")
             self._configure_pyblade()
@@ -241,29 +245,30 @@ class InitCommand(BaseCommand):
                 with open(self.default_app_path / "templates" / "layout.html", "w") as file:
                     file.write(base_template)
 
-                try:
-                    # Create theme app
-                    subprocess.check_call(["python", "manage.py", "tailwind", "init", "--no-input"])
-                    subprocess.check_call(["python", "manage.py", "tailwind", "install"])
-                except Exception as e:
-                    self.error(
-                        f"Failed to configure Tailwind: {str(e)}\n",
-                        "Please Configure manually by running 'python manage.py tailwind init'",
-                        " and 'python manage.py tailwind install'",
-                    )
-                    return
+                # try:
+                #     # Create theme app
+                #     init = command.run(["python", "manage.py", "tailwind", "init", "--no-input"])
+                #     self.success(init.stdout)
+                #     install = command.run(["python", "manage.py", "tailwind", "install"])
+                #     self.success(install.stdout)
+                # except command.RunError as e:
+                #     self.error(
+                #         f"Failed to configure Tailwind: {str(e)}\n",
+                #         "Please Configure manually by running 'pyblade tailwind:init'",
+                #         " and 'pyblade tailwind:install'",
+                #     )
+                #     return
 
             except Exception as e:
                 self.error(f"Failed to configure Tailwind: {str(e)}")
                 return
 
         self.success("Tailwind CSS has been configured successfully.")
-        if self.project_data["framework"].lower() == "django":
-            self.info("To start the Tailwind CSS build process, run 'python manage.py tailwind start'")
 
     def _pip_install(self, package: str):
         """Installs a Python package using pip."""
         try:
-            subprocess.check_call(["pip3", "install", package])
-        except Exception as e:
-            raise e
+            return command.run(["pip3", "install", package])
+        except command.RunError as e:
+            self.error(e.stderr)
+            return
