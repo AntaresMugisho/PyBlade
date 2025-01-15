@@ -1,24 +1,21 @@
 from typing import Any, Dict
 
-from pyblade.engine.exceptions import TemplateNotFoundError
+from pyblade.engine.exceptions import TemplateNotFoundError  # noqa
 
 
 class Component:
     instances = {}
 
-    def __init__(self, **kwargs):
-        self._id = kwargs.get("id", id(self))
-        self._template = kwargs.get("template", None)
-        self._state = {}
-        Component.register_component(self)
+    def __init__(self):
+        Component.register(self)
 
     @classmethod
     def get_instance(cls, id):
         return cls.instances.get(id)
 
     @classmethod
-    def register_component(cls, component):
-        cls.instances[component._id] = component
+    def register(cls, component):
+        cls.instances[component] = component.__class__.__name__
 
     def render(self):
         raise NotImplementedError()
@@ -29,7 +26,6 @@ class Component:
     def get_context(self):
         context = {}
         methods = {
-            **self._state,
             **{
                 method: getattr(self, method)
                 for method in dir(self)
@@ -48,13 +44,13 @@ def view(template_name: str, context: Dict[str, Any] = None):
     if not context:
         context = {}
 
-    component = Component.instances.get(template_name, None)
-    if not component:
-        raise TemplateNotFoundError(f"No component named {template_name}")
+    # component = Component.instances.get(template_name, None)
+    # if not component:
+    #     raise TemplateNotFoundError(f"No component named {template_name}")
 
-    template = component._template
-    context = {**context, **component.get_context()}
-    return template.render(context)
+    # template = component._template
+    # context = {**context, **component.get_context()}
+    return context
 
 
 def bladeRedirect(route):

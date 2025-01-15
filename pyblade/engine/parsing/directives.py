@@ -3,6 +3,7 @@ Directive parsing implementation for the template engine.
 """
 
 import ast
+import importlib
 import json
 import re
 from pprint import pprint  # noqa
@@ -1358,7 +1359,7 @@ class DirectiveParser:
                 if not validate_single_root_node(html_content):
                     raise TemplateRenderingError("LiveBlade component must have a single root node.")
 
-                # Add pyblade id to the root node tag of the component
+                # Add liveblade_id attribute to the root node tag of the component
                 match = re.search(self._OPENING_TAG_PATTERN, component.content)
                 tag = match.group("tag")
                 attributes = match.group("attributes")
@@ -1374,16 +1375,15 @@ class DirectiveParser:
 
                 # Render the template content
                 try:
-                    import importlib
-
-                    module = importlib.import_module(f"components.{component_name}")
-                    cls = getattr(module, "".join([word.capitalize() for word in re.split("[-_]", component_name)]))
-
+                    module = importlib.import_module(f"liveblade.{component_name}")
+                    cls = getattr(module, f"{re.sub('[-_]', '', component_name.title())}Component")
+                    comp = cls()
+                    comp.register(component_name)
                     parsed = cls(id=component_name, template=component).render()
                     return re.sub(pattern, parsed, template)
 
                 except ModuleNotFoundError:
-                    raise DirectiveParsingError(f"Component module not found: components.{component_name}")
+                    raise DirectiveParsingError(f"Component module not found: liveblade.{component_name}")
 
                 except AttributeError:
                     raise DirectiveParsingError(f"Component class not found: {cls}")
