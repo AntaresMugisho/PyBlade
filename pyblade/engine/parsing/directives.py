@@ -1347,39 +1347,23 @@ class DirectiveParser:
 
         if match is not None:
             component_name = ast.literal_eval(match.group("component"))
-            component = loader.load_template(f"liveblade.{component_name}") if component_name else None
+            template = loader.load_template(f"liveblade.{component_name}") if component_name else None
 
-            if component:
-                # Remove comments
-                html_content = re.sub(r"<!--.*?-->", "", component.content, flags=re.DOTALL)
+            if template:
+                # Ensure the component has only one root node
+                html_content = re.sub(r"<!--.*?-->", "", template.content, flags=re.DOTALL)
                 html_content = re.sub(self._COMMENT_PATTERN, "", html_content)
                 html_content = re.sub(self._COMMENTS_PATTERN, "", html_content)
 
-                # Ensure the component has only one root node
                 if not validate_single_root_node(html_content):
                     raise TemplateRenderingError("LiveBlade component must have a single root node.")
-
-                # Add liveblade_id attribute to the root node tag of the component
-                match = re.search(self._OPENING_TAG_PATTERN, component.content)
-                tag = match.group("tag")
-                attributes = match.group("attributes")
-                component_content = re.sub(
-                    rf"{tag}\s*{attributes}",
-                    f'{tag} {attributes} liveblade_id="{component_name}"',
-                    component.content,
-                    1,
-                )
-
-                # Update the component content
-                component.content = component_content
 
                 # Render the template content
                 try:
                     module = importlib.import_module(f"liveblade.{component_name}")
                     cls = getattr(module, f"{re.sub('[-_]', '', component_name.title())}Component")
-                    comp = cls()
-                    comp.register(component_name)
-                    parsed = cls(id=component_name, template=component).render()
+                    component = cls(f"liveblade.{component_name}")
+                    parsed = component.render()
                     return re.sub(pattern, parsed, template)
 
                 except ModuleNotFoundError:
