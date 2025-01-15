@@ -1,5 +1,4 @@
 import subprocess
-from pathlib import Path
 from typing import List, Optional
 
 from .base_command import BaseCommand
@@ -15,10 +14,11 @@ class DjangoCommand(BaseCommand):
 
     def _check_django_project(self):
         """Check if we're in a Django project directory."""
-        manage_py = Path("manage.py")
+        manage_py = self.settings.pyblade_root / "manage.py"
         if not manage_py.exists():
             raise FileNotFoundError(
-                "manage.py not found. Please run this command from your Django project root directory."
+                "manage.py not found. "
+                "Please make sure you're in a Django project directory and you are in the environment."
             )
 
     def _run_django_command(self, args: Optional[List[str]] = None, capture_output: bool = False) -> Optional[str]:
@@ -34,10 +34,10 @@ class DjangoCommand(BaseCommand):
 
         try:
             if capture_output:
-                result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+                result = subprocess.run(cmd, capture_output=True, text=True, check=True, cwd=self.settings.pyblade_root)
                 return result.stdout
             else:
-                subprocess.run(cmd, check=True)
+                subprocess.run(cmd, check=True, cwd=self.settings.pyblade_root)
                 return None
         except subprocess.CalledProcessError as e:
             self.error(f"Command failed: {e.stderr if e.stderr else str(e)}")
