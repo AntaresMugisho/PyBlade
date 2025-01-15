@@ -18,9 +18,9 @@ class LivebladeComponentCommand(BaseCommand):
         """Create a new LiveBlade component."""
         component_name = kwargs.get("name")
 
-        templates_dir = Path("templates")
+        templates_dir = self.settings.pyblade_root / Path(self.settings.project_name) / "templates"
         liveblade_dir = templates_dir / "liveblade"
-        components_dir = Path("liveblade")
+        components_dir = Path(self.settings.pyblade_root) / "liveblade"
 
         # Ensure liveblade directory exists
         if not liveblade_dir.exists():
@@ -36,7 +36,7 @@ class LivebladeComponentCommand(BaseCommand):
 
         # Check for existing files
         if html_file.exists() or python_file.exists():
-            self.error(f"Component '{component_name}' already exists at {html_file}")
+            self.warning(f"Component '{component_name}' already exists at {html_file}")
             overwrite = self.confirm("Do you want to overwrite it?", default=False)
             if not overwrite:
                 return
@@ -56,9 +56,6 @@ class LivebladeComponentCommand(BaseCommand):
                 f"""from pyblade import liveblade
 
 class {component_name.title()}Component(liveblade.Component):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
 
     def render(self):
         return liveblade.view("liveblade.{component_name}", context={{}})

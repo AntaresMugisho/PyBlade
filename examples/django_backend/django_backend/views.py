@@ -31,4 +31,4 @@ def index(request):
         ],
     }
 
-    return render(request, "django_backend.index", context)
+    return render(request, "home", context)

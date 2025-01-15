@@ -11,7 +11,7 @@ class MakeComponentCommand(BaseCommand):
     def handle(self, **kwargs):
         """Create a new component in the templates directory."""
         component_name = kwargs.get("name")
-        templates_dir = Path("templates")
+        templates_dir = self.settings.pyblade_root / Path(self.settings.project_name) / "templates"
         components_dir = templates_dir / "components"
 
         # Ensure templates directory exists

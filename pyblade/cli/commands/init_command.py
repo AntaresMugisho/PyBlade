@@ -8,6 +8,7 @@ from questionary import Choice
 from ..commands.base_command import BaseCommand
 from ..utils.console import console
 from ..utils.styles import PYBLADE_STYLE
+from ..utils.version import __version__
 
 _SETTINGS_PATERN = re.compile(
     r"\"\"\"(?P<banner>.*?)\"\"\"\s*.*?\s*INSTALLED_APPS\s=\s\[\s*(?P<installed_apps>.*?)\s*\]\s*.*?\s*MIDDLEWARE\s=\s\[\s*(?P<middleware>.*?)\s*\]\s*.*?\s*TEMPLATES\s=\s*\[\s*(?P<templates>\{.*?\},)\n\]",  # noqa E501
@@ -68,6 +69,16 @@ class InitCommand(BaseCommand):
                 elif "bootstrap" in self.css_framework.lower():
                     status.update("[blue]Configuring Bootstrap 5...[/blue]\n\n")
                     self._configure_bootstrap()
+
+            self.settings.pyblade_root = Path(self.project_name)
+            self.pyblade_settings = {
+                "name": self.project_name,
+                "framework": self.framework,
+                "css_framework": self.css_framework or None,
+                "pyblde_version": __version__,
+            }
+
+            self.settings.serialize(self.pyblade_settings)
 
             self.success("Pyblade Project created successfully !")
 

@@ -4,6 +4,7 @@ import click
 
 from ..exceptions import PyBladeException
 from ..utils.console import console
+from ..utils.settings import settings
 
 
 class BaseCommand:
@@ -16,6 +17,8 @@ class BaseCommand:
     def __init__(self):
         self.console = console
         self.validate_command_config()
+
+        self.settings = settings
 
     def validate_command_config(self):
         if not self.name:
