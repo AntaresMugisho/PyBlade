@@ -95,7 +95,7 @@ At PyBlade, we take security seriously. The template engine will automatically e
 
 ## Contributing
 
-Contributions are welcome! PyBlade is an open-source project, and we invite developers from both the Django and Laravel communities to collaborate. Please refer to the [Contributing Guide](docs/CONTRIBUTING.md) for more information.
+Contributions are welcome! PyBlade is an open-source project, and we invite developers from both the Django and Laravel communities to collaborate. Please refer to the [Contributing Guide](docs/docs/CONTRIBUTING.md) for more information.
 
 PyBlade is open source and welcomes contributions! Here's how you can help:
 
