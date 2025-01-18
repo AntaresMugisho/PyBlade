@@ -4,6 +4,7 @@ from .django_command import DjangoCommand
 class ServeCommand(DjangoCommand):
     name = "serve"
     description = "Run the development server"
+    aliases = ["runserver"]
     options = {
         "host": {
             "help": "The host to bind to.",
