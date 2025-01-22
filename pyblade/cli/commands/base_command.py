@@ -29,9 +29,31 @@ class BaseCommand:
     def handle(self, **kwargs):
         raise NotImplementedError("Command must implement handle method")
 
+    def argument(self, arg: str):
+        """Must return the value of the argument if it exists or None if not"""
+        pass
+    
+    def option(self, option_name: str):
+        """Must return the value of the option if it exists or None if not"""
+        pass
+
+    # Prompting for inputs
+    def ask(self, message: str, default: str = "") -> str:
+        return click.prompt(message, default=default)
+
     def confirm(self, message: str, default: bool = False) -> bool:
         return click.confirm(message, default=default)
 
+    def choice(self, message: str, choices: List[str], default: str = "") -> str:
+        return click.choice(message, choices, default=default)
+
+    def select(self, message: str, choices: List[str], default: str = "") -> str:
+        return click.prompt(message, type=click.Choice(choices), default=default)
+
+    def secret(self, message: str, default: str = "") -> str:
+        return click.prompt(message, hide_input=True, default=default)
+
+    # Command output
     def info(self, message: str):
         self.console.print(f"[blue]{message}[/blue]")
 
@@ -43,6 +65,14 @@ class BaseCommand:
 
     def warning(self, message: str):
         self.console.print(f"[yellow]⚠️ {message}[/yellow]")
+
+    def line(self, message: str):
+        self.console.print(message)
+
+    def new_line(self, n: int = 1):
+        self.console.print("\n" * n)
+
+
 
     @classmethod
     def create_click_command(cls):

@@ -233,7 +233,7 @@ class InitCommand(BaseCommand):
                     settings = file.read()
 
                 # Add tailwind to INSTALLED_APPS
-                new_settings = settings.replace("INSTALLED_APPS = [", "INSTALLED_APPS = [\n\t'tailwind',\n\t'theme',")
+                new_settings = settings.replace("INSTALLED_APPS = [", "INSTALLED_APPS = [\n\t'tailwind',")
                 new_settings += "\nTAILWIND_APP_NAME = 'theme'\n\nINTERNAL_IPS = ['127.0.0.1']"
                 with open(self.settings_path, "w") as file:
                     file.write(new_settings)
@@ -245,19 +245,29 @@ class InitCommand(BaseCommand):
                 with open(self.default_app_path / "templates" / "layout.html", "w") as file:
                     file.write(base_template)
 
-                # try:
-                #     # Create theme app
-                #     init = command.run(["python", "manage.py", "tailwind", "init", "--no-input"])
-                #     self.success(init.stdout)
-                #     install = command.run(["python", "manage.py", "tailwind", "install"])
-                #     self.success(install.stdout)
-                # except command.RunError as e:
-                #     self.error(
-                #         f"Failed to configure Tailwind: {str(e)}\n",
-                #         "Please Configure manually by running 'pyblade tailwind:init'",
-                #         " and 'pyblade tailwind:install'",
-                #     )
-                #     return
+                try:
+                    # Create theme app
+                    init = command.run(["python", "manage.py", "tailwind", "init", "--no-input"], cwd=Path(self.project_name))
+                    self.success(init.stdout)
+
+                    # Add the theme app to settings.py
+                    with open(self.settings_path, "r") as file:
+                        settings = file.read()
+
+                    new_settings = settings.replace("INSTALLED_APPS = [", "INSTALLED_APPS = [\n\t'theme',")
+                    with open(self.settings_path, "w") as file:
+                        file.write(new_settings)
+
+                    # Install tailwind
+                    install = command.run(["python", "manage.py", "tailwind", "install"], cwd=Path(self.project_name))
+                    self.success(install.stdout)
+                except command.RunError as e:
+                    self.error(
+                        f"Failed to configure Tailwind: {str(e.stderr)}\n"
+                        "Please Configure manually by running 'pyblade tailwind:init'"
+                        " and 'pyblade tailwind:install'"
+                    )
+                    return
 
             except Exception as e:
                 self.error(f"Failed to configure Tailwind: {str(e)}")
