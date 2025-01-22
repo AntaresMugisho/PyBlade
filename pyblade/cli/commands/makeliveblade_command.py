@@ -3,7 +3,7 @@ from pathlib import Path
 from ..commands.base_command import BaseCommand
 
 
-class LivebladeComponentCommand(BaseCommand):
+class MakeLivebladeCommand(BaseCommand):
     name = "liveblade:component"
     description = "Create a new LiveBlade component"
     arguments = ["name"]

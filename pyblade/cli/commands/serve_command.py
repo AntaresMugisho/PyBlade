@@ -3,6 +3,7 @@ from .django_command import DjangoCommand
 
 class ServeCommand(DjangoCommand):
     name = "serve"
+    aliases = ["runserver"]
     description = "Run the development server"
     options = {
         "host": {
