@@ -32,7 +32,7 @@ class BaseCommand:
     def argument(self, arg: str):
         """Must return the value of the argument if it exists or None if not"""
         pass
-    
+
     def option(self, option_name: str):
         """Must return the value of the option if it exists or None if not"""
         pass
@@ -72,6 +72,8 @@ class BaseCommand:
     def new_line(self, n: int = 1):
         self.console.print("\n" * n)
 
+    def newline(self, n: int = 1):
+        self.new_line(n)
 
     @classmethod
     def create_click_command(cls):

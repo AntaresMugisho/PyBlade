@@ -4,7 +4,7 @@ from ..commands.base_command import BaseCommand
 
 
 class MakeLivebladeCommand(BaseCommand):
-    name = "liveblade:component"
+    name = "make:liveblade"
     description = "Create a new LiveBlade component"
     arguments = ["name"]
     options = {
@@ -62,6 +62,7 @@ class {component_name.title()}Component(liveblade.Component):
 """
             )
 
-        self.info("LiveBlade component created successfully:")
-        self.info(f"  - HTML: {html_file}")
-        self.info(f"  - Python: {python_file}")
+        self.success("LiveBlade component created successfully:")
+        self.line(f"  - HTML: {html_file}")
+        self.line(f"  - Python: {python_file}")
+        self.newline()
