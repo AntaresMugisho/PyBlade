@@ -73,7 +73,6 @@ class BaseCommand:
         self.console.print("\n" * n)
 
 
-
     @classmethod
     def create_click_command(cls):
         cmd_instance = cls()
