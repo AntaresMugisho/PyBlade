@@ -5,10 +5,10 @@ import questionary
 from questionary import Choice
 
 from ..commands.base_command import BaseCommand
+from ..utils import command
 from ..utils.console import console
 from ..utils.styles import PYBLADE_STYLE
 from ..utils.version import __version__
-from ..utils import command
 
 _SETTINGS_PATERN = re.compile(
     r"\"\"\"(?P<banner>.*?)\"\"\"\s*.*?\s*INSTALLED_APPS\s=\s\[\s*(?P<installed_apps>.*?)\s*\]\s*.*?\s*MIDDLEWARE\s=\s\[\s*(?P<middleware>.*?)\s*\]\s*.*?\s*TEMPLATES\s=\s*\[\s*(?P<templates>\{.*?\},)\n\]",  # noqa E501
@@ -247,8 +247,8 @@ class InitCommand(BaseCommand):
 
                 try:
                     # Create theme app
-                    init = command.run(["python", "manage.py", "tailwind", "init", "--no-input"], cwd=Path(self.project_name))
-                    self.success(init.stdout)
+                    command.run(["python", "manage.py", "tailwind", "init", "--no-input"], cwd=Path(self.project_name))
+                    self.line("\tTailwind application 'theme' has been successfully created.")
 
                     # Add the theme app to settings.py
                     with open(self.settings_path, "r") as file:
@@ -260,7 +260,7 @@ class InitCommand(BaseCommand):
 
                     # Install tailwind
                     install = command.run(["python", "manage.py", "tailwind", "install"], cwd=Path(self.project_name))
-                    self.success(install.stdout)
+                    self.line(install.stdout)
                 except command.RunError as e:
                     self.error(
                         f"Failed to configure Tailwind: {str(e.stderr)}\n"
