@@ -49,6 +49,7 @@ class TemplateLoader:
         Raises:
             TemplateNotFoundError: If the template file cannot be found
         """
+
         # Remove extension if it exists
         template_name = template_name.removesuffix(self._extension)
 
@@ -57,6 +58,7 @@ class TemplateLoader:
 
         # Search in all template directories
         for directory in self._template_dirs:
+            print("##\n", directory, "\n")
             full_path = directory / f"{template_path}{self._extension}"
             try:
                 content = self._read_template(full_path)

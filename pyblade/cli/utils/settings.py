@@ -57,5 +57,8 @@ class PyBladeSettingsManager:
 
         return None
 
+    def is_empty(self):
+        return not self.pyblade_settings
+
 
 settings = PyBladeSettingsManager()

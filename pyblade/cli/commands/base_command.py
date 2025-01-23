@@ -1,6 +1,8 @@
 from typing import Any, Dict, List
 
 import click
+import questionary
+from rich.progress import track
 
 from ..exceptions import PyBladeException
 from ..utils.console import console
@@ -39,19 +41,22 @@ class BaseCommand:
 
     # Prompting for inputs
     def ask(self, message: str, default: str = "") -> str:
-        return click.prompt(message, default=default)
+        return questionary.text(message, default=default).ask()
 
     def confirm(self, message: str, default: bool = False) -> bool:
-        return click.confirm(message, default=default)
+        return questionary.confirm(message, default=default).ask()
 
-    def choice(self, message: str, choices: List[str], default: str = "") -> str:
-        return click.choice(message, choices, default=default)
+    def choice(self, message: str, choices: List[str], default: str | None = None) -> str:
+        return questionary.select(message, choices, default=default).ask()
 
-    def select(self, message: str, choices: List[str], default: str = "") -> str:
-        return click.prompt(message, type=click.Choice(choices), default=default)
+    def select(self, message: str, choices: List[str], default: str | None = None) -> str:
+        return questionary.select(message, choices, default=default).ask()
+
+    def checkbox(self, message: str, choices: List[str], default: List[str] | None = []) -> List[str]:
+        return questionary.checkbox(message, choices, default=default).ask()
 
     def secret(self, message: str, default: str = "") -> str:
-        return click.prompt(message, hide_input=True, default=default)
+        return questionary.password(message, default=default).ask()
 
     # Command output
     def info(self, message: str):
@@ -74,6 +79,9 @@ class BaseCommand:
 
     def newline(self, n: int = 1):
         self.new_line(n)
+
+    def track(self, items: List[Any], description: str = "Processing...\n"):
+        return track(items, description=f"{description}\n")
 
     @classmethod
     def create_click_command(cls):
