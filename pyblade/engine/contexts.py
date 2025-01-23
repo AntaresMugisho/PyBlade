@@ -70,11 +70,10 @@ class AttributesContext:
                 string += f" {key}" + (f'="{value}"' if value != "" else "")
         return string
 
-    def get(self, attr):
-        return self._attributes.get(attr)
+    def get(self, attr, default: str = ""):
+        return self._attributes.get(attr, default)
 
     def has(self, *args) -> bool:
-
         for attribute in args:
             if attribute not in self._attributes.keys():
                 return False

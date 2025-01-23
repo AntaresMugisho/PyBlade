@@ -58,7 +58,6 @@ class TemplateLoader:
 
         # Search in all template directories
         for directory in self._template_dirs:
-            print("##\n", directory, "\n")
             full_path = directory / f"{template_path}{self._extension}"
             try:
                 content = self._read_template(full_path)

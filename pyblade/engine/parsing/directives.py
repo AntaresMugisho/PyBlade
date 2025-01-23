@@ -74,7 +74,7 @@ class DirectiveParser:
     _VERBATIM_PATTERN: Pattern = re.compile(r"@verbatim\s*(?P<content>.*?)@endverbatim", re.DOTALL)
     _VERBATIM_SHORTHAND_PATTERN: Pattern = re.compile(r"@(?P<content>{{.*?}})", re.DOTALL)
     _COMPONENT_PATTERN: Pattern = re.compile(
-        r"@component\s*\(\s*(?P<name>['\"].*?['\"])\s*(?:,\s*(?P<data>.*?))?\s*\)(?P<slot>.*?)@endcomponent", re.DOTALL
+        r"@component\s*\(\s*(?P<name>.*?)\s*(?:,\s*(?P<data>.*?))?\s*\)(?P<slot>.*?)", re.DOTALL
     )
     _LIVEBLADE_SCRIPTS_PATTERN: Pattern = re.compile(
         r"@(?:liveblade_scripts|livebladeScripts)(?:\s*\(\s*(?P<attributes>.*?)\s*\))?", re.DOTALL
@@ -157,7 +157,10 @@ class DirectiveParser:
         template = self._parse_error(template)
 
         # Components related
+        template = self._parse_pyblade_tags(template)
+        template = self._parse_component(template)
         template = self._parse_include(template)
+        template = self._parse_extends(template)
 
         # Django-like directives
         template = self._parse_now(template)
@@ -542,8 +545,8 @@ class DirectiveParser:
 
             try:
                 layout = loader.load_template(layout_name)
-                # self.parse(str(layout), self._context)
-                return self._parse_section(template, layout.content)
+                parsed_layout = layout.render(self._context)
+                return self._parse_section(template, parsed_layout)
             except Exception as e:
                 raise e
 
@@ -562,7 +565,7 @@ class DirectiveParser:
 
         directives = ("section", "block")
 
-        local_context = {}
+        sections = {}
         for directive in directives:
             pattern = re.compile(
                 rf"@{directive}\s*\((?P<section_name>[^)]*)\)\s*(?P<content>.*?)@end{directive}", re.DOTALL
@@ -575,12 +578,12 @@ class DirectiveParser:
                 line_match_pattern = re.compile(rf"@{directive}\s*\(({argument})\)", re.DOTALL)
                 section_name = self._validate_argument(line_match_pattern.search(template))
 
-                local_context[section_name] = content
+                sections[section_name] = content
                 # TODO: Add a slot variable that will contain all the content outside the @section directives
 
-        return self._parse_yield(layout)
+        return self._parse_yield(layout, sections)
 
-    def _parse_yield(self, layout):
+    def _parse_yield(self, layout, sections: Dict[str, str]):
         """
         Replace every yieldable content by the actual value or None
 
@@ -588,13 +591,13 @@ class DirectiveParser:
         :return:
         """
         pattern = re.compile(r"@yield\s*\(\s*(?P<yieldable_name>.*?)\s*\)", re.DOTALL)
-        return pattern.sub(lambda match: self._handle_yield(match), layout)
+        return pattern.sub(lambda match: self._handle_yield(match, sections), layout)
 
-    def _handle_yield(self, match):
+    def _handle_yield(self, match, sections: Dict[str, str] = None):
         yieldable_name = self._validate_argument(match)
-        return self._context.get(yieldable_name)
+        return sections.get(yieldable_name)
 
-    def _parse_pyblade_tags(self, template, context):
+    def _parse_pyblade_tags(self, template):
         pattern = re.compile(
             r"<b-(?P<component>\w+-?\w+)\s*(?P<attributes>.*?)\s*(?:/>|>(?P<slot>.*?)</b-(?P=component)>)", re.DOTALL
         )
@@ -625,14 +628,16 @@ class DirectiveParser:
 
             attributes[name] = value
 
-        component, props = self._parse_props(component.content)
         component_context.update(attributes)
+
+        new_content, props = self._parse_props(component.content)
+        component.content = new_content
+
         attributes = AttributesContext(props, attributes, component_context)
-
-        component_context["slot"] = SlotContext(match.group("slot"))
         component_context["attributes"] = attributes
-        parsed_component = self.parse(component, component_context)
+        component_context["slot"] = SlotContext(match.group("slot"))
 
+        parsed_component = component.render(component_context)
         return parsed_component
 
     def _parse_props(self, component: str) -> tuple:
@@ -651,6 +656,35 @@ class DirectiveParser:
                 raise e
 
         return component, props
+
+    def _parse_component(self, template: str) -> str:
+        """Process @component directive for reusable template components."""
+
+        def replace_component(match: Match) -> str:
+            try:
+                component_name = self._validate_argument(match)
+                data = match.group("data")
+
+                component = loader.load_template(f"components.{component_name}")
+
+                component_context = {}
+                if data:
+                    try:
+                        component_context = eval(data, {}, self._context)
+                    except Exception as e:
+                        raise DirectiveParsingError(f"Error processing component data: {str(e)}")
+
+                new_content, props = self._parse_props(component.content)
+                attributes = AttributesContext(props, {}, component_context)
+                component_context["attributes"] = attributes
+
+                component.content = new_content
+                return component.render(component_context)
+
+            except Exception as e:
+                raise DirectiveParsingError(f"Error in @component directive: {str(e)}")
+
+        return self._COMPONENT_PATTERN.sub(replace_component, template)
 
     def _parse_class(self, template: str) -> str:
         """
@@ -1453,46 +1487,6 @@ class DirectiveParser:
                 raise DirectiveParsingError(f"Error in verbatim shorthand: {str(e)}")
 
         return self._VERBATIM_SHORTHAND_PATTERN.sub(replace_verbatim_shorthand, template)
-
-    def _parse_component(self, template: str) -> str:
-        """Process @component directive for reusable template components."""
-
-        def replace_component(match: Match) -> str:
-            try:
-                name = self._validate_argument(match.group("name"))
-                data = match.group("data")
-                slot = match.group("slot")
-
-                # Get the component template
-                component_template = loader.load_template(name)
-
-                # Create component context
-                component_context = self._context.copy()
-
-                # Add slot content to context
-                component_context["slot"] = slot
-
-                # Process data arguments
-                if data:
-                    try:
-                        # Convert string data to dict
-                        data_dict = {}
-                        for pair in data.split(","):
-                            key, value = pair.split("=")
-                            key = key.strip()
-                            # Evaluate the value in the current context
-                            data_dict[key] = eval(value, {}, self._context)
-                        component_context.update(data_dict)
-                    except Exception as e:
-                        raise DirectiveParsingError(f"Error processing component data: {str(e)}")
-
-                # Process the component template with the new context
-                return self.parse_directives(component_template.content, component_context)
-
-            except Exception as e:
-                raise DirectiveParsingError(f"Error in @component directive: {str(e)}")
-
-        return self._COMPONENT_PATTERN.sub(replace_component, template)
 
     def _parse_liveblade_scripts(self, template: str) -> str:
         """Process @liveblade_scripts directive to include Liveblade scripts."""
