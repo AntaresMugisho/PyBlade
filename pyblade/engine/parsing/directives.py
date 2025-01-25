@@ -74,7 +74,11 @@ class DirectiveParser:
     _VERBATIM_PATTERN: Pattern = re.compile(r"@verbatim\s*(?P<content>.*?)@endverbatim", re.DOTALL)
     _VERBATIM_SHORTHAND_PATTERN: Pattern = re.compile(r"@(?P<content>{{.*?}})", re.DOTALL)
     _COMPONENT_PATTERN: Pattern = re.compile(
-        r"@component\s*\(\s*(?P<name>.*?)\s*(?:,\s*(?P<data>.*?))?\s*\)(?P<slot>.*?)", re.DOTALL
+        r"@component\s*\(\s*(?P<name>.*?)\s*(?:,\s*(?P<data>.*?))?\s*\)(?P<slot>.*?)@endcomponent", re.DOTALL
+    )
+    _BSLOT_PATTERN: Pattern = re.compile(r"@b-slot\s*\(\s*(?P<name>.*?)\s*\)(?P<content>.*?)@endb-slot", re.DOTALL)
+    _BSLOT_INLINE_PATTERN: Pattern = re.compile(
+        r"<b-slot\s+name=[\"\'](?P<name>.*?)[\"\']>(?P<content>.*?)</b-slot>", re.DOTALL
     )
     _LIVEBLADE_SCRIPTS_PATTERN: Pattern = re.compile(
         r"@(?:liveblade_scripts|livebladeScripts)(?:\s*\(\s*(?P<attributes>.*?)\s*\))?", re.DOTALL
@@ -135,6 +139,9 @@ class DirectiveParser:
         """
         self._context = context
         self._check_unclosed_tags(template)
+
+        # Process slots first to ensure they're captured before component rendering
+        template = self._process_slots(template, context)
 
         # Process directives in order
         template = self._parse_comments(template)
@@ -1573,3 +1580,33 @@ class DirectiveParser:
                 raise DirectiveParsingError(f"Error in tailwind_preload_css directive: {str(e)}")
 
         return self._TAILWIND_PRELOAD_CSS_PATTERN.sub(_get_tailwind_preload_css, template)
+
+    def _process_slots(self, template: str, context: Dict[str, Any]) -> str:
+        """Process b-slot directives in the template."""
+        # Process directive-style slots
+        for match in self._BSLOT_PATTERN.finditer(template):
+            slot_name = match.group("name").strip()
+            content = match.group("content")
+
+            # Store the slot content in the context
+            if "slots" not in context:
+                context["slots"] = {}
+            context["slots"][slot_name] = content.strip()
+
+            # Replace the slot directive with an empty string
+            template = template.replace(match.group(0), "", 1)
+
+        # Process inline-style slots
+        for match in self._BSLOT_INLINE_PATTERN.finditer(template):
+            slot_name = match.group("name")
+            content = match.group("content")
+
+            # Store the slot content in the context
+            if "slots" not in context:
+                context["slots"] = {}
+            context["slots"][slot_name] = content.strip()
+
+            # Replace the slot tag with an empty string
+            template = template.replace(match.group(0), "", 1)
+
+        return template
