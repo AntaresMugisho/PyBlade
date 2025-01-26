@@ -44,6 +44,11 @@ class DirectiveParser:
         r"@cycle\s*\((?P<values>.*?)(?:(?P<alias>\s*as\s*)(?P<variable>\w+))?\)", re.DOTALL
     )
     _DEBUG_PATTERN: Pattern = re.compile(r"@debug", re.DOTALL)
+
+    _EXTENDS_PATTERN: Pattern = re.compile(r"(.*?)@extends\s*\(\s*[\"']?(.*?(?:\.?\.*?)*)[\"']?\s*\)", re.DOTALL)
+    _SECTION_PATTERN: Pattern = re.compile(
+        r"@(?P<directive>section|block)\s*\((?P<section_name>[^)]*)\)\s*(?P<content>.*?)@end(?P=directive)", re.DOTALL
+    )
     _FILTER_PATTERN: Pattern = re.compile(r"@filter\s*\((?P<filters>.*?)\)\s*(?P<content>.*?)@endfilter", re.DOTALL)
     _FIRSTOF_PATTERN: Pattern = re.compile(
         r"@firstof\s*\((?P<values>.*?)(?:\s*,\s*default=(?P<default>.*?))?\)", re.DOTALL
@@ -74,7 +79,7 @@ class DirectiveParser:
     _VERBATIM_PATTERN: Pattern = re.compile(r"@verbatim\s*(?P<content>.*?)@endverbatim", re.DOTALL)
     _VERBATIM_SHORTHAND_PATTERN: Pattern = re.compile(r"@(?P<content>{{.*?}})", re.DOTALL)
     _COMPONENT_PATTERN: Pattern = re.compile(
-        r"@component\s*\(\s*(?P<name>.*?)\s*(?:,\s*(?P<data>.*?))?\s*\)(?P<slot>.*?)@endcomponent", re.DOTALL
+        r"@component\s*\(\s*(?P<name>.*?)\s*(?:,\s*(?P<data>.*?))?\s*\)(?P<slot>.*?)", re.DOTALL
     )
     _BSLOT_PATTERN: Pattern = re.compile(r"@b-slot\s*\(\s*(?P<name>.*?)\s*\)(?P<content>.*?)@endb-slot", re.DOTALL)
     _BSLOT_INLINE_PATTERN: Pattern = re.compile(
@@ -539,8 +544,8 @@ class DirectiveParser:
     def _parse_extends(self, template):
         """Search for extends directive in the template then parse sections inside."""
 
-        pattern = re.compile(r"(.*?)@extends\s*\(\s*[\"']?(.*?(?:\.?\.*?)*)[\"']?\s*\)", re.DOTALL)
-        match = re.match(pattern, template)
+        match = re.match(self._EXTENDS_PATTERN, template)
+        template = re.sub(self._EXTENDS_PATTERN, "", template)
 
         if match:
             if match.group(1):
@@ -570,24 +575,19 @@ class DirectiveParser:
         :return: The full page after yield
         """
 
-        directives = ("section", "block")
+        def handle_section(match: Match) -> str:
+            try:
+                section_name = ast.literal_eval(match.group("section_name"))
+                section_content = match.group("content")
+            except Exception as e:
+                raise DirectiveParsingError(f"Error in @section directive: {str(e)}")
+
+            sections[section_name] = section_content
+            return ""
 
         sections = {}
-        for directive in directives:
-            pattern = re.compile(
-                rf"@{directive}\s*\((?P<section_name>[^)]*)\)\s*(?P<content>.*?)@end{directive}", re.DOTALL
-            )
-
-            matches = pattern.findall(template)
-
-            for match in matches:
-                argument, content = match
-                line_match_pattern = re.compile(rf"@{directive}\s*\(({argument})\)", re.DOTALL)
-                section_name = self._validate_argument(line_match_pattern.search(template))
-
-                sections[section_name] = content
-                # TODO: Add a slot variable that will contain all the content outside the @section directives
-
+        template = re.sub(self._SECTION_PATTERN, handle_section, template)
+        print(template)
         return self._parse_yield(layout, sections)
 
     def _parse_yield(self, layout, sections: Dict[str, str]):
