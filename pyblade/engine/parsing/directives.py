@@ -549,22 +549,24 @@ class DirectiveParser:
 
         if match:
             if match.group(1):
-                raise Exception("The @extend tag must be at the top of the file before any character.")
+                raise DirectiveParsingError("The @extend tag must be at the top of the file before any character.")
 
             layout_name = match.group(2) if match else None
             if not layout_name:
-                raise Exception("Layout not found")
+                raise DirectiveParsingError("Missing layout name in @extends directive")
 
             try:
+                # The following line order is important
                 layout = loader.load_template(layout_name)
+                sections = self._parse_section(template)
                 parsed_layout = layout.render(self._context)
-                return self._parse_section(template, parsed_layout)
+                template = self._parse_yield(parsed_layout, sections)
             except Exception as e:
-                raise e
+                raise DirectiveParsingError(f"Error in @extends directive: {str(e)}")
 
         return template
 
-    def _parse_section(self, template, layout):
+    def _parse_section(self, template):
         """
         Find every section that can be yielded in the layout.
         Sections may be inside @section(<name>) and @endsection directives, or inside
@@ -587,8 +589,10 @@ class DirectiveParser:
 
         sections = {}
         template = re.sub(self._SECTION_PATTERN, handle_section, template)
-        print(template)
-        return self._parse_yield(layout, sections)
+
+        self._context["slot"] = SlotContext(template.strip())
+
+        return sections
 
     def _parse_yield(self, layout, sections: Dict[str, str]):
         """
