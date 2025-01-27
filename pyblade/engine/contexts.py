@@ -128,11 +128,17 @@ class AttributesContext:
 
 class SlotContext:
 
-    def __init__(self, content: str):
+    def __init__(self, content: str = ""):
         self.content = content
 
     def __str__(self):
         return self.content
+
+    def __bool__(self):
+        return bool(self.content)
+
+    def is_empty(self):
+        return not self.content
 
 
 class ClassContext:

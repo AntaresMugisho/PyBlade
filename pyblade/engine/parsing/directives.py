@@ -5,6 +5,7 @@ Directive parsing implementation for the template engine.
 import ast
 import importlib
 import json
+import keyword
 import re
 from pprint import pprint  # noqa
 from typing import Any, Dict, Match, Pattern, Tuple
@@ -82,9 +83,11 @@ class DirectiveParser:
         r"@component\s*\(\s*(?P<name>.*?)\s*(?:,\s*(?P<data>.*?))?\s*\)(?P<slot>.*?)", re.DOTALL
     )
     _BSLOT_PATTERN: Pattern = re.compile(r"@b-slot\s*\(\s*(?P<name>.*?)\s*\)(?P<content>.*?)@endb-slot", re.DOTALL)
-    _BSLOT_INLINE_PATTERN: Pattern = re.compile(
-        r"<b-slot\s+name=[\"\'](?P<name>.*?)[\"\']>(?P<content>.*?)</b-slot>", re.DOTALL
+    _SLOT_TAG_PATTERN: Pattern = re.compile(
+        r"<b-slot(?::|\s+name\s*=\s*)(?P<name>.*?)>\s*(?P<content>.*?)\s*</b-slot(?::(?P=name))?>", re.DOTALL
     )
+    _SLOT_PATTERN: Pattern = re.compile(r"@slot\s*\(\s*(?P<name>.*?)\s*\)(?P<content>.*?)@endslot", re.DOTALL)
+    _SLOT_SHORTHAND_PATTERN: Pattern = re.compile(r"@slot\((?P<name>.*?)\s*,\s*(?P<content>.*?)\)", re.DOTALL)
     _LIVEBLADE_SCRIPTS_PATTERN: Pattern = re.compile(
         r"@(?:liveblade_scripts|livebladeScripts)(?:\s*\(\s*(?P<attributes>.*?)\s*\))?", re.DOTALL
     )
@@ -146,7 +149,7 @@ class DirectiveParser:
         self._check_unclosed_tags(template)
 
         # Process slots first to ensure they're captured before component rendering
-        template = self._process_slots(template, context)
+        # template = self._process_slots(template, context)
 
         # Process directives in order
         template = self._parse_comments(template)
@@ -169,6 +172,8 @@ class DirectiveParser:
         template = self._parse_error(template)
 
         # Components related
+        # Parse slots first to ensure they're captured before any component rendering
+        template = self._parse_slot_tags(template)
         template = self._parse_pyblade_tags(template)
         template = self._parse_component(template)
         template = self._parse_include(template)
@@ -544,12 +549,22 @@ class DirectiveParser:
     def _parse_extends(self, template):
         """Search for extends directive in the template then parse sections inside."""
 
-        match = re.match(self._EXTENDS_PATTERN, template)
+        # Find all @extends directives in the template
+        extends_matches = list(self._EXTENDS_PATTERN.finditer(template))
+
+        # Check for multiple @extends directives
+        if len(extends_matches) > 1:
+            raise DirectiveParsingError(
+                "Multiple @extends directives found. Only one @extends directive is allowed per template."
+            )
+
+        # Get the first (and should be only) match
+        match = extends_matches[0] if extends_matches else None
         template = re.sub(self._EXTENDS_PATTERN, "", template)
 
         if match:
             if match.group(1):
-                raise DirectiveParsingError("The @extend tag must be at the top of the file before any character.")
+                raise DirectiveParsingError("The @extends tag must be at the top of the file before any character.")
 
             layout_name = match.group(2) if match else None
             if not layout_name:
@@ -605,8 +620,20 @@ class DirectiveParser:
         return pattern.sub(lambda match: self._handle_yield(match, sections), layout)
 
     def _handle_yield(self, match, sections: Dict[str, str] = None):
+        pprint(self._context)
         yieldable_name = self._validate_argument(match)
         return sections.get(yieldable_name)
+
+    def _parse_slot_tags(self, template):
+        """Inject slot content into the context."""
+
+        def handle_slot_tags(match):
+            name = self._validate_variable_name(match.group("name"))
+            content = match.group("content")
+            self._context[name] = SlotContext(content)
+            return ""
+
+        return re.sub(self._SLOT_TAG_PATTERN, handle_slot_tags, template)
 
     def _parse_pyblade_tags(self, template):
         pattern = re.compile(
@@ -1193,6 +1220,7 @@ class DirectiveParser:
 
     @staticmethod
     def _handle_static(match):
+
         try:
             from django.core.exceptions import ImproperlyConfigured
             from django.templatetags.static import static
@@ -1614,3 +1642,41 @@ class DirectiveParser:
             template = template.replace(match.group(0), "", 1)
 
         return template
+
+    def _validate_variable_name(self, name: str) -> str:
+        """
+        Validates if a string is a valid Python variable name.
+
+        Args:
+            name (str): The string to validate as a variable name
+
+        Returns:
+            str: The validated variable name
+
+        Raises:
+            ValueError: If the string is not a valid Python variable name
+        """
+
+        if not name:
+            raise ValueError("Variable name cannot be empty")
+
+        name = name.strip('"').strip("'")
+
+        # Check if it's a Python keyword
+        if keyword.iskeyword(name):
+            raise ValueError(f"'{name}' is a Python keyword and cannot be used as a variable name")
+
+        # Regular expression for valid Python variable names:
+        # - Must start with letter or underscore
+        # - Can only contain letters, numbers and underscores
+        pattern = r"^[a-zA-Z_][a-zA-Z0-9_]*$"
+
+        if not re.match(pattern, name):
+            raise ValueError(
+                f"'{name}' is not a valid variable name. Variable names must:\n"
+                "- Start with a letter or underscore\n"
+                "- Contain only letters, numbers, and underscores\n"
+                "- Not be a Python keyword"
+            )
+
+        return name
