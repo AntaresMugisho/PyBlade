@@ -79,15 +79,20 @@ class DirectiveParser:
     _COMMENT_PATTERN: Pattern = re.compile(r"@comment\s*(?P<content>.*?)@endcomment", re.DOTALL)
     _VERBATIM_PATTERN: Pattern = re.compile(r"@verbatim\s*(?P<content>.*?)@endverbatim", re.DOTALL)
     _VERBATIM_SHORTHAND_PATTERN: Pattern = re.compile(r"@(?P<content>{{.*?}})", re.DOTALL)
+    _CSRF_PATTERN: Pattern = re.compile(r"@csrf", re.DOTALL)
+    _METHOD_PATTERN: Pattern = re.compile(r"@method\s*\(\s*(?P<method>.*?)\s*\)", re.DOTALL)
+    _CONDITIONAL_ATTRIBUTES_PATTERN: Pattern = re.compile(
+        r"@(?P<directive>checked|selected|required|disabled|readonly|multiple|autofocus|autocomplete)\s*(?:\(\s*(?P<expression>.*?)\s*\))?",  # noqa
+        re.DOTALL,
+    )
     _COMPONENT_PATTERN: Pattern = re.compile(
         r"@component\s*\(\s*(?P<name>.*?)\s*(?:,\s*(?P<data>.*?))?\s*\)(?P<slot>.*?)", re.DOTALL
     )
-    _BSLOT_PATTERN: Pattern = re.compile(r"@b-slot\s*\(\s*(?P<name>.*?)\s*\)(?P<content>.*?)@endb-slot", re.DOTALL)
+    _SLOT_PATTERN: Pattern = re.compile(r"@slot\s*\((?P<name>.*?)\)(?P<content>\s*.*?\s*)@endslot", re.DOTALL)
+    _SLOT_SHORTHAND_PATTERN: Pattern = re.compile(r"@slot\((?P<name>.*?)\s*,\s*(?P<content>.*?)\)", re.DOTALL)
     _SLOT_TAG_PATTERN: Pattern = re.compile(
         r"<b-slot(?::|\s+name\s*=\s*)(?P<name>.*?)>\s*(?P<content>.*?)\s*</b-slot(?::(?P=name))?>", re.DOTALL
     )
-    _SLOT_PATTERN: Pattern = re.compile(r"@slot\s*\(\s*(?P<name>.*?)\s*\)(?P<content>.*?)@endslot", re.DOTALL)
-    _SLOT_SHORTHAND_PATTERN: Pattern = re.compile(r"@slot\((?P<name>.*?)\s*,\s*(?P<content>.*?)\)", re.DOTALL)
     _LIVEBLADE_SCRIPTS_PATTERN: Pattern = re.compile(
         r"@(?:liveblade_scripts|livebladeScripts)(?:\s*\(\s*(?P<attributes>.*?)\s*\))?", re.DOTALL
     )
@@ -166,8 +171,9 @@ class DirectiveParser:
         template = self._parse_active(template)
 
         # Form helpers
-        template = self._checked_selected_required(template)
         template = self._parse_csrf(template)
+        template = self._parse_method(template)
+        template = self._parse_conditional_attributes(template)
         template = self._parse_field(template)
         template = self._parse_error(template)
 
@@ -180,6 +186,7 @@ class DirectiveParser:
         template = self._parse_extends(template)
 
         # Django-like directives
+        template = self._parse_static(template)
         template = self._parse_now(template)
         template = self._parse_cycle(template)
         template = self._parse_debug(template)
@@ -531,9 +538,7 @@ class DirectiveParser:
         def replace_include(match: Match) -> str:
             try:
                 # Get the dot-separated path and optional data
-                path = match.group("path").strip()
-
-                path = self._validate_argument(match)
+                path = self._validate_string(match.group("path"))
 
                 try:
                     partial_template = loader.load_template(path)
@@ -620,20 +625,26 @@ class DirectiveParser:
         return pattern.sub(lambda match: self._handle_yield(match, sections), layout)
 
     def _handle_yield(self, match, sections: Dict[str, str] = None):
-        pprint(self._context)
-        yieldable_name = self._validate_argument(match)
+        yieldable_name = self._validate_variable_name(match.group("yieldable_name"))
         return sections.get(yieldable_name)
 
     def _parse_slot_tags(self, template):
         """Inject slot content into the context."""
 
-        def handle_slot_tags(match):
+        def handle_slot_tags(match, shorthand=False):
             name = self._validate_variable_name(match.group("name"))
             content = match.group("content")
+            if shorthand:
+                content = self._validate_string(content)
             self._context[name] = SlotContext(content)
             return ""
 
-        return re.sub(self._SLOT_TAG_PATTERN, handle_slot_tags, template)
+        template = self._SLOT_SHORTHAND_PATTERN.sub(lambda match: handle_slot_tags(match, True), template)
+        # Disable long-hand slot tags cause of conflicts with short-hand
+        # template = re.sub(self._SLOT_PATTERN, handle_slot_tags, template)
+        template = self._SLOT_TAG_PATTERN.sub(handle_slot_tags, template)
+
+        return template
 
     def _parse_pyblade_tags(self, template):
         pattern = re.compile(
@@ -700,7 +711,7 @@ class DirectiveParser:
 
         def replace_component(match: Match) -> str:
             try:
-                component_name = self._validate_argument(match)
+                component_name = self._validate_string(match.group("name"))
                 data = match.group("data")
 
                 component = loader.load_template(f"components.{component_name}")
@@ -1202,19 +1213,35 @@ class DirectiveParser:
         return self._WITH_PATTERN.sub(replace_with, template)
 
     def _parse_csrf(self, template):
-        pattern = re.compile(r"@csrf", re.DOTALL)
         csrf_input = self._context.get("csrf_input", "")
-        return pattern.sub(str(csrf_input), template)
+        return self._CSRF_PATTERN.sub(str(csrf_input), template)
 
     def _parse_method(self, template):
-        pattern = re.compile(r"@method\s*\(\s*(?P<method>.*?)\s*\)", re.DOTALL)
-        return pattern.sub(lambda match: self._handle_method(match), template)
 
-    def _handle_method(self, match):
-        method = self._validate_argument(match)
-        return f"""<input type="hidden" name="_method" value="{method}">"""
+        def handle_method(match):
+            method = self._validate_string(match.group("method"))
+            if method.lower() not in ["get", "post", "put", "patch", "delete"]:
+                raise DirectiveParsingError(f"Invalid HTTP method: {method}")
 
-    def _parse_static(self, template, context):
+            return f"""<input type="hidden" name="_method" value="{method.upper()}">"""
+
+        return self._METHOD_PATTERN.sub(handle_method, template)
+
+    def _parse_conditional_attributes(self, template):
+
+        def handle_conditional_attributes(match):
+            directive = match.group("directive")
+            expression = match.group("expression")
+            if not expression:
+                expression = True
+
+            if expression is True or (eval(expression, {}, self._context)):
+                return directive if directive != "autocomplete" else "on"
+            return "" if directive != "autocomplete" else "off"
+
+        return self._CONDITIONAL_ATTRIBUTES_PATTERN.sub(handle_conditional_attributes, template)
+
+    def _parse_static(self, template):
         pattern = re.compile(r"@static\s*\(\s*(?P<path>.*?)\s*\)", re.DOTALL)
         return pattern.sub(lambda match: self._handle_static(match), template)
 
@@ -1233,20 +1260,6 @@ class DirectiveParser:
                 return static(path)
             except ImproperlyConfigured as exc:
                 raise exc
-
-    def _checked_selected_required(self, template):
-
-        def handle_csr(match):
-            directive = match.group("directive")
-            expression = match.group("expression")
-            if not (eval(expression, {}, self._context)):
-                return ""
-            return directive
-
-        pattern = re.compile(
-            r"@(?P<directive>checked|selected|required|disabled)\s*\(\s*(?P<expression>.*?)\s*\)", re.DOTALL
-        )
-        return pattern.sub(handle_csr, template)
 
     def _parse_error(self, template):
         """Check if an input form contains a validation error"""
@@ -1502,16 +1515,6 @@ class DirectiveParser:
 
         return template
 
-    def _validate_argument(self, match):
-
-        argument = match.group(1)
-        if (argument[0], argument[-1]) not in (('"', '"'), ("'", "'")) or len(argument.split(" ")) > 1:
-            raise Exception(
-                f"{argument} is not a valid string. Argument must be of type string."
-                f"Look at line {self._get_line_number(match)}"
-            )
-        return argument[1:-1]
-
     def _parse_comment(self, template):
         return self._COMMENT_PATTERN.sub("", template)
 
@@ -1607,41 +1610,12 @@ class DirectiveParser:
             try:
                 # Get the TAILWIND_APP_NAME from context or use default 'theme'
                 app_name = context.get("TAILWIND_APP_NAME", "theme")
-                return f'<link rel="preload" href="{{% static(\'{app_name}/css/dist/styles.css\' %}}" as="style">'
+                return f"""<link rel="preload" href="@static('{app_name}/css/dist/styles.css')" as="style">"""
             except Exception as e:
+
                 raise DirectiveParsingError(f"Error in tailwind_preload_css directive: {str(e)}")
 
         return self._TAILWIND_PRELOAD_CSS_PATTERN.sub(_get_tailwind_preload_css, template)
-
-    def _process_slots(self, template: str, context: Dict[str, Any]) -> str:
-        """Process b-slot directives in the template."""
-        # Process directive-style slots
-        for match in self._BSLOT_PATTERN.finditer(template):
-            slot_name = match.group("name").strip()
-            content = match.group("content")
-
-            # Store the slot content in the context
-            if "slots" not in context:
-                context["slots"] = {}
-            context["slots"][slot_name] = content.strip()
-
-            # Replace the slot directive with an empty string
-            template = template.replace(match.group(0), "", 1)
-
-        # Process inline-style slots
-        for match in self._BSLOT_INLINE_PATTERN.finditer(template):
-            slot_name = match.group("name")
-            content = match.group("content")
-
-            # Store the slot content in the context
-            if "slots" not in context:
-                context["slots"] = {}
-            context["slots"][slot_name] = content.strip()
-
-            # Replace the slot tag with an empty string
-            template = template.replace(match.group(0), "", 1)
-
-        return template
 
     def _validate_variable_name(self, name: str) -> str:
         """
@@ -1660,7 +1634,8 @@ class DirectiveParser:
         if not name:
             raise ValueError("Variable name cannot be empty")
 
-        name = name.strip('"').strip("'")
+        if name.startswith("'") or name.startswith('"'):
+            name = self._validate_string(name)
 
         # Check if it's a Python keyword
         if keyword.iskeyword(name):
@@ -1680,3 +1655,8 @@ class DirectiveParser:
             )
 
         return name
+
+    def _validate_string(self, text: str) -> str:
+        if (text[0], text[-1]) not in (('"', '"'), ("'", "'")):
+            raise ValueError(f"{text} is not a valid string. Argument must be of type string.")
+        return text[1:-1]
