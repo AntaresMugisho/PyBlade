@@ -3,10 +3,12 @@ Directive parsing implementation for the template engine.
 """
 
 import ast
+import html
 import importlib
 import json
 import keyword
 import re
+from datetime import datetime
 from pprint import pprint  # noqa
 from typing import Any, Dict, Match, Pattern, Tuple
 from uuid import uuid4
@@ -908,11 +910,10 @@ class DirectiveParser:
 
         def replace_debug(match: Match) -> str:
             try:
-                debug_info = []
-                for key, value in sorted(self._context.items()):
-                    if not key.startswith("_"):  # Skip internal variables
-                        debug_info.append(f"{key}: {repr(value)}")
-                return "\n".join(debug_info)
+                escaped_context = {k: html.escape(repr(v)) for k, v in sorted(self._context.items())}
+                pretty_context = json.dumps(escaped_context, indent=4)
+                return f"<pre>{pretty_context}</pre>"
+
             except Exception as e:
                 raise DirectiveParsingError(f"Error in @debug directive: {str(e)}")
 
@@ -920,6 +921,9 @@ class DirectiveParser:
 
     def _parse_filter(self, template: str) -> str:
         """Process @filter directive to apply filters to content."""
+
+        return template
+        # TODO: Add support for filters
 
         def replace_filter(match: Match) -> str:
             try:
@@ -1066,7 +1070,6 @@ class DirectiveParser:
 
     def _parse_now(self, template: str) -> str:
         """Process @now directive to display the current date and time."""
-        from datetime import datetime
 
         def replace_now(match: Match) -> str:
             try:
