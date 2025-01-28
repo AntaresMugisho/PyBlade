@@ -16,7 +16,11 @@ from uuid import uuid4
 from pyblade.engine import loader
 
 from ..contexts import AttributesContext, CycleContext, LoopContext, SlotContext
-from ..exceptions import DirectiveParsingError, TemplateRenderingError
+from ..exceptions import (
+    DirectiveParsingError,
+    TemplateRenderingError,
+    UndefinedVariableError,
+)
 from .variables import VariableParser
 
 
@@ -229,7 +233,7 @@ class DirectiveParser:
     def _handle_for(self, match: Match) -> str:
         """Handle @for loop logic with proper error handling."""
         try:
-            variable = self._validate_variable_name(match.group(1))
+            variable = self._validate_variable_name(match.group(1).strip())
             iterable_expression = match.group(2).strip()
             block = match.group(3)
             empty_block = match.group(4)
@@ -1278,19 +1282,22 @@ class DirectiveParser:
             else:
                 form_name, field_name = parts
 
+            # Get the form
             form = self._context.get(form_name)
             if not form:
-                raise DirectiveParsingError(f"Form '{field_name}' not found in context")
+                raise UndefinedVariableError(f"Undefined variable '{form_name}'")
 
             # Get the field
             field = form.fields.get(field_name)
             if not field:
-                raise DirectiveParsingError(f"Field '{field_name}' not found in the form")
+                raise AttributeError(f"{form_name} has no attribute {field_name}.")
 
             # Check if the field got an error
-            error = form._errors.get(field_name)
+            errors = getattr(field, "_errors", {})
+            error = errors.get(field_name)
 
             if error:
+                print(error)
                 local_context = self._context.copy()
                 local_context["message"] = error[0]  # always retrieve the first error message
                 slot = self._variable_parser.parse_variables(slot, local_context)
@@ -1348,13 +1355,15 @@ class DirectiveParser:
                 # Get the form field using dot notation
                 parts = field_path.split(".")
                 if len(parts) < 2 or len(parts) > 2:
-                    raise DirectiveParsingError(f"Invalid field : {field_path}. Must be in format 'form.field_name'")
+                    raise DirectiveParsingError(
+                        f"Invalid form field : {field_path}. Must be in format 'form.field_name'"
+                    )
                 else:
                     form_name, field_name = parts
 
                 form = self._context.get(form_name)
                 if not form:
-                    raise DirectiveParsingError(f"Form '{field_name}' not found in context")
+                    raise UndefinedVariableError(f"Undefined variable '{form_name}'")
 
                 # Get the field
                 field = form.fields.get(field_name)
