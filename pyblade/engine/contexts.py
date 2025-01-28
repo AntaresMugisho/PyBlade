@@ -64,17 +64,45 @@ class AttributesContext:
         self._attributes = {**self._props, **attributes}
         self._context = context
 
+        self._only_keys = None
+        self._exclude_keys = None
+
     def __str__(self):
+        attributes = self._attributes.copy()
+
+        # Filter attributes
+        if self._only_keys:
+            attributes = {key: value for key, value in attributes.items() if key in self._only_keys}
+        if self._exclude_keys:
+            attributes = {key: value for key, value in attributes.items() if key not in self._exclude_keys}
+
+        # Format the string representation of the attributes
         string = ""
-        for key, value in self._attributes.items():
+        for key, value in attributes.items():
             if key not in self._props and isinstance(value, str):
                 string += f" {key}" + (f'="{value}"' if value != "" else "")
+
+        # Empty only and exclude keys
+        self._only_keys = None
+        self._exclude_keys = None
+
         return string
 
     def get(self, attr, default: str = ""):
+        """
+        Get the value of the given attribute
+        :param attr: the attribute to get
+        :param default: the default value to return if the attribute is not found
+        :return: the value of the attribute
+        """
         return self._attributes.get(attr, default)
 
     def has(self, *args) -> bool:
+        """
+        Check if the given attribute exists
+        :param args: list of attributes to check
+        :return: bool
+        """
         for attribute in args:
             if attribute not in self._attributes.keys():
                 return False
@@ -82,11 +110,34 @@ class AttributesContext:
         return True
 
     def has_any(self, *args) -> bool:
+        """
+        Check if at least one of the given attribute exists
+        :param args: list of attributes to check
+        :return: bool
+        """
         for attribute in args:
             if attribute in self._attributes.keys():
                 return True
 
         return False
+
+    def exclude(self, *args):
+        """
+        Exclude the given attributes
+        :param args: list of attributes to exclude
+        :return: self
+        """
+        self._exclude_keys = set(args)
+        return self
+
+    def only(self, *args):
+        """
+        Only keep the given attributes
+        :param args: list of attributes to keep
+        :return: self
+        """
+        self._only_keys = set(args)
+        return self
 
     def merge(self, attrs: dict):
         """
@@ -94,9 +145,11 @@ class AttributesContext:
         :param args:
         :return:
         """
+        if not isinstance(attrs, dict):
+            raise TypeError("Attributes must be a dictionary")
 
         for key, value in attrs.items():
-            self._attributes[key] = f"{attrs[key]} {self._attributes[key]}"
+            self._attributes[key] = f"{value} {self._attributes[key]}"
         return self
 
     def class_(self, attrs: dict):

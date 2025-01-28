@@ -1281,6 +1281,9 @@ class DirectiveParser:
             field_path = match.group("field")
             slot = match.group("slot")
 
+            # Parse variables in case the field path or attributes are variables
+            field_path = self._variable_parser.parse_variables(field_path, self._context)
+
             # Get the form field using dot notation
             parts = field_path.split(".")
             if len(parts) < 2 or len(parts) > 2:
@@ -1358,7 +1361,10 @@ class DirectiveParser:
                 field_path = match.group("field").strip()
                 attrs_str = match.group("attributes").strip()
 
-                # Get the form field using dot notation
+                # Parse variables in case the field path or attributes are variables
+                field_path = self._variable_parser.parse_variables(field_path, self._context)
+                attrs_str = self._variable_parser.parse_variables(attrs_str, self._context)
+
                 parts = field_path.split(".")
                 if len(parts) < 2 or len(parts) > 2:
                     raise DirectiveParsingError(
@@ -1378,8 +1384,9 @@ class DirectiveParser:
 
                 # Parse HTML-like attributes
                 attributes = {}
+
                 if attrs_str:
-                    attrs = attrs_str.split(" ")
+                    attrs = attrs_str.strip().split(" ")
                     for attr in attrs:
                         if len(attr.split("=")) > 1:
                             attributes[attr.split("=")[0]] = attr.split("=")[1].strip("\"'")
