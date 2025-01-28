@@ -93,6 +93,7 @@ class DirectiveParser:
     _COMMENT_PATTERN: Pattern = re.compile(r"@comment\s*(?P<content>.*?)@endcomment", re.DOTALL)
     _VERBATIM_PATTERN: Pattern = re.compile(r"@verbatim\s*(?P<content>.*?)@endverbatim", re.DOTALL)
     _VERBATIM_SHORTHAND_PATTERN: Pattern = re.compile(r"@(?P<content>{{.*?}})", re.DOTALL)
+    _VERBATIM_PLACEHOLDER_PATTERN: Pattern = re.compile(r"@__verbatim__\((?P<id>\w+)\)", re.DOTALL)
     _CSRF_PATTERN: Pattern = re.compile(r"@csrf", re.DOTALL)
     _METHOD_PATTERN: Pattern = re.compile(r"@method\s*\(\s*(?P<method>.*?)\s*\)", re.DOTALL)
     _CONDITIONAL_ATTRIBUTES_PATTERN: Pattern = re.compile(
@@ -174,6 +175,7 @@ class DirectiveParser:
 
         # Process directives in order
         template = self._parse_comments(template)
+        template = self._parse_verbatim_shorthand(template)
         template = self._parse_verbatim(template)
         template = self._parse_for(template)
         template = self._parse_if(template)
@@ -231,6 +233,9 @@ class DirectiveParser:
         # Process Tailwind directives
         template = self._process_tailwind_preload_css(template, context)
         template = self._process_tailwind_css(template, context)
+
+        # Restore verbatim content
+        template = self._restore_verbatim(template)
 
         return template
 
@@ -385,8 +390,9 @@ class DirectiveParser:
         def replace_verbatim(match: Match) -> str:
             try:
                 verbatim_content = match.group("content")
+
                 verbatim_id = uuid4().hex
-                self.verbatims[verbatim_id] = verbatim_content
+                self._context.setdefault("__verbatims", {})[verbatim_id] = verbatim_content
                 return f"@__verbatim__({verbatim_id})"
 
             except Exception as e:
@@ -395,6 +401,19 @@ class DirectiveParser:
         template = self._VERBATIM_SHORTHAND_PATTERN.sub(replace_verbatim, template)
 
         return self._VERBATIM_PATTERN.sub(replace_verbatim, template)
+
+    def _restore_verbatim(self, template: str) -> str:
+        """
+        Process all @__verbatim__(<id>) placeholders in the template and replace them
+        with the corresponding verbatim content.
+        This function is called to restore the verbatim content after processing.
+        """
+
+        def replace_verbatim_placeholder(match):
+            verbatims = self._context.get("__verbatims", {})
+            return verbatims.pop(match.group("id"))
+
+        return self._VERBATIM_PLACEHOLDER_PATTERN.sub(replace_verbatim_placeholder, template)
 
     def _parse_url(self, template: str) -> str:
         """Process @url directive with support for Django-style 'as' variable assignment."""
@@ -1362,7 +1381,6 @@ class DirectiveParser:
                 # Get field path and attributes
                 field_path = match.group("field").strip()
                 attrs_str = match.group("attributes").strip()
-                print(attrs_str)
 
                 # Parse variables in case the field path or attributes are variables
                 field_path = self._variable_parser.parse_variables(field_path, self._context)
