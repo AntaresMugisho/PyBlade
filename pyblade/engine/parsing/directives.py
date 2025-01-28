@@ -1360,6 +1360,7 @@ class DirectiveParser:
                 # Get field path and attributes
                 field_path = match.group("field").strip()
                 attrs_str = match.group("attributes").strip()
+                print(attrs_str)
 
                 # Parse variables in case the field path or attributes are variables
                 field_path = self._variable_parser.parse_variables(field_path, self._context)
