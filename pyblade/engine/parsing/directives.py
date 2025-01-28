@@ -111,7 +111,9 @@ class DirectiveParser:
         r"@(?:liveblade_scripts|livebladeScripts)(?:\s*\(\s*(?P<attributes>.*?)\s*\))?", re.DOTALL
     )
     _INCLUDE_PATTERN: Pattern = re.compile(r"@include\s*\(\s*(?P<path>.*?)\s*\)", re.DOTALL)
-    _FIELD_PATTERN: Pattern = re.compile(r"@field\s*\((?P<field>.*?)\s*,\s*(?P<attributes>.*?)\)", re.DOTALL)
+    _FIELD_PATTERN: Pattern = re.compile(
+        r"@field\s*\((?P<field>.*?)\s*(?:,\s*(?P<attributes>.*?\)?\s*\}?\}?))?\)", re.DOTALL
+    )
     _ERROR_PATTERN: Pattern = re.compile(r"@error\s*\((?P<field>.*?)\s*\)\s*(?P<slot>.*?)\s*@enderror", re.DOTALL)
     _OPENING_TAG_PATTERN: Pattern = re.compile(r"<(?P<tag>\w+)\s*(?P<attributes>.*?)>")
 
