@@ -15,7 +15,13 @@ from uuid import uuid4
 
 from pyblade.engine import loader
 
-from ..contexts import AttributesContext, CycleContext, LoopContext, SlotContext
+from ..contexts import (
+    AttributesContext,
+    CycleContext,
+    ErrorMessageContext,
+    LoopContext,
+    SlotContext,
+)
 from ..exceptions import (
     DirectiveParsingError,
     TemplateRenderingError,
@@ -1293,13 +1299,13 @@ class DirectiveParser:
                 raise AttributeError(f"{form_name} has no attribute {field_name}.")
 
             # Check if the field got an error
-            errors = getattr(field, "_errors", {})
+            errors = form._errors or {}
+
             error = errors.get(field_name)
 
             if error:
-                print(error)
                 local_context = self._context.copy()
-                local_context["message"] = error[0]  # always retrieve the first error message
+                local_context["message"] = ErrorMessageContext(error)
                 slot = self._variable_parser.parse_variables(slot, local_context)
                 return slot
 

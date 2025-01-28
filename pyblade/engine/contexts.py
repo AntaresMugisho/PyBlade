@@ -1,4 +1,5 @@
 from ast import List
+from typing import Iterable
 from uuid import uuid4
 
 
@@ -183,3 +184,14 @@ class CycleContext:
     @property
     def previous(self):
         return self.values[(self.index - 1) % len(self.values)]
+
+
+class ErrorMessageContext:
+    def __init__(self, error_list: Iterable):
+        self._error_list = error_list
+
+    def __str__(self):
+        return self._error_list[0]
+
+    def __iter__(self):
+        return self._error_list
