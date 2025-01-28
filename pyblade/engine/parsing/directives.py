@@ -9,7 +9,7 @@ import json
 import keyword
 import re
 from datetime import datetime
-from pprint import pprint  # noqa
+from pprint import pformat, pprint  # noqa
 from typing import Any, Dict, Match, Pattern, Tuple
 from uuid import uuid4
 
@@ -222,12 +222,12 @@ class DirectiveParser:
 
     def _parse_for(self, template: str) -> str:
         """Process @for loops with @empty fallback."""
-        return self._FOR_PATTERN.sub(lambda match: self._handle_for(match), template)
+        return self._FOR_PATTERN.sub(self._handle_for, template)
 
     def _handle_for(self, match: Match) -> str:
         """Handle @for loop logic with proper error handling."""
         try:
-            variable = match.group(1).strip()
+            variable = self._validate_variable_name(match.group(1))
             iterable_expression = match.group(2).strip()
             block = match.group(3)
             empty_block = match.group(4)
@@ -247,14 +247,13 @@ class DirectiveParser:
             for index, item in enumerate(iterable):
                 loop.index = index
 
-                local_context = self._context.copy()
-                local_context.update({variable: item, "loop": loop})
+                self._context.update({variable: item, "loop": loop})
 
-                parsed_block = self.parse_directives(block, local_context)
-                parsed_block = self._variable_parser.parse_variables(block, local_context)
+                parsed_block = self.parse_directives(block, self._context)
+                parsed_block = self._variable_parser.parse_variables(block, self._context)
 
-                should_break, parsed_block = self._parse_break(parsed_block, local_context)
-                should_continue, parsed_block = self._parse_continue(parsed_block, local_context)
+                should_break, parsed_block = self._parse_break(parsed_block, self._context)
+                should_continue, parsed_block = self._parse_continue(parsed_block, self._context)
 
                 if should_break:
                     break
@@ -263,6 +262,7 @@ class DirectiveParser:
 
                 result.append(parsed_block)
 
+            self._context.pop("loop")
             return "".join(result)
 
         except Exception as e:
@@ -910,9 +910,9 @@ class DirectiveParser:
 
         def replace_debug(match: Match) -> str:
             try:
-                escaped_context = {k: html.escape(repr(v)) for k, v in sorted(self._context.items())}
-                pretty_context = json.dumps(escaped_context, indent=4)
-                return f"<pre>{pretty_context}</pre>"
+                debug_context = {k: v for k, v in sorted(self._context.items()) if not k.startswith("_")}
+                pretty_debug_context = pformat(debug_context, indent=4, width=120, depth=4)
+                return f"<pre>{html.escape(pretty_debug_context)}</pre>"
 
             except Exception as e:
                 raise DirectiveParsingError(f"Error in @debug directive: {str(e)}")
