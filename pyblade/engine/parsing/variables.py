@@ -76,7 +76,17 @@ class VariableParser:
         Raises:
             UndefinedVariableError: If the variable is not found in context
         """
-        expression = match.group(1).split(".")
+        expression = match.group(1)
+
+        if not expression:
+            return ""
+
+        if expression.startswith("."):
+            raise UndefinedVariableError(
+                f"Variable name should not start with '.' on line {self._get_line_number(match)}"
+            )
+
+        expression = expression.split(".")
         variable_name = expression[0]
 
         if variable_name not in self._context:

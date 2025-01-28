@@ -77,7 +77,9 @@ class DirectiveParser:
     _WIDTHRATIO_PATTERN: Pattern = re.compile(
         r"@widthratio\s*\((?P<value>.*?)\s*,\s*(?P<max_value>.*?)\s*,\s*(?P<max_width>.*?)\)", re.DOTALL
     )
-    _WITH_PATTERN: Pattern = re.compile(r"@with\s*\((?P<expressions>.*?)\)\s*(?P<content>.*?)@endwith", re.DOTALL)
+    _WITH_PATTERN: Pattern = re.compile(
+        r"@with\s*\((?P<expression>.*?)\s*as\s*(?P<variable>.*?)\)\s*(?P<content>.*?)\s*@endwith", re.DOTALL
+    )
     _COMMENT_PATTERN: Pattern = re.compile(r"@comment\s*(?P<content>.*?)@endcomment", re.DOTALL)
     _VERBATIM_PATTERN: Pattern = re.compile(r"@verbatim\s*(?P<content>.*?)@endverbatim", re.DOTALL)
     _VERBATIM_SHORTHAND_PATTERN: Pattern = re.compile(r"@(?P<content>{{.*?}})", re.DOTALL)
@@ -913,7 +915,6 @@ class DirectiveParser:
                 debug_context = {k: v for k, v in sorted(self._context.items()) if not k.startswith("_")}
                 pretty_debug_context = pformat(debug_context, indent=4, width=120, depth=4)
                 return f"<pre>{html.escape(pretty_debug_context)}</pre>"
-
             except Exception as e:
                 raise DirectiveParsingError(f"Error in @debug directive: {str(e)}")
 
@@ -1195,21 +1196,20 @@ class DirectiveParser:
 
         def replace_with(match: Match) -> str:
             try:
-                expressions = match.group("expressions")
+                expression = match.group("expression").strip()
+                variable = self._validate_variable_name(match.group("variable").strip())
                 content = match.group("content")
 
                 # Evaluate expressions
                 try:
-                    expressions = eval(expressions, {}, self._context)
+                    value = eval(expression, {}, self._context)
                 except Exception as e:
-                    raise DirectiveParsingError(f"Error evaluating with expressions '{expressions}': {str(e)}")
+                    raise DirectiveParsingError(f"Error evaluating with expressions '{expression}': {str(e)}")
 
-                # Assign values to variables
-                for var, value in expressions.items():
-                    self._context[var] = value
+                local_context = self._context.copy()
+                local_context[variable] = value
+                return self._variable_parser.parse_variables(content, local_context)
 
-                # Process content
-                return self.parse_directives(content, self._context)
             except Exception as e:
                 raise DirectiveParsingError(f"Error in @with directive: {str(e)}")
 
