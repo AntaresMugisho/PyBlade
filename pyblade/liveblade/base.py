@@ -8,6 +8,15 @@ from pyblade.engine.exceptions import TemplateNotFoundError
 _OPENING_TAG_PATTERN: Pattern = re.compile(r"<(?P<tag>\w+)\s*(?P<attributes>.*?)>")
 
 
+def model(field_name=None):
+    """Décorateur pour marquer une propriété comme un modèle de formulaire"""
+    def decorator(func):
+        func._is_model = True
+        func._field_name = field_name or func.__name__
+        return func
+    return decorator
+
+
 class Component:
     instances = {}
 
@@ -68,6 +77,15 @@ class Component:
         template.content = updated_content
         context = {**context, **self.get_context()}
         return template.render(context)
+
+
+def bladeRedirect(route):
+    return {"redirect": True, "url": route}
+
+
+def bladeNavigate(route):
+    return {"navigate": True, "url": route}
+    return template.render(context)
 
 
 def bladeRedirect(route):

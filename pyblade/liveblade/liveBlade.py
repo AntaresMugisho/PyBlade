@@ -205,21 +205,19 @@ def cached_blade(timeout=300):
 def LiveBlade(request):
     """
     Handles the POST request to interact with a specific component's method.
-    It extracts data from the request, locates the appropriate component,
-    and calls the requested method with the provided parameters.
-
-    Args:
-        request: The HTTP request object containing POST data.
     """
     if request.method == "POST":
         try:
             # Lire les données JSON du corps de la requête
             data = json.loads(request.body.decode("utf-8"))
             print("Received data:", data)
-
-            # Get the component ID and method name from the request
             component_id = data.get("componentId")
             method_name = data.get("method")
+            files = data.get("files")
+            
+            if isinstance(method_name, dict):
+                method_name = method_name.get('expression', '').split('(')[0]
+            
             print(f"Component ID: {component_id}, Method: {method_name}")
 
             # Get the component instance
@@ -233,7 +231,7 @@ def LiveBlade(request):
                 return JsonResponse({"error": error_message}, status=404)
 
             if not hasattr(component, method_name):
-                error_message = f"Method {method_name} not found in component {component_id}"
+                error_message = f"Method {method_name} not found on component {component_id}"
                 print(error_message)
                 return JsonResponse({"error": error_message}, status=404)
 
@@ -245,11 +243,11 @@ def LiveBlade(request):
             result = component.render()
             return JsonResponse({"data": result}, status=200)
 
-        except json.JSONDecodeError as e:
-            print("JSON Decode Error:", str(e))
-            return JsonResponse({"error": "Invalid JSON data"}, status=400)
         except Exception as e:
-            print("Error:", str(e))
-            return JsonResponse({"error": str(e)}, status=500)
+            error_message = f"Error processing request: {str(e)}"
+            print(error_message)
+            import traceback
+            print(traceback.format_exc())
+            return JsonResponse({"error": error_message}, status=500)
 
     return JsonResponse({"error": "Method not allowed"}, status=405)
