@@ -58,7 +58,9 @@ class MakeLivebladeCommand(BaseCommand):
 class {component_name.title()}Component(liveblade.Component):
 
     def render(self):
-        return liveblade.view("liveblade.{component_name}", context={{}})
+        # Render liveblade/{component_name}.html
+
+        return self.view(context={{}})
 """
             )
 

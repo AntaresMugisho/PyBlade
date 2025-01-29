@@ -1,5 +1,6 @@
 import re
 from typing import Any, Dict, Pattern
+from uuid import uuid4
 
 from pyblade.engine import loader
 from pyblade.engine.exceptions import TemplateNotFoundError
@@ -11,14 +12,18 @@ class Component:
     instances = {}
 
     def __init__(self, name: str):
-        Component.register(name, self)
+        self._name = name
+        self._id = uuid4().hex
+
+        # Register the instance in the intances list.
+        self.__class__.instances[self.id] = self
+
+    @property
+    def id(self):
+        return f"{self._name}-{self._id}"
 
     @classmethod
-    def register(cls, name: str, instance):
-        cls.instances[name] = instance
-
-    @classmethod
-    def get_instance(cls, id):
+    def get_instance(cls, id: str):
         return cls.instances.get(id)
 
     def render(self):
@@ -38,39 +43,31 @@ class Component:
             if not (k.startswith("_") or callable(v))
         }
 
+    def view(self, context: Dict[str, Any] = None):
+        """Render a component with its context"""
+        if not context:
+            context = {}
 
-def view(template_name: str, context: Dict[str, Any] = None):
-    """Render a component with its context"""
-    if not context:
-        context = {}
+        # Load the component's template
+        try:
+            template = loader.load_template(self._name)
+        except TemplateNotFoundError:
+            raise TemplateNotFoundError(f"No component named {self._name}")
 
-    # Load the component's template
-    try:
-        template = loader.load_template(template_name)
-    except TemplateNotFoundError:
-        raise TemplateNotFoundError(f"No component named {template_name}")
+        # Add liveblade_id attribute to the root node of the component
+        match = re.search(_OPENING_TAG_PATTERN, template.content)
+        tag = match.group("tag")
+        attributes = match.group("attributes")
+        updated_content = re.sub(
+            rf"{tag}\s*{attributes}",
+            f'{tag} {attributes} liveblade_id="{self.id}"',
+            template.content,
+            1,
+        )
 
-    # Add liveblade_id attribute to the root node of the component
-    match = re.search(_OPENING_TAG_PATTERN, template.content)
-    tag = match.group("tag")
-    attributes = match.group("attributes")
-    updated_content = re.sub(
-        rf"{tag}\s*{attributes}",
-        f'{tag} {attributes} liveblade_id="{template_name}"',
-        template.content,
-        1,
-    )
-
-    template.content = updated_content
-
-    component = Component.instances.get(template_name, None)
-    # if not component:
-    #     # Reregister component in case the path was changed
-    #     Component.register(template_name, Component(template_name))
-    #     component = Component.instances.get(template_name, None)
-
-    context = {**context, **component.get_context()}
-    return template.render(context)
+        template.content = updated_content
+        context = {**context, **self.get_context()}
+        return template.render(context)
 
 
 def bladeRedirect(route):
