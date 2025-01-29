@@ -1,6 +1,5 @@
 import re
 from typing import Any, Dict, Pattern
-from uuid import uuid4
 
 from pyblade.engine import loader
 from pyblade.engine.exceptions import TemplateNotFoundError
@@ -21,18 +20,17 @@ class Component:
     instances = {}
 
     def __init__(self, name: str):
-        self._name = name
-        self._id = uuid4().hex
-
-        # Register the instance in the intances list.
-        self.__class__.instances[self.id] = self
-
-    @property
-    def id(self):
-        return f"{self._name}-{self._id}"
+        print(f"Initializing component {name}")
+        self._form_data = {}
+        Component.register(name, self)
 
     @classmethod
-    def get_instance(cls, id: str):
+    def register(cls, name: str, instance):
+        print(f"Registering component {name}")
+        cls.instances[name] = instance
+
+    @classmethod
+    def get_instance(cls, id):
         return cls.instances.get(id)
 
     def render(self):
@@ -52,31 +50,51 @@ class Component:
             if not (k.startswith("_") or callable(v))
         }
 
-    def view(self, context: Dict[str, Any] = None):
-        """Render a component with its context"""
-        if not context:
-            context = {}
+    def update_form_data(self, form_data):
+        """
+        Met à jour les attributs du composant avec les données du formulaire
+        
+        Args:
+            form_data: Dictionnaire contenant les données du formulaire
+        """
+        print(f"Updating form data: {form_data}")
+        for key, value in form_data.items():
+            setattr(self, key, value)
+        print(f"Updated attributes: {vars(self)}")
 
-        # Load the component's template
-        try:
-            template = loader.load_template(self._name)
-        except TemplateNotFoundError:
-            raise TemplateNotFoundError(f"No component named {self._name}")
 
-        # Add liveblade_id attribute to the root node of the component
-        match = re.search(_OPENING_TAG_PATTERN, template.content)
-        tag = match.group("tag")
-        attributes = match.group("attributes")
-        updated_content = re.sub(
-            rf"{tag}\s*{attributes}",
-            f'{tag} {attributes} liveblade_id="{self.id}"',
-            template.content,
-            1,
-        )
+def view(template_name: str, context: Dict[str, Any] = None):
+    """Render a component with its context"""
+    if not context:
+        context = {}
 
-        template.content = updated_content
-        context = {**context, **self.get_context()}
-        return template.render(context)
+    # Load the component's template
+    try:
+        template = loader.load_template(template_name)
+    except TemplateNotFoundError:
+        raise TemplateNotFoundError(f"No component named {template_name}")
+
+    # Add liveblade_id attribute to the root node of the component
+    match = re.search(_OPENING_TAG_PATTERN, template.content)
+    tag = match.group("tag")
+    attributes = match.group("attributes")
+    updated_content = re.sub(
+        rf"{tag}\s*{attributes}",
+        f'{tag} {attributes} liveblade_id="{template_name}"',
+        template.content,
+        1,
+    )
+
+    template.content = updated_content
+
+    component = Component.instances.get(template_name, None)
+    # if not component:
+    #     # Reregister component in case the path was changed
+    #     Component.register(template_name, Component(template_name))
+    #     component = Component.instances.get(template_name, None)
+
+    context = {**context, **component.get_context()}
+    return template.render(context)
 
 
 def bladeRedirect(route):
