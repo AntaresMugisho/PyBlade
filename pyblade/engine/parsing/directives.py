@@ -1491,6 +1491,10 @@ class DirectiveParser:
             # Render the template content
             try:
                 module = importlib.import_module(f"liveblade.{component_name}")
+                print("######\n")
+                pprint(module.__dict__)
+
+                return ""
 
                 cls = getattr(module, f"{re.sub('[-_]', '', component_name.title())}Component")
                 component = cls(f"liveblade.{component_name}")
