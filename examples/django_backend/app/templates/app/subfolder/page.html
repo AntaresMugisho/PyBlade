@@ -1,0 +1,69 @@
+@extends("layouts.base")
+
+@section("title")
+    This is the page title
+@endsection
+
+@section("header")
+    @include("partials.navigation")
+
+    <div class="hero">
+        <h1>This is the hero section</h1>
+    </div>
+
+    <div>
+    <img src="@static('app/images/logo.png')" alt="Alt"></div>
+@endsection
+
+
+@block("main")
+    <div>
+        <h3>Hello again, {{ name }} !</h3>
+    </div>
+
+    {# This is just for test purposes #}
+    @class({
+        "color-black": name == "Antares",
+        "color-white": not online,
+        "pb-4 my-3 bg-gray font-bold ": True,
+    })
+
+    @checked(online)
+    @required(online)
+    @selected(online)
+    @active("app")
+
+
+    <div @class({
+            "color-black": name == "Antares",
+            "color-white": not online,
+            "pb-4 my-3 bg-gray font-bold ": True,
+        })
+    >
+        This is the main content from the app.
+    </div>
+
+
+    @auth
+        <p>Welcome back, {{ user.name }}!</p>
+    @else
+        <p>Welcome, Non-Authenticated ! Please log in.</p>
+    @endauth
+
+    @guest
+        <p>Welcome, Guest! Please log in.</p>
+    @else
+        <p>Welcome back, {{ user.name }}!</p>
+    @endguest
+
+    @anonymous
+        <p>Welcome, Anonymous! Please log in.</p>
+    @endanonymous
+
+
+
+@endblock
+
+<div b-click="submit()">
+    And this too must be in the slot variable.
+</div>

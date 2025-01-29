@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contact Form</title>
+    {# <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"> #}
+    <style>
+        .form-container {
+            max-width: 600px;
+            margin: 2rem auto;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+        }
+        .radio-group {
+            display: flex;
+            gap: 1rem;
+        }
+    </style>
+</head>
+<body>
+<p>Liveblade component</p>
+    {# @liveblade("counter") #}
+<hr>
+
+<p>Liveblade scripts:</p>
+    @livebladeScripts
+<hr>
+
+<p>Verbatim:</p>
+    @verbatim
+        @auth
+            <p>You are authenticated.</p>
+        @else
+            <p>Please log in !</p>
+        @endauth
+    @endverbatim
+
+   <p></p>
+<hr>
+
+<p>Autoescape:</p>
+    @autoescape(False)
+        {{ html }}
+    @endautoescape
+<hr>
+
+<p>Comments:</p>
+    @comment Optional
+        <p>Commented out text</p>
+    @endcomment
+<hr>
+
+<p>Now:</p>
+    Copyright 2012-@now("%Y")
+<hr>
+
+<p>Debug:</p>
+    @debug
+<hr>
+
+<p>Firstof:</p>
+    @firstof(some_var, other_var, online, default="offline")
+<hr>
+
+<p>If changed:</p>
+    @for(letter in repetitives)
+        @ifchanged()
+            {{ letter }}
+        @else
+            "Not changed"
+        @endifchanged
+    @endfor
+<hr>
+
+<p>Lorem:</p>
+    @lorem(1, p)
+<hr>
+
+<p>Query string</p>
+    @querystring(color="red", size="M")
+<hr>
+
+<p>Spaceless:</p>
+    @spaceless
+        <p>Space less </p>
+    @endspaceless
+<hr>
+
+
+<p>Regroup:</p>
+    @regroup(countries by 'continent' as country)
+        @for(country in countries)
+        <li>{{ country.get("name") }}</li>
+        @endfor
+    @endregroup
+<hr>
+
+<p>Templatetag:</p>
+    @templatetag(now)
+<hr>
+
+<p>With:</p>
+    {# @with(2+5 as total)
+        {{ total }}
+    @endwith #}
+<hr>
+
+<p>Widthratio:</p>
+    @widthratio(2, 5, 10)
+<hr>
+
+<p>Cycle:</p>
+    @cycle('cycle1', 'cycle2', html)
+    @cycle('cycle1', 'cycle2', html)
+    @cycle('cycle1', 'cycle2', html)
+    @cycle('cycle1', 'cycle2', html)
+    @cycle('cycle1', 'cycle2', html)
+<hr>
+
+<h2>Test</h2>
+{# <tr>
+    <p> @cycle('row1', 'row2', 'row3' as rowcolors)</p>
+    <p> {{ rowcolors }}</p>
+</tr> #}
+{# <tr>
+    <p> @cycle(rowcolors)</p>
+    <p> {{ rowcolors }} </p>
+</tr> #}
+<hr>
+
+
+    <table>
+        <thead>
+            <th>#</th>
+            <th>Item</th>
+            <th>Current class</th>
+        </thead>
+        <tbody>
+            @for( i in items)
+            <tr class="@cycle('row1', 'row2' as current_class)">
+                <td>{{ loop.iteration }}</td>
+                <td>{{ i }}</td>
+                <td>{{ current_class }}</td>
+            </tr>
+            @endfor
+        </tbody>
+    </table>
+
+
+    <div class="container">
+        <div class="form-container">
+            <h2 class="mb-4">Contact Us</h2>
+
+            <form method="post" enctype="multipart/form-data" novalidate>
+
+                <hr>
+                @csrf
+
+                <hr>
+                @selected(True)
+                @checked(True)
+                @required(True)
+                @disabled(True)
+
+                <hr>
+
+                <div class="mb-3">
+                    <label for="id_name" class="form-label">Name</label>
+                    @field(form.name, class="form-control")
+                    @error(form.name)
+                        <small style="color:red;">{{ message }}</small>
+                    @enderror
+                </div>
+
+                <div class="mb-3">
+                    <label for="id_email" class="form-label">Email</label>
+                    @field(form.email, class="form-control" required)
+                    <b-error :field="form.name"/>
+                    @error(form.email)
+                        <small style="color:red;">{{ message }}</small>
+                    @enderror
+                </div>
+
+                <div class="mb-3">
+                    <label for="id_phone" class="form-label">Phone (optional)</label>
+                    @field(form.phone, class="form-control")
+                    @error(form.phone)
+                        <small style="color:red;">{{ message }}</small>
+                    @enderror
+                </div>
+
+                <div class="mb-3">
+                    <label for="id_subject" class="form-label">Subject</label>
+                    @field(form.subject, class="form-select")
+                    @error(form.subject)
+                        <small style="color:red;">{{ message }}</small>
+                    @enderror
+                </div>
+
+                <div class="mb-3">
+                    <label for="id_message" class="form-label">Message</label>
+                    @field(form.message, class="form-control")
+                    @error(form.message)
+                        <small style="color:red;">{{ message }}</small>
+                    @enderror
+                </div>
+
+                <div class="mb-3">
+                    <div class="form-check">
+                        @field(form.subscribe, class="form-check-input")
+                        <label class="form-check-label" for="id_subscribe">Subscribe to newsletter</label>
+                    </div>
+                    @error(form.subscribe)
+                        <small style="color:red;">{{ message }}</small>
+                    @enderror
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Priority</label>
+                    <div class="radio-group">
+                        @field(form.priority, class="form-check-input")
+                    </div>
+                    @error(form.priority)
+                        <small style="color:red;">{{ message }}</small>
+                    @enderror
+                </div>
+
+                <div class="mb-3">
+                    <label for="id_attachment" class="form-label">Attachment (optional)</label>
+                    @field(form.attachment, class="form-control")
+                    <div class="form-text">Max file size: 5MB</div>
+                    @error(form.attachment)
+                        <small style="color:red;">{{ message }}</small>
+                    @enderror
+                </div>
+
+                <button type="submit" class="btn btn-primary">Send Message</button>
+            </form>
+        </div>
+    </div>
+
+    @include("partials.footer")
+
+    {# <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script> #}
+</body>
+</html>

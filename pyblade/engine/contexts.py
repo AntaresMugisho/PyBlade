@@ -1,3 +1,8 @@
+from ast import List
+from typing import Iterable
+from uuid import uuid4
+
+
 class LoopContext:
     """Holds context information for loops."""
 
@@ -59,18 +64,45 @@ class AttributesContext:
         self._attributes = {**self._props, **attributes}
         self._context = context
 
+        self._only_keys = None
+        self._exclude_keys = None
+
     def __str__(self):
+        attributes = self._attributes.copy()
+
+        # Filter attributes
+        if self._only_keys:
+            attributes = {key: value for key, value in attributes.items() if key in self._only_keys}
+        if self._exclude_keys:
+            attributes = {key: value for key, value in attributes.items() if key not in self._exclude_keys}
+
+        # Format the string representation of the attributes
         string = ""
-        for key, value in self._attributes.items():
+        for key, value in attributes.items():
             if key not in self._props and isinstance(value, str):
                 string += f" {key}" + (f'="{value}"' if value != "" else "")
+
+        # Empty only and exclude keys
+        self._only_keys = None
+        self._exclude_keys = None
+
         return string
 
-    def get(self, attr):
-        return self._attributes.get(attr)
+    def get(self, attr, default: str = ""):
+        """
+        Get the value of the given attribute
+        :param attr: the attribute to get
+        :param default: the default value to return if the attribute is not found
+        :return: the value of the attribute
+        """
+        return self._attributes.get(attr, default)
 
     def has(self, *args) -> bool:
-
+        """
+        Check if the given attribute exists
+        :param args: list of attributes to check
+        :return: bool
+        """
         for attribute in args:
             if attribute not in self._attributes.keys():
                 return False
@@ -78,11 +110,34 @@ class AttributesContext:
         return True
 
     def has_any(self, *args) -> bool:
+        """
+        Check if at least one of the given attribute exists
+        :param args: list of attributes to check
+        :return: bool
+        """
         for attribute in args:
             if attribute in self._attributes.keys():
                 return True
 
         return False
+
+    def exclude(self, *args):
+        """
+        Exclude the given attributes
+        :param args: list of attributes to exclude
+        :return: self
+        """
+        self._exclude_keys = set(args)
+        return self
+
+    def only(self, *args):
+        """
+        Only keep the given attributes
+        :param args: list of attributes to keep
+        :return: self
+        """
+        self._only_keys = set(args)
+        return self
 
     def merge(self, attrs: dict):
         """
@@ -90,9 +145,11 @@ class AttributesContext:
         :param args:
         :return:
         """
+        if not isinstance(attrs, dict):
+            raise TypeError("Attributes must be a dictionary")
 
         for key, value in attrs.items():
-            self._attributes[key] = f"{attrs[key]} {self._attributes[key]}"
+            self._attributes[key] = f"{value} {self._attributes[key]}"
         return self
 
     def class_(self, attrs: dict):
@@ -125,11 +182,17 @@ class AttributesContext:
 
 class SlotContext:
 
-    def __init__(self, content: str):
+    def __init__(self, content: str = ""):
         self.content = content
 
     def __str__(self):
         return self.content
+
+    def __bool__(self):
+        return bool(self.content)
+
+    def is_empty(self):
+        return not self.content
 
 
 class ClassContext:
@@ -141,3 +204,47 @@ class ClassContext:
 
     def __str__(self):
         return f'class="{self._class.strip()}"'
+
+
+class CycleContext:
+    def __init__(self, values: List, alias: str | None = None) -> None:
+        self.alias = alias or uuid4().hex
+        self.values = values
+        self._current_index = 0
+
+    # def __eq__(self, other: object) -> bool:
+    #     return self._id == other._id
+
+    def __str__(self) -> str:
+        return self.current
+
+    @property
+    def index(self):
+        return self._current_index % len(self.values)
+
+    @index.setter
+    def index(self, value):
+        self._current_index = value
+
+    @property
+    def current(self):
+        return self.values[self.index]
+
+    @property
+    def next(self):
+        return self.values[(self.index + 1) % len(self.values)]
+
+    @property
+    def previous(self):
+        return self.values[(self.index - 1) % len(self.values)]
+
+
+class ErrorMessageContext:
+    def __init__(self, error_list: Iterable):
+        self._error_list = error_list
+
+    def __str__(self):
+        return self._error_list[0]
+
+    def __iter__(self):
+        return self._error_list
