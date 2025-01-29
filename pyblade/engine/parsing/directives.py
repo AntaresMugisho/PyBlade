@@ -1585,8 +1585,9 @@ class DirectiveParser:
 
                 # Base scripts needed for Liveblade functionality
                 scripts = [
-                    '<script src="/static/js/liveblade.js"></script>',
-                    "<script>window.liveblade = new Liveblade();</script>",
+                    '<script src="/static/liveblade/js/scripts.js"></script>',
+                    '<script src="/static/liveblade/js/advanced-directives.js"></script>',
+                    # "<script>window.liveblade = new Liveblade();</script>",
                 ]
 
                 # Add CSRF token for security

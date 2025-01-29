@@ -70,11 +70,53 @@ class Component {
                 return true;
             }
         });
+        this.id = Math.random().toString(36).substr(2, 9);
     }
+
     async callServerMethod(methodName, el, ...args) {
+        try {
+            emit('request.start');
+            const response = await fetch('/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({
+                    method: methodName,
+                    args: args,
+                    componentId: this.id
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+
+            const data = await response.json();
+            if (data.error) {
+                console.error('Server error:', data.error);
+                return;
+            }
+
+            if (data.data) {
+                Object.assign(this._data, data.data);
+                this.updateDOM(data.data);
+            }
+
+            return data;
+        } catch (error) {
+            console.error('Erreur lors de l\'appel de la méthode serveur:', error);
+            emit('blade.error', { message: error.message });
+        } finally {
+            emit('request.end');
+        }
+    }
+
+    async callServerMethodOld(methodName, el, ...args) {
         document.dispatchEvent(new Event('request.start')); 
         const component = el.closest("[liveblade_id]").getAttribute('liveblade_id')
-        console.log(el)
+        console.log(el, "jesuis")
         try {
             const formData = new FormData();
             formData.append('component', component); 
@@ -222,19 +264,14 @@ directive('text', ({ el, component, directive }) => {
 directive('click', ({ el, component, directive }) => {
     el.addEventListener('click', async () => {
         try {
-            const params = extractParams(directive); 
-            const par = params.param.reduce((index, acc) => {
-                return acc.value = acc.name;
-            }, 0);
-            
-            const methodName = directive.expression.split("(")[0].trim(); 
-            
-            await component.callServerMethod({ expression: methodName },el, params);
+            const methodName = directive.expression.split('(')[0];
+            await component.callServerMethod(methodName, el);
         } catch (error) {
-            console.error('Erreur lors de l\'appel de la méthode serveur:', error);
+            console.error('Erreur lors du clic:', error);
         }
     });
 });
+
 directive("valided",({el,component, directive})=>{
     fetch('/',{
         method:"POST",  
@@ -251,6 +288,7 @@ directive("valided",({el,component, directive})=>{
     }
     
 })
+
 // Directive b-model pour la liaison de données
 directive('model', ({ el, component, directive }) => {
     const updateModel = () => {
