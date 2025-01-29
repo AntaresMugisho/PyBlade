@@ -4,6 +4,7 @@ Template class for representing loaded templates.
 
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
+from  pyblade.liveblade import liveBlade
 
 from .parsing.template_processor import TemplateProcessor
 
@@ -63,7 +64,13 @@ class Template:
 
         if context is None:
             context = {}
+        if request is not None:
+            print(request)
+            if request.method == "POST":
+            #    return liveBlade.LiveBlade(request)
+                pass
 
+            
         # Handle Django-specific context if available
         if request is not None and DJANGO_AVAILABLE:
             context["request"] = request

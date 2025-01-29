@@ -1,6 +1,7 @@
 import importlib
 import json
 import pkgutil
+import re
 from urllib.parse import urlencode
 
 from django.http import HttpResponseRedirect, JsonResponse
@@ -212,95 +213,47 @@ def cached_blade(timeout=300):
 
 
 def LiveBlade(request):
-    print("request", Component.instances)
-    # is_lazy = request.GET.get("lazy")
     """
     Handles the POST request to interact with a specific component's method.
-    It extracts data from the request, locates the appropriate component,
-    and calls the requested method with the provided parameters.
-
-    If an error occurs, it redirects to an error page with an error message.
-    If successful, it returns a JSON response with the rendered HTML.
-
-    Args:
-        request: The HTTP request object containing POST data.
-
-    Returns:
-        JsonResponse or HttpResponseRedirect: Returns either a JSON response containing the
-        HTML content or a redirect in case of an error.
     """
     if request.method == "POST":
+        return JsonResponse({"error": "Method not allowed"}, status=405)
         try:
-            data = request.POST.dict()
-            files_data = request.FILES
-
+            # Lire les données JSON du corps de la requête
+            data = json.loads(request.body.decode('utf-8'))
             print("Received data:", data)
 
             # Get the component ID and method name from the request
-            component_id = data.get("component")
+            component_id = data.get("componentId")
             method_name = data.get("method")
-            print(f"Component ID: {component_id}, Method: {method_name}")
+            args = data.get("args", [])
+            print(f"Component ID: {component_id}, Method: {method_name}, Args: {args}")
 
-            component = components.get(component_id)
-
+            # Get the component instance
+            component = Component.instances.get(f"liveblade.{component_id}")
+            print(f"Component instance: {Component.instances}")
             if component is None:
                 error_message = f"Component with ID {component_id} not found"
                 print(error_message)
-                params = urlencode({"error": error_message})
-                return HttpResponseRedirect(f"/bladeError?{params}")
+                return JsonResponse({"error": error_message}, status=404)
 
-            if not hasattr(component, method_name):
+            # Call the component method
+            if hasattr(component, method_name):
+                method = getattr(component, method_name)
+                method(*args) if args else method()
+                # result = 
+                # print(f"Result: {result}")
+                # return JsonResponse({"data": "Method called successfully"})
+            else:
                 error_message = f"Method {method_name} not found in component {component_id}"
                 print(error_message)
-                params = urlencode({"error": error_message})
-                return HttpResponseRedirect(f"/bladeError?{params}")
+                return JsonResponse({"error": error_message}, status=404)
 
-            # Vérifier le cache
-            cached_result = blade_cache.get(component_id, method_name, data)
-            if cached_result and not is_lazy:
-                return JsonResponse({'html': cached_result, 'cached': True})
+        except json.JSONDecodeError as e:
+            print("JSON Decode Error:", str(e))
+            return JsonResponse({"error": "Invalid JSON data"}, status=400)
+        except Exception as e:
+            print("Error:", str(e))
+            return JsonResponse({"error": str(e)}, status=500)
 
-            formatted_params = {}
-            print(files_data, "data")
-            # Format the parameters from the request
-            for key in data.keys():
-                if key.startswith("param"):
-                    formatted_params[key] = data[key]
-                    param = json.loads(formatted_params.get("param0"))
-                    param = param.get("param", []) if not isinstance(param, list) else param
-                    # Replace dynamic values with state values if needed
-                    for i in param:
-                        if isinstance(i, dict):
-                            value = i.get("value")
-                            if value and value.startswith("$"):
-                                state_value = component.state.get(value[1:])
-                                if state_value is not None:
-                                    i["value"] = state_value
-                                    i["name"] = i["name"][1:]
-
-                    formatted_params = param
-            if files_data:
-                # If files are attached, include them in the parameters
-                print(f"Received files: {files_data}")
-                formatted_params["files"] = files_data
-
-            html_response = ""
-            # If there are no parameters, call the method without parameters
-            if len(formatted_params) == 0:
-                html_response = method()
-                if html_response.get("redirect"):
-                    return HttpResponseRedirect(html_response.get("url"))
-            else:
-                html_response = method(formatted_params)
-
-            # Return the response as JSON
-            return JsonResponse({"html": html_response})
-
-        except (ValueError, KeyError, TypeError) as e:
-            error_message = f"Error processing request: {e}"
-            print(error_message)
-            params = urlencode({"error": error_message})
-            return HttpResponseRedirect(f"/bladeError?{params}")
-    else:
-        # If the method is not POST, return a 405 Method Not Allowed error
-        return JsonResponse({"error": "Method not allowed"}, status=405)
+    return JsonResponse({"error": "Method not allowed"}, status=405)

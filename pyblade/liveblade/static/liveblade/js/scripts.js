@@ -74,6 +74,7 @@ class Component {
     }
 
     async callServerMethod(methodName, el, ...args) {
+        const component = el.closest("[liveblade_id]").getAttribute('liveblade_id')        
         try {
             emit('request.start');
             const response = await fetch('/', {
@@ -85,26 +86,32 @@ class Component {
                 body: JSON.stringify({
                     method: methodName,
                     args: args,
-                    componentId: this.id
+                    componentId: component.split('.')[1]
                 })
             });
+            response.text().then(data => {
+                console.log(data);
+                
+            })
+            
 
-            if (!response.ok) {
-                throw new Error('Network response was not ok');
-            }
+            // if (!response.ok) {
+            //     throw new Error('Network response was not ok');
+            // }
 
-            const data = await response.json();
-            if (data.error) {
-                console.error('Server error:', data.error);
-                return;
-            }
+            // const data = await response.json();
+            
+            // if (data.error) {
+            //     console.error('Server error:', data.error);
+            //     return;
+            // }
 
-            if (data.data) {
-                Object.assign(this._data, data.data);
-                this.updateDOM(data.data);
-            }
+            // if (data.data) {
+            //     Object.assign(this._data, data.data);
+            //     this.updateDOM(data.data);
+            // }
 
-            return data;
+            // return data;
         } catch (error) {
             console.error('Erreur lors de l\'appel de la méthode serveur:', error);
             emit('blade.error', { message: error.message });
@@ -116,7 +123,6 @@ class Component {
     async callServerMethodOld(methodName, el, ...args) {
         document.dispatchEvent(new Event('request.start')); 
         const component = el.closest("[liveblade_id]").getAttribute('liveblade_id')
-        console.log(el, "jesuis")
         try {
             const formData = new FormData();
             formData.append('component', component); 
@@ -263,6 +269,8 @@ directive('text', ({ el, component, directive }) => {
 // Directive b-click pour gérer les clics
 directive('click', ({ el, component, directive }) => {
     el.addEventListener('click', async () => {
+        // console.log(el, component, directive);
+        
         try {
             const methodName = directive.expression.split('(')[0];
             await component.callServerMethod(methodName, el);

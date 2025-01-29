@@ -108,6 +108,7 @@ class DirectiveParser:
     _SLOT_TAG_PATTERN: Pattern = re.compile(
         r"<b-slot(?::|\s+name\s*=\s*)(?P<name>.*?)>\s*(?P<content>.*?)\s*</b-slot(?::(?P=name))?>", re.DOTALL
     )
+    _LIVEBLADE_PATTERN = re.compile(r"@liveblade\s*\(\s*(?P<component>.*?)\s*\)", re.DOTALL)
     _LIVEBLADE_SCRIPTS_PATTERN: Pattern = re.compile(
         r"@(?:liveblade_scripts|livebladeScripts)(?:\s*\(\s*(?P<attributes>.*?)\s*\))?", re.DOTALL
     )
@@ -1442,8 +1443,6 @@ class DirectiveParser:
             DirectiveParsingError: If the component is not found
             TemplateRenderingError: If the component template has more than one root nodes
         """
-        pattern = re.compile(r"@liveblade\s*\(\s*(?P<component>.*?)\s*\)")
-        match = re.search(pattern, template)
 
         def validate_single_root_node(html_content):
             """
@@ -1477,36 +1476,36 @@ class DirectiveParser:
 
             return False
 
-        if match is not None:
-            component_name = ast.literal_eval(match.group("component"))
-            template = loader.load_template(f"liveblade.{component_name}") if component_name else None
+        def handle_liveblade(match):
+            component_name = self._validate_string(match.group("component"))
+            liveblade = loader.load_template(f"liveblade.{component_name}")
 
-            if template:
-                # Ensure the component has only one root node
-                html_content = re.sub(r"<!--.*?-->", "", template.content, flags=re.DOTALL)
-                html_content = re.sub(self._COMMENT_PATTERN, "", html_content)
-                html_content = re.sub(self._COMMENTS_PATTERN, "", html_content)
+            # Ensure the component has only one root node after removing all comments
+            html_content = re.sub(r"<!--.*?-->", "", liveblade.content, flags=re.DOTALL)
+            html_content = re.sub(self._COMMENT_PATTERN, "", html_content)
+            html_content = re.sub(self._COMMENTS_PATTERN, "", html_content)
 
-                if not validate_single_root_node(html_content):
-                    raise TemplateRenderingError("LiveBlade component must have a single root node.")
+            if not validate_single_root_node(html_content):
+                raise TemplateRenderingError("LiveBlade component must have a single root node.")
 
-                # Render the template content
-                try:
-                    module = importlib.import_module(f"liveblade.{component_name}")
-                    cls = getattr(module, f"{re.sub('[-_]', '', component_name.title())}Component")
-                    component = cls(f"liveblade.{component_name}")
-                    parsed = component.render()
-                    return re.sub(pattern, parsed, template)
+            # Render the template content
+            try:
+                module = importlib.import_module(f"liveblade.{component_name}")
 
-                except ModuleNotFoundError:
-                    raise DirectiveParsingError(f"Component module not found: liveblade.{component_name}")
+                cls = getattr(module, f"{re.sub('[-_]', '', component_name.title())}Component")
+                component = cls(f"liveblade.{component_name}")
+                parsed = component.render()
+                return parsed
 
-                except AttributeError:
-                    raise DirectiveParsingError(f"Component class not found: {cls}")
+            except ModuleNotFoundError:
+                raise DirectiveParsingError(f"Component module not found: liveblade.{component_name}")
 
-        return template
+            except AttributeError as e:
+                raise DirectiveParsingError(f"Error loading liveblade component: {str(e)}")
 
-    def _parse_translations(self, template, context):
+        return self._LIVEBLADE_PATTERN.sub(handle_liveblade, template)
+
+    def _parse_translations(self, template):
         """
         Process @translate, @trans, @blocktranslate, and @plural directives in PyBlade templates.
         """
@@ -1587,7 +1586,6 @@ class DirectiveParser:
                 scripts = [
                     '<script src="/static/liveblade/js/scripts.js"></script>',
                     '<script src="/static/liveblade/js/advanced-directives.js"></script>',
-                    # "<script>window.liveblade = new Liveblade();</script>",
                 ]
 
                 # Add CSRF token for security
