@@ -8,7 +8,7 @@ with open("README.md", "r") as file:
 setup(
     name="PyBlade",
     packages=["pyblade"],
-    version="0.1.8",
+    version="0.1.9",
     license="MIT",
     description="PyBlade is a lightweight template engine for Python, initially designed for Django. Inspired by "
     "Laravel's Blade and Livewire, it simplifies dynamic template creation with developer-friendly @-based "
@@ -35,13 +35,10 @@ setup(
         "Topic :: Text Processing :: Markup :: HTML",
         "Security :: Security",
     ],
-    install_requires=[
-        'questionary', 
-        'colorama' 
-    ],
+    install_requires=["questionary", "colorama"],
     entry_points={
-        'console_scripts': [
-            'pyblade=pyblade.cli.main:cli',
+        "console_scripts": [
+            "pyblade=pyblade.cli.main:cli",
         ],
     },
 )

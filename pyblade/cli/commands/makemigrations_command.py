@@ -8,7 +8,6 @@ class MakeMigrationsCommand(DjangoCommand):
     name = "make:migrations"
     description = "Create new database migrations"
     aliases = ["makemigrations", "db:makemigrations"]
-    arguments = ["app"]
     options = {
         "empty": {
             "help": "Create an empty migration.",
