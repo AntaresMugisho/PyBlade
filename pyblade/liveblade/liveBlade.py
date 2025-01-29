@@ -13,7 +13,7 @@ import threading
 from django.core.cache import cache
 import hashlib
 from concurrent.futures import ThreadPoolExecutor
-
+import ast
 # Dictionary to store initialized components by their IDs
 components = {}
 
@@ -188,48 +188,21 @@ def cached_blade(timeout=300):
         return wrapper
     return decorator
 
-# def initialize_components():
-#     """
-#     Initializes all components by dynamically loading them from the 'components' package.
-#     It checks if the class is a subclass of Component and instantiates it, adding
-#     it to the `components` dictionary.
-#     """
-#     package = "liveblade"
-#     for _, module_name, _ in pkgutil.iter_modules([package]):
-#         # Dynamically import each module in the 'components' package
-#         module = importlib.import_module(f"{package}.{module_name}")
-#         for name in dir(module):
-#             # For each class in the module, check if it is a subclass of Component
-#             cls = getattr(module, name)
-#             if isinstance(cls, type) and issubclass(cls, Component) and cls is not Component:
-#                 # Create an instance of the component and add it to the components dictionary
-#                 component_instance = cls(name.lower())
-#                 components[component_instance.id] = component_instance
-#                 print(component_instance.id, ' id')
-
-
-# # Initialize all components when the script is loaded
-# initialize_components()
-
-
 def LiveBlade(request):
     """
     Handles the POST request to interact with a specific component's method.
-    It extracts data from the request, locates the appropriate component,
-    and calls the requested method with the provided parameters.
-
-    Args:
-        request: The HTTP request object containing POST data.
     """
     if request.method == "POST":
         try:
-            # Lire les données JSON du corps de la requête
             data = json.loads(request.body.decode('utf-8'))
             print("Received data:", data)
-
-            # Get the component ID and method name from the request
             component_id = data.get("componentId")
             method_name = data.get("method")
+            files = data.get("files")
+            
+            if isinstance(method_name, dict):
+                method_name = method_name.get('expression', '').split('(')[0]
+            
             print(f"Component ID: {component_id}, Method: {method_name}")
 
             # Get the component instance
@@ -243,23 +216,47 @@ def LiveBlade(request):
                 return JsonResponse({"error": error_message}, status=404)
 
             if not hasattr(component, method_name):
-                error_message = f"Method {method_name} not found in component {component_id}"
+                error_message = f"Method {method_name} not found on component {component_id}"
                 print(error_message)
                 return JsonResponse({"error": error_message}, status=404)
 
-            # Call the component method
-            method = getattr(component, method_name)
-            method()
+            # Traiter les arguments
+            args = data.get('args', [])
             
-            # Re-render the component
+            # Dé-imbriquer les arguments si nécessaire
+            while isinstance(args, list) and len(args) == 1 and isinstance(args[0], list):
+                args = args[0]
+            
+            # Gérer les fichiers uploadés
+            if files:
+                print(f"Files: {type(files.get("file"))} =====> {files}")
+                args = [files]
+            elif args and isinstance(args[0], dict):
+                # Cas des données de formulaire
+                form_data = args[0]
+                print(f"Form data: {form_data}")
+                if form_data:
+                    component.update_form_data(form_data)
+                    args = []
+
+            # Appeler la méthode avec les arguments
+            method = getattr(component, method_name)
+            print(f"Calling {method_name} with args: {args}")
+            if args:
+                method(*args) 
+            elif args and isinstance(args[0], dict):
+                method([*args])
+            else:
+                method()
+            
             result = component.render()
             return JsonResponse({"data": result}, status=200)
 
-        except json.JSONDecodeError as e:
-            print("JSON Decode Error:", str(e))
-            return JsonResponse({"error": "Invalid JSON data"}, status=400)
         except Exception as e:
-            print("Error:", str(e))
-            return JsonResponse({"error": str(e)}, status=500)
+            error_message = f"Error processing request: {str(e)}"
+            print(error_message)
+            import traceback
+            print(traceback.format_exc())
+            return JsonResponse({"error": error_message}, status=500)
 
     return JsonResponse({"error": "Method not allowed"}, status=405)
