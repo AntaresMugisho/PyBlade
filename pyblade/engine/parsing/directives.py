@@ -1584,6 +1584,7 @@ class DirectiveParser:
 
                 # Base scripts needed for Liveblade functionality
                 scripts = [
+                    '<script src="/static/liveblade/vendor/morphdom.min.js"></script>',
                     '<script src="/static/liveblade/js/scripts.js"></script>',
                     '<script src="/static/liveblade/js/advanced-directives.js"></script>',
                 ]

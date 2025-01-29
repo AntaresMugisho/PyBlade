@@ -1,11 +1,16 @@
 from django.http import JsonResponse
 from django.urls import path
 from django.views.generic import TemplateView
+from django.views.decorators.csrf import csrf_exempt
+from  pyblade.liveblade import liveBlade
 
 
-class LiveBladeView(TemplateView):
-    def post(self, request, *args, **kwargs):
-        return JsonResponse({"message": "Hello, Liveblade!"})
+def LiveBladeView(request):
+    if request.method == "GET":
+        return JsonResponse({"error": "Method not allowed"}, status=405)
+    return liveBlade.LiveBlade(request)
 
 
-urlpatterns = [path("api/liveblade/", LiveBladeView.as_view(), name="liveblade")]
+urlpatterns = [
+    path('liveblade/', csrf_exempt(liveBlade.LiveBlade), name='liveblade'),
+]

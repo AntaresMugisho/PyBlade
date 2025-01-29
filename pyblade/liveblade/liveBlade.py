@@ -215,9 +215,13 @@ def cached_blade(timeout=300):
 def LiveBlade(request):
     """
     Handles the POST request to interact with a specific component's method.
+    It extracts data from the request, locates the appropriate component,
+    and calls the requested method with the provided parameters.
+
+    Args:
+        request: The HTTP request object containing POST data.
     """
     if request.method == "POST":
-        return JsonResponse({"error": "Method not allowed"}, status=405)
         try:
             # Lire les données JSON du corps de la requête
             data = json.loads(request.body.decode('utf-8'))
@@ -226,28 +230,30 @@ def LiveBlade(request):
             # Get the component ID and method name from the request
             component_id = data.get("componentId")
             method_name = data.get("method")
-            args = data.get("args", [])
-            print(f"Component ID: {component_id}, Method: {method_name}, Args: {args}")
+            print(f"Component ID: {component_id}, Method: {method_name}")
 
             # Get the component instance
             component = Component.instances.get(f"liveblade.{component_id}")
-            print(f"Component instance: {Component.instances}")
+            print(f"Component instances: {Component.instances}")
+            print(f"Component instance: {component}")
+
             if component is None:
                 error_message = f"Component with ID {component_id} not found"
                 print(error_message)
                 return JsonResponse({"error": error_message}, status=404)
 
-            # Call the component method
-            if hasattr(component, method_name):
-                method = getattr(component, method_name)
-                method(*args) if args else method()
-                # result = 
-                # print(f"Result: {result}")
-                # return JsonResponse({"data": "Method called successfully"})
-            else:
+            if not hasattr(component, method_name):
                 error_message = f"Method {method_name} not found in component {component_id}"
                 print(error_message)
                 return JsonResponse({"error": error_message}, status=404)
+
+            # Call the component method
+            method = getattr(component, method_name)
+            method()
+            
+            # Re-render the component
+            result = component.render()
+            return JsonResponse({"data": result}, status=200)
 
         except json.JSONDecodeError as e:
             print("JSON Decode Error:", str(e))

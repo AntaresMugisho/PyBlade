@@ -77,7 +77,7 @@ class Component {
         const component = el.closest("[liveblade_id]").getAttribute('liveblade_id')        
         try {
             emit('request.start');
-            const response = await fetch('/', {
+            const response = await fetch('/liveblade/', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -89,29 +89,41 @@ class Component {
                     componentId: component.split('.')[1]
                 })
             });
-            response.text().then(data => {
-                console.log(data);
-                
-            })
+
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+
+            const data = await response.json();
+            console.log('Response data:', data);
             
+            if (data.error) {
+                console.error('Server error:', data.error);
+                return;
+            }
 
-            // if (!response.ok) {
-            //     throw new Error('Network response was not ok');
-            // }
+            if (data.data) {
+                // Créer un élément temporaire pour contenir le nouveau HTML
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = data.data;
 
-            // const data = await response.json();
-            
-            // if (data.error) {
-            //     console.error('Server error:', data.error);
-            //     return;
-            // }
+                // Trouver l'élément du composant actuel
+                const currentComponent = document.querySelector(`[liveblade_id="${component}"]`);
+                if (currentComponent) {
+                    // Utiliser morphdom pour mettre à jour le DOM
+                    morphdom(currentComponent, tempDiv.firstElementChild, {
+                        onBeforeElUpdated: function(fromEl, toEl) {
+                            // Préserver les écouteurs d'événements et les attributs personnalisés
+                            if (fromEl.isEqualNode(toEl)) {
+                                return false;
+                            }
+                            return true;
+                        }
+                    });
+                }
+            }
 
-            // if (data.data) {
-            //     Object.assign(this._data, data.data);
-            //     this.updateDOM(data.data);
-            // }
-
-            // return data;
+            return data;
         } catch (error) {
             console.error('Erreur lors de l\'appel de la méthode serveur:', error);
             emit('blade.error', { message: error.message });
@@ -196,12 +208,39 @@ class Component {
     }
 
     updateDOM(newData) {
-        for (const key in newData) {
+        // Mettre à jour tous les éléments avec b-text
+        document.querySelectorAll('[b-text]').forEach(el => {
+            const key = el.getAttribute('b-text');
             if (newData.hasOwnProperty(key)) {
-                const element = document.querySelector(`[b-text=${key}]`);
-                if (element) {
-                    element.textContent = newData[key];
-                }
+                el.textContent = newData[key];
+            }
+        });
+
+        // Mettre à jour tous les éléments avec b-model
+        document.querySelectorAll('[b-model]').forEach(el => {
+            const key = el.getAttribute('b-model');
+            if (newData.hasOwnProperty(key)) {
+                el.value = newData[key];
+            }
+        });
+
+        // Mettre à jour les éléments avec b-show
+        document.querySelectorAll('[b-show]').forEach(el => {
+            const key = el.getAttribute('b-show');
+            if (newData.hasOwnProperty(key)) {
+                el.style.display = newData[key] ? '' : 'none';
+            }
+        });
+
+        // Si nous avons reçu du HTML, mettre à jour le contenu
+        if (newData.html) {
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = newData.html;
+            
+            // Trouver l'élément parent avec l'attribut liveblade_id
+            const currentComponent = document.querySelector(`[liveblade_id="${this.id}"]`);
+            if (currentComponent) {
+                currentComponent.innerHTML = tempDiv.firstElementChild.innerHTML;
             }
         }
     }
