@@ -2,8 +2,7 @@
 Core template processing functionality.
 """
 
-import re
-from typing import Any, Dict, Pattern
+from typing import Any, Dict
 
 from ..exceptions import TemplateRenderingError
 from .cache import TemplateCache
@@ -16,8 +15,6 @@ class TemplateProcessor:
     Main template processing class that coordinates parsing, caching,
     and rendering of templates.
     """
-
-    _VERBATIM_PLACEHOLDER_PATTERN: Pattern = re.compile(r"@__verbatim__\((?P<id>\w+)\)", re.DOTALL)
 
     def __init__(self, cache_size: int = 1000, cache_ttl: int = 3600):
         self.cache = TemplateCache(max_size=cache_size, ttl=cache_ttl)
@@ -76,9 +73,6 @@ class TemplateProcessor:
         # Then process variables
         template = self.variable_parser.parse_variables(template, context)
 
-        # Then restore possible verbatim contents
-        template = self._restore_verbatim(template)
-
         return template
 
     def clear_cache(self) -> None:
@@ -94,15 +88,3 @@ class TemplateProcessor:
             context: The context dictionary
         """
         self.cache.invalidate(template, context)
-
-    def _restore_verbatim(self, template: str) -> str:
-        """
-        Process all @__verbatim__(<id>) placeholders in the template and replace them
-        with the corresponding verbatim content.
-        This function is called to restore the verbatim content after processing.
-        """
-
-        def replace_verbatim_placeholder(match):
-            return self.directive_parser.verbatims.pop(match.group("id"))
-
-        return self._VERBATIM_PLACEHOLDER_PATTERN.sub(replace_verbatim_placeholder, template)

@@ -5,10 +5,10 @@ import questionary
 from questionary import Choice
 
 from ..commands.base_command import BaseCommand
+from ..utils import command
 from ..utils.console import console
 from ..utils.styles import PYBLADE_STYLE
 from ..utils.version import __version__
-from ..utils import command
 
 _SETTINGS_PATERN = re.compile(
     r"\"\"\"(?P<banner>.*?)\"\"\"\s*.*?\s*INSTALLED_APPS\s=\s\[\s*(?P<installed_apps>.*?)\s*\]\s*.*?\s*MIDDLEWARE\s=\s\[\s*(?P<middleware>.*?)\s*\]\s*.*?\s*TEMPLATES\s=\s*\[\s*(?P<templates>\{.*?\},)\n\]",  # noqa E501
@@ -36,12 +36,12 @@ class InitCommand(BaseCommand):
         # Confirm project details
         console.print(
             f"""
-    Project details :
-        - Project name : [bold]{self.project_name}[/bold]
-        - Framework : [bold]{self.framework}[/bold]
-        - CSS framework : [bold]{self.css_framework or 'None'}[/bold]
-        - Use LiveBlade : [bold]{'Yes' if self.use_liveblade else 'No'}[/bold]
-    """
+Project details :
+    - Project name : [bold]{self.project_name}[/bold]
+    - Framework : [bold]{self.framework}[/bold]
+    - CSS framework : [bold]{self.css_framework or 'None'}[/bold]
+    - Use LiveBlade : [bold]{'Yes' if self.use_liveblade else 'No'}[/bold]
+"""
         )
 
         if not questionary.confirm("Is this correct?").ask():
@@ -143,11 +143,9 @@ class InitCommand(BaseCommand):
 
         if self.framework.lower() == "django":
             try:
-                # TODO: Add PyBlade to TEMPLATES
-
                 new_temp_settings = """{
         "BACKEND": "pyblade.backends.DjangoPyBlade",
-        "DIRS": [BASE_DIR / "templates"],
+        "DIRS": [BASE_DIR / "%s/templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -161,7 +159,7 @@ class InitCommand(BaseCommand):
 
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [BASE_DIR / "templates"],
+        "DIRS": [BASE_DIR / "%s/templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -172,7 +170,10 @@ class InitCommand(BaseCommand):
             ],
         },
     },
-    """
+    """ % (
+                    self.project_name,
+                    self.project_name,
+                )
 
                 with open(self.settings_path, "r") as file:
                     settings = file.read()
@@ -233,7 +234,7 @@ class InitCommand(BaseCommand):
                     settings = file.read()
 
                 # Add tailwind to INSTALLED_APPS
-                new_settings = settings.replace("INSTALLED_APPS = [", "INSTALLED_APPS = [\n\t'tailwind',\n\t'theme',")
+                new_settings = settings.replace("INSTALLED_APPS = [", "INSTALLED_APPS = [\n\t'tailwind',")
                 new_settings += "\nTAILWIND_APP_NAME = 'theme'\n\nINTERNAL_IPS = ['127.0.0.1']"
                 with open(self.settings_path, "w") as file:
                     file.write(new_settings)
@@ -245,19 +246,28 @@ class InitCommand(BaseCommand):
                 with open(self.default_app_path / "templates" / "layout.html", "w") as file:
                     file.write(base_template)
 
-                # try:
-                #     # Create theme app
-                #     init = command.run(["python", "manage.py", "tailwind", "init", "--no-input"])
-                #     self.success(init.stdout)
-                #     install = command.run(["python", "manage.py", "tailwind", "install"])
-                #     self.success(install.stdout)
-                # except command.RunError as e:
-                #     self.error(
-                #         f"Failed to configure Tailwind: {str(e)}\n",
-                #         "Please Configure manually by running 'pyblade tailwind:init'",
-                #         " and 'pyblade tailwind:install'",
-                #     )
-                #     return
+                try:
+                    # Create theme app
+                    command.run(["python", "manage.py", "tailwind", "init", "--no-input"], cwd=Path(self.project_name))
+                    self.line("\tTailwind application 'theme' has been successfully created.")
+
+                    # Add the theme app to settings.py
+                    with open(self.settings_path, "r") as file:
+                        settings = file.read()
+
+                    new_settings = settings.replace("INSTALLED_APPS = [", "INSTALLED_APPS = [\n\t'theme',")
+                    with open(self.settings_path, "w") as file:
+                        file.write(new_settings)
+
+                    # Install tailwind
+                    command.run(["python", "manage.py", "tailwind", "install"], cwd=Path(self.project_name))
+                except command.RunError as e:
+                    self.error(
+                        f"Failed to configure Tailwind: {str(e.stderr)}\n"
+                        "Please Configure manually by running 'pyblade tailwind:init'"
+                        " and 'pyblade tailwind:install'"
+                    )
+                    return
 
             except Exception as e:
                 self.error(f"Failed to configure Tailwind: {str(e)}")

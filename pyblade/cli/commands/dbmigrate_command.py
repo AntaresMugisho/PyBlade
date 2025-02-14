@@ -3,6 +3,7 @@ from typing import List
 from .django_command import DjangoCommand
 
 
+# TODO: Fix this command
 class DbMigrateCommand(DjangoCommand):
     name = "db:migrate"
     description = "Run database migrations"

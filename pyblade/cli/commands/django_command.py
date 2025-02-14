@@ -1,7 +1,7 @@
 from typing import List, Optional
 
-from .base_command import BaseCommand
 from ..utils import command
+from .base_command import BaseCommand
 
 
 class DjangoCommand(BaseCommand):
@@ -33,7 +33,8 @@ class DjangoCommand(BaseCommand):
             cmd.extend(args)
 
         try:
-            return command.run(cmd, cwd=self.settings.pyblade_root)
+            output = command.run(cmd, cwd=self.settings.pyblade_root)
+            return output
         except command.RunError as e:
             self.error(e.stderr)
             return

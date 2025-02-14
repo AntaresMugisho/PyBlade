@@ -11,3 +11,6 @@ build/
 node_modules/
 /docs/.vitepress/cache
 /docs/.vitepress/dist
+/my_project
+/my_project1
+test_/

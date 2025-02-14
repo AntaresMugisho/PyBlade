@@ -3,8 +3,8 @@ from pathlib import Path
 from ..commands.base_command import BaseCommand
 
 
-class LivebladeComponentCommand(BaseCommand):
-    name = "liveblade:component"
+class MakeLivebladeCommand(BaseCommand):
+    name = "make:liveblade"
     description = "Create a new LiveBlade component"
     arguments = ["name"]
     options = {
@@ -58,10 +58,13 @@ class LivebladeComponentCommand(BaseCommand):
 class {component_name.title()}Component(liveblade.Component):
 
     def render(self):
-        return liveblade.view("liveblade.{component_name}", context={{}})
+        # Render liveblade/{component_name}.html
+
+        return self.view(context={{}})
 """
             )
 
-        self.info("LiveBlade component created successfully:")
-        self.info(f"  - HTML: {html_file}")
-        self.info(f"  - Python: {python_file}")
+        self.success("LiveBlade component created successfully:")
+        self.line(f"  - HTML: {html_file}")
+        self.line(f"  - Python: {python_file}")
+        self.newline()

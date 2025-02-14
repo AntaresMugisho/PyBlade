@@ -3,11 +3,11 @@ from typing import List
 from .django_command import DjangoCommand
 
 
+# TODO: Fix this command
 class MakeMigrationsCommand(DjangoCommand):
     name = "make:migrations"
     description = "Create new database migrations"
     aliases = ["makemigrations", "db:makemigrations"]
-    arguments = ["app"]
     options = {
         "empty": {
             "help": "Create an empty migration.",
@@ -24,6 +24,7 @@ class MakeMigrationsCommand(DjangoCommand):
     def handle(self, **kwargs):
         """Create new database migrations."""
         app_names = kwargs.get("app", [])
+        print(app_names)
         empty = kwargs.get("empty", False)
         merge = kwargs.get("merge", False)
 

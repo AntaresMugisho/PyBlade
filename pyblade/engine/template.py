@@ -63,7 +63,7 @@ class Template:
 
         if context is None:
             context = {}
-
+            
         # Handle Django-specific context if available
         if request is not None and DJANGO_AVAILABLE:
             context["request"] = request

@@ -11,15 +11,14 @@ class RunError(Exception):
             self.__dict__.update(exception.__dict__)
 
 
-def run(command: List[str]|str, cwd: Optional[Path]=None) -> None:
+def run(command: List[str] | str, cwd: Optional[Path] = None) -> None:
     if isinstance(command, str):
         command = command.split(" ")
 
     if not cwd:
         cwd = Path.cwd()
     try:
-        result = subprocess.run(command, capture_output=True, text=True, check=True, cwd=cwd)
+        result = subprocess.check_call(command, text=True, cwd=cwd)
         return result
     except subprocess.CalledProcessError as e:
         raise RunError(e)
-

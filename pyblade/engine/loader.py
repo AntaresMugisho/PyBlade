@@ -49,6 +49,7 @@ class TemplateLoader:
         Raises:
             TemplateNotFoundError: If the template file cannot be found
         """
+
         # Remove extension if it exists
         template_name = template_name.removesuffix(self._extension)
 

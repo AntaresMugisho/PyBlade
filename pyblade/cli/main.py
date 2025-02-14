@@ -10,7 +10,7 @@ DEFAULT_COMMANDS = {
     "Project commands": ["init", "migrate", "serve"],
     "Component commands": [
         "make:component",
-        "liveblade:component",
+        "make:liveblade",
     ],
     "Django commands": [
         "db:migrate",
@@ -41,6 +41,10 @@ def load_commands():
             cmd_cls = getattr(module, class_name)
             cmd_instance = cmd_cls.create_click_command()
             cli.add_command(cmd_instance)
+
+            # Register aliases
+            for alias in cmd_cls.aliases:
+                cli.add_command(cmd_instance, name=alias)
 
             _CACHED_COMMANDS.setdefault(category, []).append(cmd_instance)
 

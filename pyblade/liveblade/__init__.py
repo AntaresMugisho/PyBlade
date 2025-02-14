@@ -1,2 +1,3 @@
 from .base import Component
-from .base import view
+
+__all__ = ["Component"]
