@@ -37,6 +37,8 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "pyblade.liveblade",
+    "app",
 ]
 
 MIDDLEWARE = [
@@ -54,7 +56,7 @@ ROOT_URLCONF = "django_backend.urls"
 TEMPLATES = [
     {
         "BACKEND": "pyblade.backends.DjangoPyBlade",
-        "DIRS": [BASE_DIR / "templates"],
+        "DIRS": [BASE_DIR / "django_backend/templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [

@@ -11,4 +11,4 @@ class CounterComponent(liveblade.Component):
         self.count -= 1
 
     def render(self):
-        return liveblade.view("liveblade.counter", context={})
+        return self.view(context={})

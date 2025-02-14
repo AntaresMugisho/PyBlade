@@ -75,7 +75,9 @@ class PyBlade:
             template = loader.load_template(template_name, self._template_dirs, self)
             return template
         except Exception as e:
-            raise TemplateNotFoundError(template_name) from e
+            raise TemplateNotFoundError(
+                f"No template named '{template_name}.html'.\n Searched in the following directories: {self._template_dirs}"
+            )
 
     def from_string(self, template_code, context):
         pass
