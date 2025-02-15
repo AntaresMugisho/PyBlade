@@ -62,7 +62,7 @@
     @firstof(some_var, other_var, online, default="offline")
 <hr>
 
-<p>If changed:</p>
+{# <p>If changed:</p>
     @for(letter in repetitives)
         @ifchanged()
             {{ letter }}
@@ -70,7 +70,7 @@
             "Not changed"
         @endifchanged
     @endfor
-<hr>
+<hr> #}
 
 <p>Lorem:</p>
     @lorem(1, p)
@@ -88,11 +88,11 @@
 
 
 <p>Regroup:</p>
-    @regroup(countries by 'continent' as country)
+    {# @regroup(countries by 'continent' as country)
         @for(country in countries)
         <li>{{ country.get("name") }}</li>
         @endfor
-    @endregroup
+    @endregroup #}
 <hr>
 
 <p>Templatetag:</p>
@@ -136,13 +136,13 @@
             <th>Current class</th>
         </thead>
         <tbody>
-            @for( i in items)
+            {# @for( i in items)
             <tr class="@cycle('row1', 'row2' as current_class)">
                 <td>{{ loop.iteration }}</td>
                 <td>{{ i }}</td>
                 <td>{{ current_class }}</td>
             </tr>
-            @endfor
+            @endfor #}
         </tbody>
     </table>
 
@@ -157,10 +157,10 @@
                 @csrf
 
                 <hr>
-                @selected(True)
+                {# @selected(True)
                 @checked(True)
                 @required(True)
-                @disabled(True)
+                @disabled(True) #}
 
                 <hr>
 

@@ -269,7 +269,7 @@ class DirectiveParser:
 
                 self._context.update({variable: item, "loop": loop})
 
-                parsed_block = self.parse_directives(block, self._context)
+                # parsed_block = self.parse_directives(block, self._context)
                 parsed_block = self._variable_parser.parse_variables(block, self._context)
 
                 should_break, parsed_block = self._parse_break(parsed_block, self._context)
@@ -277,6 +277,7 @@ class DirectiveParser:
 
                 if should_break:
                     break
+
                 if should_continue:
                     continue
 
@@ -1268,7 +1269,9 @@ class DirectiveParser:
             directive = match.group("directive")
             expression = match.group("expression")
             if not expression:
-                expression = True
+                expression = "True"
+
+            print("CHECK", eval(expression, {}, self._context))
 
             if expression is True or (eval(expression, {}, self._context)):
                 return directive if directive != "autocomplete" else "on"
