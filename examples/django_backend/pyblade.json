@@ -2,5 +2,5 @@
     "name": "django_backend",
     "framework": "django",
     "css_framework": null,
-    "pyblde_version": "0.1.9"
+    "pyblade_version": "0.1.9"
 }

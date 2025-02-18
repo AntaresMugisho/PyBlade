@@ -56,7 +56,7 @@ ROOT_URLCONF = "django_backend.urls"
 TEMPLATES = [
     {
         "BACKEND": "pyblade.backends.DjangoPyBlade",
-        "DIRS": [BASE_DIR / "django_backend/templates"],
+        "DIRS": [BASE_DIR / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
