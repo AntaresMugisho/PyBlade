@@ -152,6 +152,9 @@ class AttributesContext:
             self._attributes[key] = f"{value} {self._attributes[key]}"
         return self
 
+    def prepends(self, attrs: dict):
+        pass
+
     def class_(self, attrs: dict):
         """
         Conditionally marge classes
