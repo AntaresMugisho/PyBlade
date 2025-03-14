@@ -175,7 +175,7 @@
                 <div class="mb-3">
                     <label for="id_email" class="form-label">Email</label>
                     @field(form.email, class="form-control" required)
-                    {# <b-error :field="form.name"/> #}
+                    <b-error :field="form.name"/>
                     @error(form.email)
                         <small style="color:red;">{{ message }}</small>
                     @enderror
@@ -183,11 +183,11 @@
 
                 <div class="mb-3">
                     <label for="id_phone" class="form-label">Phone (optional)</label>
-                    @field(form.phone, class="form-control")
+                    @field(form.name, class="form-control p-2" required)
+                </div>
                     @error(form.phone)
                         <small style="color:red;">{{ message }}</small>
                     @enderror
-                </div>
 
                 <div class="mb-3">
                     <label for="id_subject" class="form-label">Subject</label>
