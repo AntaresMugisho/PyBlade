@@ -27,4 +27,4 @@ def index(request):
         ],
     }
 
-    return render(request, "home", context)
+    return render(request, "index", context)

@@ -74,6 +74,11 @@ class Component:
         for key, value in form_data.items():
             setattr(self, key, value)
 
+    @staticmethod
+    def as_view():
+        """Render the component as a Django view"""
+        pass
+
 
 def bladeRedirect(route):
     return {"redirect": True, "url": route}
