@@ -26,9 +26,6 @@ class Component:
     def get_instance(cls, id: str):
         return cls.instances.get(id)
 
-    def render(self):
-        raise NotImplementedError()
-
     def get_html(self):
         return self.render()
 
@@ -74,9 +71,52 @@ class Component:
         for key, value in form_data.items():
             setattr(self, key, value)
 
+    def reset(self, *args):
+        """Reset properties to their initial values"""
+        pass
+
+    def pull(self, property):
+        """Retrieve the value of a property then reset it to the initial value"""
+        pass
+
+    def mount(self, *args, **kwargs):
+        """The equivalent of __init__()"""
+        pass
+
+    def boot(self):
+        pass
+
+    def render(self):
+        raise NotImplementedError()
+
+    def rendering(self):
+        pass
+
+    def rendered(self):
+        pass
+
+    def update(self):
+        pass
+
+    def updating(self):
+        pass
+
+    def updated(self):
+        pass
+
+    def serialize(self):
+        pass
+
+    def deserialize(self):
+        pass
+
+    @staticmethod
+    def exception(e, stopPropagation):
+        pass
+
     @staticmethod
     def as_view():
-        """Render the component as a Django view"""
+        """Render the component as a Django Template View"""
         pass
 
 
