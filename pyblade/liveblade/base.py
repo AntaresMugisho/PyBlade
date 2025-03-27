@@ -71,14 +71,7 @@ class Component:
         for key, value in form_data.items():
             setattr(self, key, value)
 
-    def reset(self, *args):
-        """Reset properties to their initial values"""
-        pass
-
-    def pull(self, property):
-        """Retrieve the value of a property then reset it to the initial value"""
-        pass
-
+    # Lifecycle hooks
     def mount(self, *args, **kwargs):
         """The equivalent of __init__()"""
         pass
@@ -110,8 +103,50 @@ class Component:
     def deserialize(self):
         pass
 
+    # Actions
+    def reset(self, *args):
+        """Reset properties to their initial values"""
+        pass
+
+    def pull(self, property: str):
+        """Retrieve the value of a property then reset it to the initial value"""
+        pass
+
+    def refresh(self):
+        """Make a server-roundtrip and re-render the component without calling any methods"""
+        pass
+
+    def toggle(self, property: bool):
+        """Toggle boolean properties"""
+        pass
+
+    def set(self, prop: str, value: Any):
+        """Update a property value"""
+        pass
+
+    def dispatch(self, event: str):
+        """Dispatch an event. Same as emit()"""
+        pass
+
+    def emit(self, event: str):
+        """Emit an event. Same as dispatch()"""
+        pass
+
+    def js(self, fn: str):
+        """Call js functions from python"""
+        pass
+
+    # Properties
+    @property
+    def event(self):
+        pass
+
+    @property
+    def parent(self):
+        pass
+
     @staticmethod
-    def exception(e, stopPropagation):
+    def exception(exc, stopPropagation):
         pass
 
     @staticmethod
@@ -119,10 +154,21 @@ class Component:
         """Render the component as a Django Template View"""
         pass
 
+    def skip_render(self):
+        """Call an action without calling the render method"""
+        pass
 
+
+# Navigation
 def bladeRedirect(route):
     return {"redirect": True, "url": route}
 
 
 def bladeNavigate(route):
     return {"navigate": True, "url": route}
+
+
+# Decorators
+def renderless(fn):
+    """Call an action without calling the render method"""
+    pass
