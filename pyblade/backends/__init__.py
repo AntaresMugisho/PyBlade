@@ -1,4 +1,4 @@
-from .django_backend import DjangoPyBlade
+from .django import PyBladeTemplates
 
 __all__ = [
     "DjangoPyBlade",

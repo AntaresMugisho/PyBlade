@@ -144,8 +144,8 @@ Project details :
         if self.framework.lower() == "django":
             try:
                 new_temp_settings = """{
-        "BACKEND": "pyblade.backends.DjangoPyBlade",
-        "DIRS": [BASE_DIR / "%s/templates"],
+        "BACKEND": "pyblade.backends.PyBladeTemplates",
+        "DIRS": [BASE_DIR / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -159,7 +159,7 @@ Project details :
 
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [BASE_DIR / "%s/templates"],
+        "DIRS": [BASE_DIR / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -170,10 +170,7 @@ Project details :
             ],
         },
     },
-    """ % (
-                    self.project_name,
-                    self.project_name,
-                )
+    """
 
                 with open(self.settings_path, "r") as file:
                     settings = file.read()
