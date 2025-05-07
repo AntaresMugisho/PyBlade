@@ -1,4 +1,4 @@
-from ..base import BaseCommand
+from pyblade.cli import BaseCommand
 
 
 class Command(BaseCommand):

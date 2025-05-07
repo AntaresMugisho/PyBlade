@@ -2,8 +2,9 @@ import re
 from pathlib import Path
 
 import questionary
-from base import BaseCommand
 from questionary import Choice
+
+from pyblade.cli import BaseCommand
 
 from ..utils import command
 from ..utils.console import console

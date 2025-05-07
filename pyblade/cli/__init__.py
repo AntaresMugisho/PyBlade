@@ -1,1 +1,1 @@
-from . import base, django_base
+from .base import BaseCommand

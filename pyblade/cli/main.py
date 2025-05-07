@@ -12,11 +12,13 @@ from .utils.console import console
 from .utils.version import __version__
 
 DEFAULT_COMMANDS = {
-    "Project commands": ["serve"],
-    # "Component commands": [
-    #     "make:component",
-    #     "make:liveblade",
-    # ],
+    "Project commands": ["init", "serve"],
+    "PyBlade commands": [
+        "make:command",
+        "hello",
+        # "make:component",
+        # "make:liveblade",
+    ],
     # "Django commands": [
     #     "db:migrate",
     #     "db:shell",

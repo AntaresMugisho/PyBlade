@@ -28,15 +28,20 @@ class HelpFormatter:
 
 
 class BaseCommand:
+
     name: str = ""  # Will come from the module name
     help: str = ""  # Will come from the Command class docstring
-    arguments: List[Dict] = []
-    options: List[Dict] = []
     aliases: List[str] = []
 
     def __init__(self):
         self.console = console
         self.settings = settings
+
+        self.arguments: List[Dict] = []
+        self.options: List[Dict] = []
+
+        if not self.name:
+            raise Exception("Command must profide a 'name' attribute")
 
     # Command configuration
     def config(self):
@@ -51,24 +56,28 @@ class BaseCommand:
     ):
         self.options.append({"name": args, "help": help, "required": required, "default": default, "is_flag": is_flag})
 
+    def add_flag(self, *args, help: str, required: bool = False):
+        self.add_option(*args, help=help, required=required, is_flag=True)
+
     @classmethod
     def create_click_command(cls):
         cmd = cls()
         cmd.config()
-        cmd.help = cls.help or cls.__doc__.strip()
+        cmd.help = cls.help or (cls.__doc__.strip() if cls.__doc__ else "")
 
         # Create a click command function
-        @click.command(name=cls.name, help=cmd.help)
+        @click.command(name=cmd.name, help=cmd.help)
         def click_command(**kwargs):
             return cmd.handle(**kwargs)
 
-        for arg in cls.arguments:
-            name = arg.pop("name")
-            click_command = click.argument(name, **arg)(click_command)
+        for params in cmd.arguments:
+            name = params.pop("name")
+            click_command = click.argument(name, **params)(click_command)
 
-        for option in cls.options:
-            name = option.pop("name")
-            click_command = click.option(*name, **option)(click_command)
+        for params in cmd.options:
+            name = params.pop("name")
+            # The name of a command option may be a tuple of strings (eg. ('-h', '--help'))
+            click_command = click.option(*name, **params)(click_command)
 
         return click_command
 

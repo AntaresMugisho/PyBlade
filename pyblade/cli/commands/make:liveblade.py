@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from ._base_command import BaseCommand
+from pyblade.cli import BaseCommand
 
 
 class MakeLivebladeCommand(BaseCommand):
