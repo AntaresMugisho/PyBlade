@@ -1,7 +1,7 @@
 from typing import List, Optional
 
-from ..utils import command
-from .base_command import BaseCommand
+from .base import BaseCommand
+from .utils import command
 
 
 class DjangoCommand(BaseCommand):

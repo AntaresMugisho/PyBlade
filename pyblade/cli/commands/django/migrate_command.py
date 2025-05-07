@@ -3,7 +3,7 @@ import re
 import shutil
 from pathlib import Path
 
-from ..commands.base_command import BaseCommand
+from ._base_command import BaseCommand
 
 _SETTINGS_PATERN = re.compile(
     r"\"\"\"(?P<banner>.*?)\"\"\"\s*.*?\s*INSTALLED_APPS\s=\s\[\s*(?P<installed_apps>.*?)\s*\]\s*.*?\s*MIDDLEWARE\s=\s\[\s*(?P<middleware>.*?)\s*\]\s*.*?\s*TEMPLATES\s=\s*\[\s*(?P<templates>\{.*?\},)\n\]",  # noqa E501

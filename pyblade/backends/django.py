@@ -6,7 +6,7 @@ from django.utils.module_loading import import_string
 from pyblade import PyBlade
 
 
-class PyBladeTemplates(BaseEngine):
+class PyBladeEngine(BaseEngine):
 
     app_dirname = "templates"
 

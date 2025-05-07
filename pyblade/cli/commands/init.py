@@ -2,9 +2,9 @@ import re
 from pathlib import Path
 
 import questionary
+from base import BaseCommand
 from questionary import Choice
 
-from ..commands.base_command import BaseCommand
 from ..utils import command
 from ..utils.console import console
 from ..utils.styles import PYBLADE_STYLE
@@ -16,9 +16,13 @@ _SETTINGS_PATERN = re.compile(
 )
 
 
-class InitCommand(BaseCommand):
+class Command(BaseCommand):
+    """
+    Creates a new PyBlade-powered project with the necessary initial directory structure
+    and your preferred framemework configuration.
+    """
+
     name = "init"
-    description = "Create a new PyBlade project"
 
     def handle(self, **kwargs):
         # Get project configuration
@@ -144,7 +148,7 @@ Project details :
         if self.framework.lower() == "django":
             try:
                 new_temp_settings = """{
-        "BACKEND": "pyblade.backends.PyBladeTemplates",
+        "BACKEND": "pyblade.backends.PyBladeEngine",
         "DIRS": [BASE_DIR / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {

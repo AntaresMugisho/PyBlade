@@ -1,4 +1,9 @@
+# import functools
 import importlib
+
+# import os
+import pkgutil
+from pathlib import Path
 
 import click
 from rich.table import Table
@@ -7,21 +12,21 @@ from .utils.console import console
 from .utils.version import __version__
 
 DEFAULT_COMMANDS = {
-    "Project commands": ["init", "migrate", "serve"],
-    "Component commands": [
-        "make:component",
-        "make:liveblade",
-    ],
-    "Django commands": [
-        "db:migrate",
-        "db:shell",
-        "shell",
-        "app:start",
-        "static:collect",
-        "make:migrations",
-        "make:messages",
-        "compile:messages",
-    ],
+    "Project commands": ["serve"],
+    # "Component commands": [
+    #     "make:component",
+    #     "make:liveblade",
+    # ],
+    # "Django commands": [
+    #     "db:migrate",
+    #     "db:shell",
+    #     "shell",
+    #     "app:start",
+    #     "static:collect",
+    #     "make:migrations",
+    #     "make:messages",
+    #     "compile:messages",
+    # ],
 }
 
 _CACHED_COMMANDS = {}
@@ -34,11 +39,9 @@ def load_commands():
             if cmd_name in _CACHED_COMMANDS.get(category, []):
                 continue
 
-            class_name = "".join([word.capitalize() for word in cmd_name.split(":")]) + "Command"
-            module = importlib.import_module(
-                f"pyblade.cli.commands.{class_name.removesuffix('Command')}_command".lower()
-            )
-            cmd_cls = getattr(module, class_name)
+            module = importlib.import_module(f"pyblade.cli.commands.{cmd_name}")
+
+            cmd_cls = getattr(module, "Command")
             cmd_instance = cmd_cls.create_click_command()
             cli.add_command(cmd_instance)
 
@@ -85,6 +88,16 @@ class CommandGroup(click.Group):
 @click.help_option("-h", "--help")
 def cli():
     """PyBlade CLI - The modern Python web frameworks development toolkit"""
+
+
+def find_commands(command_dir=None):
+    """
+    Given a path to a command directory, return a list of all the command
+    names that are available.
+    """
+
+    command_dir = Path(command_dir) / "commands"
+    return [name for _, name, is_pkg in pkgutil.iter_modules([command_dir]) if not is_pkg and not name.startswith("_")]
 
 
 load_commands()

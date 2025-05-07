@@ -1,7 +1,7 @@
 from pyblade import PyBlade
 
 
-class PyBladeTemplates:
+class PyBladeEngine:
 
     def __init__(self, params):
         self.engine = PyBlade(dirs="templates")

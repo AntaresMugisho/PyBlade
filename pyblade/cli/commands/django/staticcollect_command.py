@@ -1,6 +1,6 @@
 import click
 
-from .django_command import DjangoCommand
+from ._django_command import DjangoCommand
 
 
 class StaticCollectCommand(DjangoCommand):

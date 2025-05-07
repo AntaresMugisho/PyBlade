@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from ..commands.base_command import BaseCommand
+from ._base_command import BaseCommand
 
 
 class MakeLivebladeCommand(BaseCommand):

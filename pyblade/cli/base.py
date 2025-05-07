@@ -1,36 +1,83 @@
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 import click
 import questionary
 from rich.progress import track
 
-from ..exceptions import PyBladeException
-from ..utils.console import console
-from ..utils.settings import settings
+from .utils.console import console
+from .utils.settings import settings
+
+
+class CommandParser:
+    arguments: List[str] = []
+    options: Dict[str, Dict[str, str]] = {}
+
+    @classmethod
+    def add_argument(cls, name: str, help: str, required: bool = True, default: str | int | bool = None):
+        cls.arguments.append({name: {"help": help, "required": required}})
+
+    @classmethod
+    def add_option(
+        cls, name: str | Tuple | List[str], help: str, required: bool = False, default: str | int | bool = None
+    ):
+        cls.options = {name: {"help": help, "required": required, "default": default}}
+
+
+class HelpFormatter:
+    pass
 
 
 class BaseCommand:
-    name: str = ""
-    description: str = ""
-    arguments: List[str] = []
-    options: Dict[str, Dict[str, Any]] = {}
+    name: str = ""  # Will come from the module name
+    help: str = ""  # Will come from the Command class docstring
+    arguments: List[Dict] = []
+    options: List[Dict] = []
     aliases: List[str] = []
 
     def __init__(self):
         self.console = console
-        self.validate_command_config()
-
         self.settings = settings
 
-    def validate_command_config(self):
-        if not self.name:
-            raise PyBladeException("Command name must be defined")
-        if not self.description:
-            raise PyBladeException("Command description must be defined")
+    # Command configuration
+    def config(self):
+        """Used to define command arguments and options"""
+        pass
 
+    def add_argument(self, name: str, required: bool = True, default: str | int | bool = None):
+        self.arguments.append({"name": name, "required": required, "default": default})
+
+    def add_option(
+        self, *args, help: str, required: bool = False, is_flag: bool = False, default: str | int | bool = None
+    ):
+        self.options.append({"name": args, "help": help, "required": required, "default": default, "is_flag": is_flag})
+
+    @classmethod
+    def create_click_command(cls):
+        cmd = cls()
+        cmd.config()
+        cmd.help = cls.help or cls.__doc__.strip()
+
+        # Create a click command function
+        @click.command(name=cls.name, help=cmd.help)
+        def click_command(**kwargs):
+            return cmd.handle(**kwargs)
+
+        for arg in cls.arguments:
+            name = arg.pop("name")
+            click_command = click.argument(name, **arg)(click_command)
+
+        for option in cls.options:
+            name = option.pop("name")
+            click_command = click.option(*name, **option)(click_command)
+
+        return click_command
+
+    # Main command function handler
     def handle(self, **kwargs):
+        """Used to define the command bihavior"""
         raise NotImplementedError("Command must implement handle method")
 
+    # Helpers
     def argument(self, arg: str):
         """Must return the value of the argument if it exists or None if not"""
         pass
@@ -82,19 +129,3 @@ class BaseCommand:
 
     def track(self, items: List[Any], description: str = "Processing...\n"):
         return track(items, description=f"{description}\n")
-
-    @classmethod
-    def create_click_command(cls):
-        cmd_instance = cls()
-
-        @click.command(name=cls.name, help=cls.description)
-        def click_command(**kwargs):
-            return cmd_instance.handle(**kwargs)
-
-        for arg in cls.arguments:
-            click_command = click.argument(arg)(click_command)
-
-        for option_name, option_config in cls.options.items():
-            click_command = click.option(f"--{option_name}", **option_config)(click_command)
-
-        return click_command

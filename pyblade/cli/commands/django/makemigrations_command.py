@@ -1,6 +1,6 @@
 from typing import List
 
-from .django_command import DjangoCommand
+from ._django_command import DjangoCommand
 
 
 # TODO: Fix this command
