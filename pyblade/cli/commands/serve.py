@@ -3,8 +3,7 @@ from pyblade.cli import BaseCommand
 
 class Command(BaseCommand):
     """
-    Starts a lightweight web server for development and also serves static files,
-    allowing you to preview your project locally as you are coding.
+    Start a lightweight web server for development.
     """
 
     name = "serve"

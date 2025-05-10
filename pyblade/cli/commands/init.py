@@ -19,8 +19,7 @@ _SETTINGS_PATERN = re.compile(
 
 class Command(BaseCommand):
     """
-    Creates a new PyBlade-powered project with the necessary initial directory structure
-    and your preferred framemework configuration.
+    Start a new PyBlade-powered project.
     """
 
     name = "init"

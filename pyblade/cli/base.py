@@ -2,9 +2,9 @@ from typing import Any, Dict, List, Tuple
 
 import click
 import questionary
+from rich.console import Console as console
 from rich.progress import track
 
-from .utils.console import console
 from .utils.settings import settings
 
 
@@ -28,13 +28,11 @@ class HelpFormatter:
 
 
 class BaseCommand:
-
-    name: str = ""  # Will come from the module name
+    name: str = ""
     help: str = ""  # Will come from the Command class docstring
     aliases: List[str] = []
 
     def __init__(self):
-        self.console = console
         self.settings = settings
 
         self.arguments: List[Dict] = []
@@ -116,22 +114,22 @@ class BaseCommand:
 
     # Command output
     def info(self, message: str):
-        self.console.print(f"[blue]{message}[/blue]")
+        console.print(f"[blue]{message}[/blue]")
 
     def success(self, message: str):
-        self.console.print(f"[green]✔️ {message}[/green]")
+        console.print(f"[green]✔️ {message}[/green]")
 
     def error(self, message: str):
-        self.console.print(f"[red]❌ {message}[/red]")
+        console.print(f"[red]❌ {message}[/red]")
 
     def warning(self, message: str):
-        self.console.print(f"[yellow]⚠️ {message}[/yellow]")
+        console.print(f"[yellow]⚠️ {message}[/yellow]")
 
     def line(self, message: str):
-        self.console.print(message)
+        console.print(message)
 
     def new_line(self, n: int = 1):
-        self.console.print("\n" * n)
+        console.print("\n" * n)
 
     def newline(self, n: int = 1):
         self.new_line(n)

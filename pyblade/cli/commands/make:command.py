@@ -5,7 +5,7 @@ from pyblade.cli import BaseCommand
 
 class Command(BaseCommand):
     """
-    Generates a new PyBlade command file in the management folder
+    Create a new PyBlade command file.
     """
 
     name = "make:command"

@@ -3,9 +3,12 @@ from pathlib import Path
 from pyblade.cli import BaseCommand
 
 
-class MakeComponentCommand(BaseCommand):
+class Command(BaseCommand):
+    """
+    Create a new PyBlade component file.
+    """
+
     name = "make:component"
-    description = "Create a new PyBlade component"
     arguments = ["name"]
 
     def handle(self, **kwargs):

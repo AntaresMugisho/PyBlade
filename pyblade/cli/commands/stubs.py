@@ -3,10 +3,10 @@ from pyblade.cli import BaseCommand
 
 class Command(BaseCommand):
     """
-    Hello command example
+    Generate PyBlade stub files for customization.
     """
 
-    name = "hello"
+    name = "stubs"
     aliases = []  # Other possible names for the command
 
     def config(self):
@@ -14,6 +14,5 @@ class Command(BaseCommand):
         ...
 
     def handle(self, **kwargs):
-        """Execute the 'pyblade hello' command"""
-
-        self.line("Holla")
+        """Execute the 'pyblade stubs' command"""
+        ...

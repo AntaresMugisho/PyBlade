@@ -3,9 +3,12 @@ from pathlib import Path
 from pyblade.cli import BaseCommand
 
 
-class MakeLivebladeCommand(BaseCommand):
+class Command(BaseCommand):
+    """
+    Create a new LiveBlade component.
+    """
+
     name = "make:liveblade"
-    description = "Create a new LiveBlade component"
     arguments = ["name"]
     options = {
         "name": {
