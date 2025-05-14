@@ -1,7 +1,156 @@
 from typing import List, Optional
 
-from .base import BaseCommand
+import click
+
+from pyblade.cli import BaseCommand
+
 from .utils import command
+
+# Mapping of Django commands to PyBlade command aliases
+DJANGO_COMMAND_ALIASES = {
+    "check": [],
+    "compilemessages": ["messages:compile"],
+    "createcachetable": [],
+    "dbshell": ["db:shell"],
+    "diffsettings": [],
+    "dumpdata": ["data:dump"],
+    "flush": [],
+    "inspectdb": ["db:inspect"],
+    "loaddata": ["data:load"],
+    "makemessages": ["make:messages", "messages:make"],
+    "makemigrations": ["make:migrations"],
+    "migrate": [],
+    "optimizemigration": ["migrations:optimize"],
+    "runserver": ["serve"],
+    "sendtestemail": [],
+    "shell": [],
+    "showmigrations": ["migrations:show"],
+    "sqlflush": ["sql:flush"],
+    "sqlmigrate": ["sql:migrate"],
+    "sqlsequencereset": ["sql:reset"],
+    "squashmigrations": ["migrations:squash"],
+    "startapp": ["app:start"],
+    "startproject": ["project:start"],
+    "test": [],
+    "testserver": ["server:test"],
+}
+
+
+class DjangoCommandWrapper(BaseCommand):
+    """Wrapper for Django commands to integrate with Click."""
+
+    def __init__(self, django_command_name: str, app_name: str):
+        self.django_command_name = django_command_name
+        self.app_name = app_name
+        self._django_command = None
+        self.name = django_command_name
+        self.aliases = []
+
+        # Set aliases for this command (if any)
+        for cmd_name, aliases in DJANGO_COMMAND_ALIASES.items():
+            if cmd_name == self.django_command_name:
+                self.aliases = aliases
+
+    def handle(self, **kwargs):
+        self.line(
+            f"This will run [python manage.py \
+            {self.django_command_name, ' '.join(f'{k}={v}' for k, v in kwargs.items())}"
+        )
+
+    def load_django_command(self):
+        """Load the actual Django command to extract help text and arguments."""
+        from django.core.management import load_command_class
+
+        if not self._django_command:
+            self._django_command = load_command_class(self.app_name, self.django_command_name)
+        return self._django_command
+
+    def get_help_text(self) -> str:
+        """Extract help text from Django command."""
+        try:
+            cmd = self.load_django_command()
+            return getattr(cmd, "help", f"Django {self.django_command_name} command")
+        except Exception:
+            return f"Django {self.django_command_name} command"
+
+    def create_parser(self):
+        """Create a parser for the Django command to extract options."""
+        try:
+            cmd = self.load_django_command()
+            parser = cmd.create_parser("manage.py", self.django_command_name)
+            return parser
+        except Exception:
+            return None
+
+    def create_click_command(self) -> click.Command:
+        """Create a Click command that mirrors Django command parameters."""
+        help_text = self.get_help_text()
+        parser = self.create_parser()
+        print(parser.__dict__)
+
+        @click.command(name=self.django_command_name, help=help_text)
+        def click_command(**kwargs):
+            return self.handle(**kwargs)
+
+        # if parser:
+        #     # Process parser's actions to extract parameters
+        #     for action in parser._actions:
+        #         # Skip the help action as Click adds it automatically
+        #         if action.dest == 'help':
+        #             continue
+
+        #         # Handle positional arguments
+        #         if not action.option_strings:
+        #             if action.dest == 'args':
+        #                 # This is a catch-all for remaining arguments
+        #                 click_command = click.argument(['args'], nargs=-1,
+        #                                                     metavar=action.metavar or 'ARGS',
+        #                                                     help=action.help)
+        #             else:
+        #                 # Regular positional argument
+        #                click_command = click.argument([action.dest],
+        #                                                 required=action.required,
+        #                                                 metavar=action.metavar or action.dest.upper(),
+        #                                                 help=action.help)
+        #         else:
+        #             # Handle optional arguments/flags
+        #             param_kwargs = {
+        #                 'help': action.help or '',
+        #                 'required': action.required,
+        #             }
+
+        #             # Determine parameter type
+        #             if action.type:
+        #                 if action.type == int:
+        #                     param_kwargs['type'] = click.INT
+        #                 elif action.type == float:
+        #                     param_kwargs['type'] = click.FLOAT
+        #                 elif action.type == bool:
+        #                     param_kwargs['is_flag'] = True
+
+        #             # Handle choices if available
+        #             if action.choices:
+        #                 param_kwargs['type'] = click.Choice(action.choices)
+
+        #             # Handle default values
+        #             if action.default is not None and action.default != '' \
+        # and not (hasattr(action, 'const') and action.const == action.default):
+        #                 param_kwargs['default'] = action.default
+        #                 param_kwargs['show_default'] = True
+
+        #             # Create the option with all option strings
+        #             option_strings = [
+        #                 s if len(s) > 2 else s.replace('--', '-')
+        #                 for s in action.option_strings
+        #             ]
+
+        #             # Convert Python dest to Click param name (e.g., verbosity -> --verbosity)
+        #             dest = action.dest.replace('_', '-')
+
+        #             # Create the Click Option
+        #             click_command = click.option(option_strings or [f'--{dest}'], **param_kwargs)
+
+        return click_command
 
 
 class DjangoCommand(BaseCommand):
@@ -25,8 +174,6 @@ class DjangoCommand(BaseCommand):
         """Run a Django management command."""
         if not self.django_command:
             raise ValueError("django_command must be set in the command class")
-
-        self._check_django_project()
 
         cmd = ["python", "manage.py", self.django_command]
         if args:

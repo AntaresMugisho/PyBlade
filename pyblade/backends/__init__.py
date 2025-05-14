@@ -1,5 +1,5 @@
-from .django import PyBladeTemplates
+from .django import PyBladeEngine
 
 __all__ = [
-    "DjangoPyBlade",
+    "PyBladeEngine",
 ]
