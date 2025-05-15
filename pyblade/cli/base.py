@@ -4,10 +4,20 @@ import click
 import questionary
 from rich.console import Console
 from rich.progress import track
+from rich.theme import Theme
 
 from .utils.settings import settings
 
-console = Console()
+custom_theme = Theme(
+    {
+        "info": "white on blue bold",
+        "warning": "white on yellow bold",
+        "danger": "white on red bold",
+    }
+)
+
+
+console = Console(theme=custom_theme)
 
 
 class BaseCommand:
@@ -87,7 +97,7 @@ class BaseCommand:
         return questionary.select(message, choices, default=default).ask()
 
     def select(self, message: str, choices: List[str], default: str | None = None) -> str:
-        return questionary.select(message, choices, default=default).ask()
+        return self.choice(message=message, choices=choices, default=default)
 
     def checkbox(self, message: str, choices: List[str], default: List[str] | None = []) -> List[str]:
         return questionary.checkbox(message, choices, default=default).ask()
@@ -97,16 +107,16 @@ class BaseCommand:
 
     # Command output
     def info(self, message: str):
-        console.print(f"[blue]{message}[/blue]")
+        console.print(f"[info] INFO  [/info] {message}")
 
     def success(self, message: str):
-        console.print(f"[green]✔️ {message} [/green]")
+        console.print(f"[green] ✔️ [/green] [bold] {message}[bold]")
 
     def error(self, message: str):
-        console.print(f"[red]❌ {message} [/red]")
+        console.print(f"[danger] ERROR [/danger] {message}")
 
     def warning(self, message: str):
-        console.print(f"[yellow]⚠️ {message} [/yellow]")
+        console.print(f"[warning] WARN  [/warning] {message}")
 
     def line(self, message: str):
         console.print(message)

@@ -53,7 +53,11 @@ class DjangoCommandWrapper(BaseCommand):
                 self.aliases = aliases
 
     def handle(self, **kwargs):
-        self.error(f"This will run [python manage.py {kwargs}")
+        self.success("Test")
+        self.info("Test")
+        self.warning("Test")
+        self.error("Test")
+        # self.error(f"This will run [python manage.py {kwargs}")
 
     def load_django_command(self):
         """Load the actual Django command to extract help text and arguments."""
