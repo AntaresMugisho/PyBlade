@@ -99,7 +99,7 @@ def load_django_commands():
             except Exception as e:
                 click.echo(f"Failed to load Django command {cmd_name}: {str(e)}", err=True)
 
-        return django_commands
+        return sorted(django_commands, key=lambda c: c.name)
 
     except ImportError:
         click.echo("Django not found. Django commands will not be available.", err=True)

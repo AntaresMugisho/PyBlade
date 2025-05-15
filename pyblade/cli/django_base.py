@@ -51,12 +51,15 @@ class DjangoCommandWrapper(BaseCommand):
         for cmd_name, aliases in DJANGO_COMMAND_ALIASES.items():
             if cmd_name == self.django_command_name:
                 self.aliases = aliases
+                if self.aliases:
+                    self.name = self.aliases[0]
+                    self.aliases[0] = self.django_command_name
 
     def handle(self, **kwargs):
-        self.success("Test")
         self.info("Test")
         self.warning("Test")
         self.error("Test")
+        self.success("Test")
         # self.error(f"This will run [python manage.py {kwargs}")
 
     def load_django_command(self):
