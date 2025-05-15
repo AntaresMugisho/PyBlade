@@ -1,30 +1,13 @@
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List
 
 import click
 import questionary
-from rich.console import Console as console
+from rich.console import Console
 from rich.progress import track
 
 from .utils.settings import settings
 
-
-class CommandParser:
-    arguments: List[str] = []
-    options: Dict[str, Dict[str, str]] = {}
-
-    @classmethod
-    def add_argument(cls, name: str, help: str, required: bool = True, default: str | int | bool = None):
-        cls.arguments.append({name: {"help": help, "required": required}})
-
-    @classmethod
-    def add_option(
-        cls, name: str | Tuple | List[str], help: str, required: bool = False, default: str | int | bool = None
-    ):
-        cls.options = {name: {"help": help, "required": required, "default": default}}
-
-
-class HelpFormatter:
-    pass
+console = Console()
 
 
 class BaseCommand:
@@ -117,13 +100,13 @@ class BaseCommand:
         console.print(f"[blue]{message}[/blue]")
 
     def success(self, message: str):
-        console.print(f"[green]✔️ {message}[/green]")
+        console.print(f"[green]✔️ {message} [/green]")
 
     def error(self, message: str):
-        console.print(f"[red]❌ {message}[/red]")
+        console.print(f"[red]❌ {message} [/red]")
 
     def warning(self, message: str):
-        console.print(f"[yellow]⚠️ {message}[/yellow]")
+        console.print(f"[yellow]⚠️ {message} [/yellow]")
 
     def line(self, message: str):
         console.print(message)

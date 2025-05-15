@@ -15,12 +15,12 @@ from .utils.version import __version__
 DEFAULT_COMMANDS = {
     "Project commands": ["init", "convert", "serve", "deploy"],
     "PyBlade commands": [
-        "cache:clear",
-        "config:cache",
+        # "cache:clear",
+        # "config:cache",
         "docs",
         "info",
-        "login",
-        "logout",
+        # "login",
+        # "logout",
         "make:command",
         "make:component",
         "make:liveblade",
@@ -28,7 +28,7 @@ DEFAULT_COMMANDS = {
         "route:list",
         "stubs",
         "update",
-        "upgrade",
+        # "upgrade",
     ],
 }
 
@@ -57,9 +57,6 @@ def find_project_root():
 
 def load_commands():
     """Load all commands and categorize them."""
-    # Skip loading if commands are already cached
-    if _CACHED_COMMANDS:
-        return
 
     # Load PyBlade commands
     for category, commands in DEFAULT_COMMANDS.items():
@@ -69,7 +66,7 @@ def load_commands():
                 click_cmd = register(cmd)
                 _CACHED_COMMANDS.setdefault(category, []).append(click_cmd)
             except (ImportError, AttributeError) as e:
-                console.print(f"[red]Failed to load command {cmd_name}: {str(e)}[/red]")
+                console.print(f"[red]Failed to load PyBlade Command {cmd_name}: {str(e)}[/red]")
 
     # Load Django commands if the project is based on Django Framework
     commands = load_django_commands()
@@ -88,7 +85,6 @@ def load_django_commands():
         from django.core.management import get_commands as get_django_commands
 
         django_commands_dict = get_django_commands()
-        processed_commands = set()
 
         # Process Django commands
         for cmd_name, app_name in django_commands_dict.items():
@@ -99,7 +95,6 @@ def load_django_commands():
 
                 # Add command to our list
                 django_commands.append(click_cmd)
-                processed_commands.add(cmd_name)
 
             except Exception as e:
                 click.echo(f"Failed to load Django command {cmd_name}: {str(e)}", err=True)
@@ -150,8 +145,10 @@ def find_commands(command_dir):
 def register(cmd):
     """Register a command with Click CLI."""
     click_cmd = cmd.create_click_command()
-    cli.add_command(click_cmd)
-    for alias in getattr(cmd, "aliases", []):
+
+    cli.add_command(click_cmd, name=cmd.name)
+
+    for alias in cmd.aliases:
         cli.add_command(click_cmd, name=alias)
     return click_cmd
 
@@ -163,7 +160,7 @@ class CommandGroup(click.Group):
         """Format the help text with Rich formatting."""
         console.print(
             """
-[bold]Welcome to the [blue]PyBlade CLI[/blue][/bold]
+[bold]Welcome in the [blue]PyBlade CLI[/blue][/bold]
 [italic]- The modern Python web development toolkit -[/italic]
 
 [bold italic]Usage[/bold italic]: [blue]pyblade COMMAND [ARGUMENTS] [OPTIONS] [/blue]
@@ -175,37 +172,16 @@ class CommandGroup(click.Group):
 """
         )
 
-        if _CACHED_COMMANDS:
-            table = Table(show_header=True, header_style="white", box=None)
-            table.add_column("Command", justify="left")
-            table.add_column("Description", justify="left")
+        table = Table(show_header=True, header_style="white", box=None)
+        table.add_column("Command", justify="left")
+        table.add_column("Description", justify="left")
+        for category, commands in _CACHED_COMMANDS.items():
 
-            # Order categories logically
-            category_order = ["Project commands", "PyBlade commands", "Django Commands", "Custom Commands"]
-            all_categories = list(_CACHED_COMMANDS.keys())
+            table.add_row(f"\n[yellow]{category}[/yellow]")
+            for cmd in commands:
+                table.add_row(f"  [blue]{cmd.name}[/blue]", cmd.help)
 
-            # First display categories in our preferred order
-            for category in category_order:
-                if category in all_categories:
-                    table.add_row(f"\n[yellow]{category}[/yellow]")
-
-                    # Sort commands alphabetically within each category
-                    commands = sorted(_CACHED_COMMANDS[category], key=lambda x: x.name)
-                    for cmd in commands:
-                        table.add_row(f"  [blue]{cmd.name}[/blue]", cmd.help)
-
-                    all_categories.remove(category)
-
-            # Then display any remaining categories
-            for category in sorted(all_categories):
-                table.add_row(f"\n[yellow]{category}[/yellow]")
-                commands = sorted(_CACHED_COMMANDS[category], key=lambda x: x.name)
-                for cmd in commands:
-                    table.add_row(f"  [blue]{cmd.name}[/blue]", cmd.help)
-
-            console.print(table)
-        else:
-            console.print("[red]No commands registered.[/red]")
+        console.print(table)
 
         console.print("\nUse [blue]pyblade COMMAND --help[/blue] for more information about a specific command.\n")
 
