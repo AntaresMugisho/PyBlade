@@ -11,13 +11,31 @@ from .utils.settings import settings
 custom_theme = Theme(
     {
         "info": "white on blue bold",
-        "warning": "white on yellow bold",
+        "warning": "black on yellow bold",
         "danger": "white on red bold",
     }
 )
 
 
 console = Console(theme=custom_theme)
+
+
+class Argument(click.Argument):
+    """Custom argument class"""
+
+    ...
+
+
+class Option(click.Option):
+    """Custom Option class"""
+
+    ...
+
+
+class ClickCommand(click.Command):
+    """Custom Click Command class"""
+
+    ...
 
 
 class BaseCommand:
@@ -107,16 +125,16 @@ class BaseCommand:
 
     # Command output
     def info(self, message: str):
-        console.print(f"[info] INFO  [/info] {message}")
+        console.print(f" [info] INFO [/info] {message}\n")
 
     def success(self, message: str):
-        console.print(f"[green] ✔️ [/green] [bold] {message}[bold]")
+        console.print(f" [green] ✔️[/green] [bold] {message}[bold]\n")
 
     def error(self, message: str):
-        console.print(f"[danger] ERROR [/danger] {message}")
+        console.print(f" [danger] ERROR [/danger] {message}\n")
 
     def warning(self, message: str):
-        console.print(f"[warning] WARN  [/warning] {message}")
+        console.print(f" [warning] WARN [/warning] {message}\n")
 
     def line(self, message: str):
         console.print(message)
@@ -127,5 +145,5 @@ class BaseCommand:
     def newline(self, n: int = 1):
         self.new_line(n)
 
-    def track(self, items: List[Any], description: str = "Processing...\n"):
+    def track(self, items: List[Any], description: str = "Processing..."):
         return track(items, description=f"{description}\n")

@@ -7,7 +7,7 @@ from rich.table import Table
 
 from pyblade.cli import BaseCommand
 
-from .django_base import DjangoCommandWrapper
+from .django_base import DjangoCommand
 from .utils.console import console
 from .utils.version import __version__
 
@@ -90,7 +90,7 @@ def load_django_commands():
         for cmd_name, app_name in django_commands_dict.items():
             try:
                 # Create wrapper for the Django command
-                wrapper = DjangoCommandWrapper(cmd_name, app_name)
+                wrapper = DjangoCommand(cmd_name, app_name)
                 click_cmd = register(wrapper)
 
                 # Add command to our list

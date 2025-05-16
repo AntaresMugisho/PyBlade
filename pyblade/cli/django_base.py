@@ -1,5 +1,4 @@
 import os
-from typing import List, Optional
 
 import click
 
@@ -37,7 +36,7 @@ DJANGO_COMMAND_ALIASES = {
 }
 
 
-class DjangoCommandWrapper(BaseCommand):
+class DjangoCommand(BaseCommand):
     """Wrapper for Django commands to integrate with Click."""
 
     def __init__(self, django_command_name: str, app_name: str):
@@ -46,6 +45,8 @@ class DjangoCommandWrapper(BaseCommand):
         self._django_command = None
         self.name = django_command_name
         self.aliases = []
+
+        super().__init__()
 
         # Set aliases for this command (if any)
         for cmd_name, aliases in DJANGO_COMMAND_ALIASES.items():
@@ -56,11 +57,28 @@ class DjangoCommandWrapper(BaseCommand):
                     self.aliases[0] = self.django_command_name
 
     def handle(self, **kwargs):
-        self.info("Test")
-        self.warning("Test")
-        self.error("Test")
-        self.success("Test")
-        # self.error(f"This will run [python manage.py {kwargs}")
+        arguments = [a.get("name") for a in self.arguments]
+
+        argv = []
+        for param, value in kwargs.items():
+            if value:
+                if param in arguments:
+                    # Handle positional arguments
+                    argv.append(f"{value}")
+                else:
+                    # Handle flags
+                    option = param.replace("_", "-")
+                    if isinstance(value, bool):
+                        argv.append(f"--{option}")
+                    else:
+                        # Hanlle options
+                        argv.append(f"--{option}={value}")
+
+        cmd = ["python", "manage.py", self.django_command_name, *argv]
+        try:
+            command.run(cmd, cwd=self.settings.pyblade_root)
+        except Exception:
+            pass
 
     def load_django_command(self):
         """Load the actual Django command to extract help text and arguments."""
@@ -81,7 +99,7 @@ class DjangoCommandWrapper(BaseCommand):
             os.environ.setdefault("DJANGO_SETTINGS_MODULE", "examples.django_backend.django_backend.settings")
 
         cmd = self.load_django_command()
-        parser = cmd.create_parser("manage.py", self.django_command_name)
+        parser = cmd.create_parser("", self.django_command_name)
         return parser
 
     def _reordered_actions(self, actions):
@@ -99,14 +117,8 @@ class DjangoCommandWrapper(BaseCommand):
         }
         return sorted(actions, key=lambda a: set(a.option_strings) & show_last != set())
 
-    def create_click_command(self) -> click.Command:
-        """Create a Click command that mirrors Django command parameters."""
-        help_text = self.get_help_text()
+    def config(self):
         parser = self.create_parser()
-
-        @click.command(name=self.name, help=help_text)
-        def click_command(**kwargs):
-            return self.handle(**kwargs)
 
         if parser:
             actions = self._reordered_actions(parser._actions)
@@ -115,23 +127,24 @@ class DjangoCommandWrapper(BaseCommand):
                 if action.dest == "help":
                     continue
 
+                # Skip suppressed actions
+                if action.default == "==SUPPRESS==" or action.help == "==SUPPRESS==":
+                    continue
+
                 # Handle positional arguments
                 if not action.option_strings:
                     if action.dest == "args":
                         # This is a cath-all for remaining arguments
-                        # self.add_argument(action.metavar, required=action.required, help=action.help)
-                        click_command = click.argument(
-                            action.metavar,
-                            # help=action.help,
-                            required=action.required,
-                        )(click_command)
+                        self.add_argument(action.metavar, required=action.required, default=action.default)
+
                     else:
                         # Regular positional argument
-                        click_command = click.argument(
+                        self.add_argument(
                             action.dest,
                             # help=action.help,
                             required=action.required,
-                        )(click_command)
+                            default=action.default,
+                        )
                 else:
                     # Handle optional arguments / flags
                     param_kwargs = {
@@ -139,57 +152,48 @@ class DjangoCommandWrapper(BaseCommand):
                         "required": action.required,
                     }
 
+                    # Handle default values
+                    if action.default:
+                        param_kwargs["default"] = action.default
+
                     # Determine option type
                     if action.type:
-                        if action.type == int:
-                            param_kwargs["type"] = click.INT
-                        elif action.type == float:
-                            param_kwargs["type"] = click.FLOAT
-                        elif action.type == bool:
+                        # if action.type == int:
+                        #     param_kwargs["type"] = click.INT
+                        # elif action.type == float:
+                        #     param_kwargs["type"] = click.FLOAT
+                        if action.type == bool:
                             param_kwargs["is_flag"] = True
+                            param_kwargs["default"] = None
 
-                    # Handle choices if available
+                    # Handle choices if available (This is commented cause it's causing some types errors in click)
                     # if action.choices:
                     # param_kwargs["type"] = click.Choice(action.choices)
 
-                    # Handle default values
-                    if action.default and action.default != "==SUPPRESS==":
-                        param_kwargs["default"] = action.default
+                    # Add the option in the list
+                    self.add_option(*action.option_strings, **param_kwargs)
 
-                    # Create the Click Option
-                    click_command = click.option(*action.option_strings, **param_kwargs)(click_command)
+    def create_click_command(self) -> click.Command:
+        """Create a Click command that mirrors Django command parameters."""
+        self.config()
+        help_text = self.get_help_text()
+
+        @click.command(name=self.name, help=help_text)
+        def click_command(**kwargs):
+            return self.handle(**kwargs)
+
+        for argument in self.arguments:
+            click_command = click.argument(
+                argument.get("name"), required=argument.get("required"), default=argument.get("default")
+            )(click_command)
+
+        for option in self.options:
+            click_command = click.option(
+                *option.get("name"),
+                help=option.get("help"),
+                required=option.get("required"),
+                default=option.get("default"),
+                is_flag=option.get("is_flag", False),
+            )(click_command)
+
         return click_command
-
-
-class DjangoCommand(BaseCommand):
-    """Base class for Django-specific commands."""
-
-    django_command: str = ""  # The Django management command to run
-
-    def __init__(self):
-        super().__init__()
-
-    def _check_django_project(self):
-        """Check if we're in a Django project directory."""
-        manage_py = self.settings.pyblade_root / "manage.py"
-        if not manage_py.exists():
-            raise FileNotFoundError(
-                "manage.py not found. "
-                "Please make sure you're in a Django project directory and you are in the environment."
-            )
-
-    def _run_django_command(self, args: Optional[List[str]] = None, capture_output: bool = False) -> Optional[str]:
-        """Run a Django management command."""
-        if not self.django_command:
-            raise ValueError("django_command must be set in the command class")
-
-        cmd = ["python", "manage.py", self.django_command]
-        if args:
-            cmd.extend(args)
-
-        try:
-            output = command.run(cmd, cwd=self.settings.pyblade_root)
-            return output
-        except command.RunError as e:
-            self.error(e.stderr)
-            return
