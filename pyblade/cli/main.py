@@ -13,7 +13,12 @@ from .utils.version import __version__
 
 # Default commands organized by category
 DEFAULT_COMMANDS = {
-    "Project commands": ["init", "convert", "serve", "deploy"],
+    "Project commands": [
+        "init",
+        "convert",
+        "serve",
+        # "deploy"
+    ],
     "PyBlade commands": [
         # "cache:clear",
         # "config:cache",

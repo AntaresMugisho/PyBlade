@@ -57,6 +57,8 @@ class DjangoCommand(BaseCommand):
                     self.aliases[0] = self.django_command_name
 
     def handle(self, **kwargs):
+        """Execute the equivalent Django command"""
+
         arguments = [a.get("name") for a in self.arguments]
 
         argv = []

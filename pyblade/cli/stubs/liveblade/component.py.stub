@@ -1,0 +1,8 @@
+from pyblade import liveblade
+
+class {name.title()}(liveblade.Component):
+
+    def render(self):
+        """ Render templates/liveblade/{name}.html"""
+
+        return self.view(context={{}})
