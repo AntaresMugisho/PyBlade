@@ -1,15 +1,11 @@
 import re
 from pathlib import Path
 
-import questionary
 from questionary import Choice
 
 from pyblade.cli import BaseCommand
 
 from ..utils import command
-from ..utils.console import console
-from ..utils.styles import PYBLADE_STYLE
-from ..utils.version import __version__
 
 _SETTINGS_PATERN = re.compile(
     r"\"\"\"(?P<banner>.*?)\"\"\"\s*.*?\s*INSTALLED_APPS\s=\s\[\s*(?P<installed_apps>.*?)\s*\]\s*.*?\s*MIDDLEWARE\s=\s\[\s*(?P<middleware>.*?)\s*\]\s*.*?\s*TEMPLATES\s=\s*\[\s*(?P<templates>\{.*?\},)\n\]",  # noqa E501
@@ -25,92 +21,85 @@ class Command(BaseCommand):
     name = "init"
 
     def handle(self, **kwargs):
-        # Get project configuration
-        self.project_data = self._get_project_info()
 
-        # Extract project details
-        self.project_name, self.framework, self.css_framework, self.use_liveblade = self.project_data.values()
+        # Get project configuration
+        self.project_name = self.ask(
+            "What is your project name?",
+            default="my_project",
+        )
+
+        self.framework = self.choice(
+            "Which Python web framework would you like to use?",
+            choices=["Django"],
+        )
+
+        self.css_framework = self.choice(
+            "Would you like to configure a CSS framework?",
+            choices=["Tailwind 4", "Bootstrap 5", Choice("Not sure", False)],
+        )
+
+        self.use_liveblade = self.confirm(
+            "Would you like to use Liveblade?",
+        )
+
+        # Extract important project data
         self.default_app_path = Path(self.project_name) / self.project_name
         self.settings_path = self.default_app_path / "settings.py"
         self.cli_path = Path(__file__).parent.parent
 
-        if not self.project_data:
-            return
-
         # Confirm project details
-        console.print(
+        self.line(
             f"""
 Project details :
     - Project name : [bold]{self.project_name}[/bold]
     - Framework : [bold]{self.framework}[/bold]
     - CSS framework : [bold]{self.css_framework or 'None'}[/bold]
-    - Use LiveBlade : [bold]{'Yes' if self.use_liveblade else 'No'}[/bold]
+    - Use Liveblade : [bold]{'Yes' if self.use_liveblade else 'No'}[/bold]
 """
         )
 
-        if not questionary.confirm("Is this correct?").ask():
-            self.error("Project creation cancelled.")
+        if not self.confirm("Is this correct?"):
+            self.info("Project creation cancelled.")
             return
 
-        with console.status("[blue]Installing dependencies...[/blue]\n\n") as status:
+        # Generate project
+        with self.status("[blue]Installing dependencies...[/blue]\n\n"):
             self._install_dependencies()
 
-            status.update(f"[blue]Starting a new [bold]{self.framework}[/bold] project...[/blue]")
-            try:
-                command.run(["django-admin", "startproject", self.project_name])
-            except command.RunError as e:
-                self.error(e.stderr)
-                return
+            # status.update(f"[blue]Starting a new [bold]{self.framework}[/bold] project...[/blue]")
+            # try:
+            #     command.run(["django-admin", "startproject", self.project_name])
+            # except command.RunError as e:
+            #     self.error(e.stderr)
+            #     return
 
-            status.update("[blue]Configuring PyBlade Template Engine...[/blue]\n\n")
-            self._configure_pyblade()
+            # status.update("[blue]Configuring PyBlade Template Engine...[/blue]\n\n")
+            # self._configure_pyblade()
 
-            if self.use_liveblade:
-                status.update("[blue]Configuring LiveBlade...[/blue]\n\n")
-                self._configure_liveblade()
+            # if self.use_liveblade:
+            #     status.update("[blue]Configuring LiveBlade...[/blue]\n\n")
+            #     self._configure_liveblade()
 
-            if self.css_framework:
-                if "tailwind" in self.css_framework.lower():
-                    status.update("[blue]Configuring Tailwind CSS...[/blue]\n\n")
-                    self._configure_tailwind()
+            # if self.css_framework:
+            #     if "tailwind" in self.css_framework.lower():
+            #         status.update("[blue]Configuring Tailwind CSS...[/blue]\n\n")
+            #         self._configure_tailwind()
 
-                elif "bootstrap" in self.css_framework.lower():
-                    status.update("[blue]Configuring Bootstrap 5...[/blue]\n\n")
-                    self._configure_bootstrap()
+            #     elif "bootstrap" in self.css_framework.lower():
+            #         status.update("[blue]Configuring Bootstrap 5...[/blue]\n\n")
+            #         self._configure_bootstrap()
 
-            self.settings.pyblade_root = Path(self.project_name)
-            self.pyblade_settings = {
-                "name": self.project_name,
-                "framework": self.framework,
-                "css_framework": self.css_framework or None,
-                "pyblde_version": __version__,
-            }
+            # self.settings.pyblade_root = Path(self.project_name)
+            # self.pyblade_settings = {
+            #     "name": self.project_name,
+            #     "framework": self.framework,
+            #     "css_framework": self.css_framework or None,
+            #     "pyblde_version": __version__,
+            # }
 
-            self.settings.serialize(self.pyblade_settings)
+            # self.settings.serialize(self.pyblade_settings)
 
-            self.success("Pyblade Project created successfully !")
-
-    @staticmethod
-    def _get_project_info():
-        """Get project information from user"""
-        return questionary.form(
-            project_name=questionary.text("What is your project name?", default="my_project", style=PYBLADE_STYLE),
-            framework=questionary.select(
-                "Which Python web framework would you like to use?",
-                choices=["Django", "Flask"],
-                style=PYBLADE_STYLE,
-            ),
-            css_framework=questionary.select(
-                "Would you like to install a CSS framework?",
-                choices=["Tailwind CSS", "Bootstrap 5", Choice("Not sure", False)],
-                style=PYBLADE_STYLE,
-            ),
-            use_liveblade=questionary.select(
-                "Would you like to use LiveBlade for interactive UI?",
-                choices=[Choice("Yes", True), Choice("No", False)],
-                style=PYBLADE_STYLE,
-            ),
-        ).ask()
+            # self.success("Pyblade Project created successfully !")
 
     def _install_dependencies(self):
         """Install project dependencies based on configuration"""
@@ -279,7 +268,6 @@ Project details :
     def _pip_install(self, package: str):
         """Installs a Python package using pip."""
         try:
-            return command.run(["pip3", "install", package])
+            command.run(["pip3", "install", package])
         except command.RunError as e:
             self.error(e.stderr)
-            return
