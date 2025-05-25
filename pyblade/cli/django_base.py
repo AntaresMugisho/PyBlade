@@ -3,8 +3,8 @@ import os
 import click
 
 from pyblade.cli import BaseCommand
-
-from .utils import command
+from pyblade.cli.utils import run_command
+from pyblade.config import settings
 
 # Mapping of Django commands to PyBlade command aliases
 DJANGO_COMMAND_ALIASES = {
@@ -78,7 +78,7 @@ class DjangoCommand(BaseCommand):
 
         cmd = ["python", "manage.py", self.django_command_name, *argv]
         try:
-            command.run(cmd, cwd=self.settings.pyblade_root)
+            run_command(cmd, cwd=settings.root_dir)
         except Exception:
             pass
 

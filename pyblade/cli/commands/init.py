@@ -1,11 +1,15 @@
 import re
+import time
 from pathlib import Path
 
 from questionary import Choice
 
 from pyblade.cli import BaseCommand
+from pyblade.cli.exceptions import RunError
+from pyblade.cli.utils import run_command
 
-from ..utils import command
+# from pyblade.config import settings
+
 
 _SETTINGS_PATERN = re.compile(
     r"\"\"\"(?P<banner>.*?)\"\"\"\s*.*?\s*INSTALLED_APPS\s=\s\[\s*(?P<installed_apps>.*?)\s*\]\s*.*?\s*MIDDLEWARE\s=\s\[\s*(?P<middleware>.*?)\s*\]\s*.*?\s*TEMPLATES\s=\s*\[\s*(?P<templates>\{.*?\},)\n\]",  # noqa E501
@@ -30,7 +34,7 @@ class Command(BaseCommand):
 
         self.framework = self.choice(
             "Which Python web framework would you like to use?",
-            choices=["Django"],
+            choices=[Choice("Django", "django")],
         )
 
         self.css_framework = self.choice(
@@ -43,8 +47,9 @@ class Command(BaseCommand):
         )
 
         # Extract important project data
-        self.default_app_path = Path(self.project_name) / self.project_name
-        self.settings_path = self.default_app_path / "settings.py"
+        self.root_dir = Path(self.project_name)
+        self.core_dir = Path(self.project_name) / self.project_name
+        self.settings_dir = self.core_dir / "settings.py"
         self.cli_path = Path(__file__).parent.parent
 
         # Confirm project details
@@ -63,14 +68,38 @@ Project details :
             return
 
         # Generate project
-        with self.status("[blue]Installing dependencies...[/blue]\n\n"):
+        with self.status("[blue]Creating a PyBlade-powered project...[/blue]\n\n") as status:
             self._install_dependencies()
 
-            # status.update(f"[blue]Starting a new [bold]{self.framework}[/bold] project...[/blue]")
+            status.update(f"[blue]Starting a new [bold]{self.framework}[/bold] project...[/blue]")
+            status.update("Starting a new django project...")
+            time.sleep(2)
+            self.check("Starting a new django project")
+
+            status.update("Configuring django project...")
+            time.sleep(2)
+            self.check("Configuring django project")
+
+            status.update("Installing tailwind CSS 4...")
+            time.sleep(2)
+            self.check("Installing tailwind CSS 4")
+
+            status.update("Configuring tailwind CSS 4...")
+            time.sleep(2)
+            self.check("Configuring tailwind CSS 4")
+
+            status.update("Configuring Liveblade")
+            time.sleep(3)
+            self.check("Done")
+
+            status.update("Final touches...")
+            time.sleep(3)
+            self.success("Project created successfully.")
+            self.line("Run [blue]pyblade serve[/blue] to start a development server.\n")
             # try:
-            #     command.run(["django-admin", "startproject", self.project_name])
-            # except command.RunError as e:
-            #     self.error(e.stderr)
+            #     run_command(["django-admin", "startproject", self.project_name])
+            # except RunError as e:
+            #     self.error(e.stderr or "Read the traceback for more information")
             #     return
 
             # status.update("[blue]Configuring PyBlade Template Engine...[/blue]\n\n")
@@ -238,7 +267,7 @@ Project details :
 
                 try:
                     # Create theme app
-                    command.run(["python", "manage.py", "tailwind", "init", "--no-input"], cwd=Path(self.project_name))
+                    run_command(["python", "manage.py", "tailwind", "init", "--no-input"], cwd=Path(self.project_name))
                     self.line("\tTailwind application 'theme' has been successfully created.")
 
                     # Add the theme app to settings.py
@@ -250,8 +279,8 @@ Project details :
                         file.write(new_settings)
 
                     # Install tailwind
-                    command.run(["python", "manage.py", "tailwind", "install"], cwd=Path(self.project_name))
-                except command.RunError as e:
+                    run_command(["python", "manage.py", "tailwind", "install"], cwd=Path(self.project_name))
+                except RunError as e:
                     self.error(
                         f"Failed to configure Tailwind: {str(e.stderr)}\n"
                         "Please Configure manually by running 'pyblade tailwind:init'"
@@ -268,6 +297,6 @@ Project details :
     def _pip_install(self, package: str):
         """Installs a Python package using pip."""
         try:
-            command.run(["pip3", "install", package])
-        except command.RunError as e:
+            run_command(["pip3", "install", package])
+        except RunError as e:
             self.error(e.stderr)

@@ -3,13 +3,15 @@ import pkgutil
 from pathlib import Path
 
 import click
+from rich.console import Console
 from rich.table import Table
 
 from pyblade.cli import BaseCommand
+from pyblade.utils import get_version
 
 from .django_base import DjangoCommand
-from .utils.console import console
-from .utils.version import __version__
+
+console = Console()
 
 # Default commands organized by category
 DEFAULT_COMMANDS = {
@@ -32,8 +34,7 @@ DEFAULT_COMMANDS = {
         "make:template",
         "route:list",
         "stubs",
-        "update",
-        # "upgrade",
+        "upgrade",
     ],
 }
 
@@ -191,8 +192,11 @@ class CommandGroup(click.Group):
         console.print("\nUse [blue]pyblade COMMAND --help[/blue] for more information about a specific command.\n")
 
 
+version = get_version()
+
+
 @click.group(cls=CommandGroup)
-@click.version_option(__version__, "-v", "--version", message=f"\npyblade {__version__}\n")
+@click.version_option(version, "-v", "--version", message=f"\npyblade {version}\n")
 @click.help_option("-h", "--help")
 def cli():
     """PyBlade CLI - The modern Python web frameworks development toolkit"""

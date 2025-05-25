@@ -147,6 +147,9 @@ class BaseCommand:
     def warning(self, message: str):
         console.print(f" [warning] WARN [/warning] {message}\n")
 
+    def check(self, message: str):
+        console.print(f"[green] ✔️[/green] {message}")
+
     def line(self, message: str):
         console.print(message)
 
