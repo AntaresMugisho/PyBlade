@@ -9,9 +9,7 @@
 </head>
 <body>
     <div class="container">
-        @yield("header")
         @yield("main")
-        @yield("footer")
     </div>
     @bootstrap_javascript
     @yield("extra_js")

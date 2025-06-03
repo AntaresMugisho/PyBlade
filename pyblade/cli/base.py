@@ -1,3 +1,4 @@
+from collections import namedtuple
 from typing import Any, Dict, List
 
 import click
@@ -120,7 +121,7 @@ class BaseCommand:
 
     # Prompting for inputs
     def ask(self, message: str, default: str = "") -> str:
-        return questionary.text(message, default=default, style=questionnary_style).ask()
+        return questionary.text(message, default=default, style=questionnary_style).ask(kbi_msg="Aborted !")
 
     def confirm(self, message: str, default: bool = False) -> bool:
         return questionary.confirm(message, default=default).ask()
@@ -134,12 +135,16 @@ class BaseCommand:
     def secret(self, message: str, default: str | None = None) -> str:
         return questionary.password(message, default=default).ask()
 
+    def form(self, **questions):
+        Response = namedtuple("Response", questions.keys())
+        return Response(*[answer for answer in questions.values()])
+
     # Command output
     def info(self, message: str):
         console.print(f" [info] INFO [/info] {message}\n")
 
     def success(self, message: str):
-        console.print(f" [green] ✔️[/green] [bold] {message}[bold]\n")
+        console.print(f"[green] ✔️[/green] [bold] {message}[bold]\n")
 
     def error(self, message: str):
         console.print(f" [danger] ERROR [/danger] {message}\n")
@@ -147,7 +152,7 @@ class BaseCommand:
     def warning(self, message: str):
         console.print(f" [warning] WARN [/warning] {message}\n")
 
-    def check(self, message: str):
+    def ok(self, message: str):
         console.print(f"[green] ✔️[/green] {message}")
 
     def line(self, message: str):
@@ -160,7 +165,7 @@ class BaseCommand:
         self.new_line(n)
 
     def status(self, message: str):
-        return console.status(message)
+        return console.status(f"[blue]{message}[/blue]\n")
 
     def track(self, items: List[Any], description: str = "Processing..."):
         return track(items, description=f"{description}\n")
