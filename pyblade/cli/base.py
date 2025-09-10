@@ -121,19 +121,19 @@ class BaseCommand:
 
     # Prompting for inputs
     def ask(self, message: str, default: str = "") -> str:
-        return questionary.text(message, default=default, style=questionnary_style).ask(kbi_msg="Aborted !")
+        return questionary.text(message, default=default, style=questionnary_style).unsafe_ask()
 
     def confirm(self, message: str, default: bool = False) -> bool:
-        return questionary.confirm(message, default=default).ask()
+        return questionary.confirm(message, default=default).unsafe_ask()
 
     def choice(self, message: str, choices: List, default: str | None = None) -> str:
-        return questionary.select(message, choices, default=default).ask()
+        return questionary.select(message, choices, default=default).unsafe_ask()
 
     def checkbox(self, message: str, choices: List[str], default: List[str] | None = None) -> List[str]:
-        return questionary.checkbox(message, choices, default=default).ask()
+        return questionary.checkbox(message, choices, default=default).unsafe_ask()
 
     def secret(self, message: str, default: str | None = None) -> str:
-        return questionary.password(message, default=default).ask()
+        return questionary.password(message, default=default).unsafe_ask()
 
     def form(self, **questions):
         Response = namedtuple("Response", questions.keys())
@@ -151,9 +151,6 @@ class BaseCommand:
 
     def warning(self, message: str):
         console.print(f" [warning] WARN [/warning] {message}\n")
-
-    def ok(self, message: str):
-        console.print(f"[green] ✔️[/green] {message}")
 
     def line(self, message: str):
         console.print(message)

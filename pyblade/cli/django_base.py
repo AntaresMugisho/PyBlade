@@ -102,6 +102,10 @@ class DjangoCommand(BaseCommand):
 
         cmd = self.load_django_command()
         parser = cmd.create_parser("", self.django_command_name)
+
+        # Remove the DJANGO8SETTINGS_MODULE from env to prevent conflicts
+        os.environ.pop("DJANGO_SETTINGS_MODULE")
+
         return parser
 
     def _reordered_actions(self, actions):
