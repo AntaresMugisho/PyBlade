@@ -200,7 +200,7 @@ class Command(BaseCommand):
                 with open(stubs_path / "bootstrap_layout.html.stub", "r") as file:
                     base_template = file.read()
 
-                with open(self.settings.root_dir / "templates" / "layout.html", "w") as file:
+                with open(self.settings.root_dir / "templates/layout.html", "w") as file:
                     file.write(base_template)
 
             except Exception as e:
