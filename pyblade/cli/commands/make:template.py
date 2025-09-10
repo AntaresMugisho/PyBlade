@@ -19,18 +19,22 @@ class Command(BaseCommand):
     def handle(self, **kwargs):
         """Execute the 'pyblade make:template' command"""
 
-        templates_path = Path(settings.templates_dir)
-        stubs_path = Path(__file__).parent.parent / "stubs"
-
         template_name = kwargs.get("name").split(".")
 
-        p = Path(templates_path, *template_name[:-1])
+        p = Path(settings.templates_dir, *template_name[:-1])
         p.mkdir(parents=True, exist_ok=True)
 
+        html_path = p / f"{template_name[-1]}.html"
+
+        if html_path.exists():
+            self.error(f"Template '{html_path}' already exists.")
+            return
+
+        stubs_path = Path(__file__).parent.parent / "stubs"
         with open(stubs_path / "template.html.stub", "r") as file:
             template = file.read()
 
-        with open(p / f"{template_name[-1]}.html", "w") as file:
+        with open(html_path, "w") as file:
             file.write(template)
 
-        self.success(f"""Created template '{p / f"{template_name[-1]}.html"}' successfully.""")
+        self.success(f"""Created template '{html_path}' successfully.""")
