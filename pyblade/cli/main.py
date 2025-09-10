@@ -32,6 +32,7 @@ DEFAULT_COMMANDS = {
         "make:component",
         "make:liveblade",
         "make:template",
+        "tailwind:configure",
         "route:list",
         "stubs",
         "upgrade",

@@ -33,7 +33,7 @@ class Command(BaseCommand):
                 ),
                 css_framework=self.choice(
                     "Would you like to configure a CSS framework?",
-                    choices=["Tailwind 4", "Bootstrap 5", Choice("Not sure", False)],
+                    choices=["TailwindCSS 4", "Bootstrap 5", Choice("Not sure", False)],
                 ),
             )
         except KeyboardInterrupt:
