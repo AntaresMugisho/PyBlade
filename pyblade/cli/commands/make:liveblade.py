@@ -39,8 +39,8 @@ class Command(BaseCommand):
             if not kwargs.get("force"):
                 self.error(f"Component '{component_name}' already exists at {python_file}")
                 self.tip(
-                    "Use [bright_black]--force[/bright_black] to override the existing \
-                    component or choose a different name."
+                    "Use [bright_black]--force[/bright_black] to override the existing "
+                    "component or choose a different name."
                 )
                 return
 

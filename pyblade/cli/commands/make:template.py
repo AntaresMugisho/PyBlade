@@ -31,8 +31,8 @@ class Command(BaseCommand):
             if not kwargs.get("force"):
                 self.error(f"Template '{html_path}' already exists.")
                 self.tip(
-                    "Use [bright_black]--force[/bright_black] to override the existing \
-                    template or choose a different name."
+                    "Use [bright_black]--force[/bright_black] to override the existing "
+                    "template or choose a different name."
                 )
                 return
 

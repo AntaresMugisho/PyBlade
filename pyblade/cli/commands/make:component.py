@@ -1,6 +1,6 @@
-from pathlib import Path
-
 from pyblade.cli import BaseCommand
+from pyblade.cli.utils import pascal_to_snake
+from pyblade.config import settings
 
 
 class Command(BaseCommand):
@@ -9,35 +9,35 @@ class Command(BaseCommand):
     """
 
     name = "make:component"
-    arguments = ["name"]
+
+    def config(self):
+        """Setup command arguments and options here"""
+        self.add_argument("name")
+        self.add_flag("-f", "--force", help="Create the component even if it already exists")
 
     def handle(self, **kwargs):
         """Create a new component in the templates directory."""
-        component_name = kwargs.get("name")
-        templates_dir = self.settings.pyblade_root / Path(self.settings.project_name) / "templates"
-        components_dir = templates_dir / "components"
+        component_name = pascal_to_snake(kwargs.get("name"))
 
-        # Ensure templates directory exists
-        if not components_dir.exists():
-            components_dir.mkdir(parents=True)
+        components_dir = settings.components_dir
+        components_dir.mkdir(parents=True, exist_ok=True)
 
-        # Create component path
-        component_path = components_dir / f"{component_name}.html"
+        component_file = components_dir / f"{component_name}.html"
 
-        if component_path.exists():
-            self.error(f"Component '{component_name}' already exists at {component_path}")
-            overwrite = self.confirm("Do you want to overwrite it?", default=False)
-            if not overwrite:
-                return
-
-        # Create component with template
-        with open(component_path, "w") as f:
-            f.write(
-                """@props({})
-
-<div>
-    {# Component content goes here #}
-</div>
-"""
+        if component_file.exists():
+            self.error(f"Component '{component_name}' already exists at {component_file}")
+            self.tip(
+                "Use [bright_black]--force[/bright_black] to override the existing "
+                "component or choose a different name."
             )
-        self.info(f"Component created successfully at '{component_path}'")
+            return
+
+        html_stub = settings.stubs_dir / "component.html.stub"
+
+        with open(html_stub, "r") as file:
+            component_template = file.read()
+
+        with open(component_file, "w") as f:
+            f.write(component_template)
+
+        self.success(f"Component created successfully at '{component_file}'")

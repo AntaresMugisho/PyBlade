@@ -7,10 +7,14 @@ from typing import Dict, Self
 class Config:
 
     DEFAULTS = {
-        "templates_dir": "templates",
-        "components_dir": "templates/components",
+        "templates_dir": Path("templates"),
+        "components_dir": Path("templates/components"),
         "stubs_dir": Path(__file__).parent / "cli/stubs",
-        "liveblade": {"paginator": "undefined", "components_dir": "liveblade", "templates_dir": "templates/liveblade"},
+        "liveblade": {
+            "paginator": "undefined",
+            "components_dir": Path("liveblade"),
+            "templates_dir": Path("templates/liveblade"),
+        },
     }
 
     def __init__(
