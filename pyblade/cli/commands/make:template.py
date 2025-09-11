@@ -15,6 +15,7 @@ class Command(BaseCommand):
     def config(self):
         """Setup command arguments and options here"""
         self.add_argument("name")
+        self.add_flag("-f", "--force", help="Create the template even if it already exists")
 
     def handle(self, **kwargs):
         """Execute the 'pyblade make:template' command"""
@@ -27,8 +28,13 @@ class Command(BaseCommand):
         html_path = p / f"{template_name[-1]}.html"
 
         if html_path.exists():
-            self.error(f"Template '{html_path}' already exists.")
-            return
+            if not kwargs.get("force"):
+                self.error(f"Template '{html_path}' already exists.")
+                self.tip(
+                    "Use [bright_black]--force[/bright_black] to override the existing \
+                    template or choose a different name."
+                )
+                return
 
         stubs_path = Path(__file__).parent.parent / "stubs"
         with open(stubs_path / "template.html.stub", "r") as file:

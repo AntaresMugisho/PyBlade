@@ -8,8 +8,9 @@ class Config:
 
     DEFAULTS = {
         "templates_dir": "templates",
-        "components_dir": "templates.components",
-        "liveblade": {"paginator": "undefined", "components_dir": "liveblade", "templates_dir": "templates.liveblade"},
+        "components_dir": "templates/components",
+        "stubs_dir": Path(__file__).parent / "cli/stubs",
+        "liveblade": {"paginator": "undefined", "components_dir": "liveblade", "templates_dir": "templates/liveblade"},
     }
 
     def __init__(

@@ -15,6 +15,7 @@ console = Console(
             "info": "white on blue bold",
             "warning": "black on yellow bold",
             "danger": "white on red bold",
+            "tip": "white on grey46 bold",
         }
     )
 )
@@ -151,6 +152,9 @@ class BaseCommand:
 
     def warning(self, message: str):
         console.print(f" [warning] WARN [/warning] {message}\n")
+
+    def tip(self, message: str):
+        console.print(f" [tip] TIPS [/tip] {message}\n")
 
     def line(self, message: str):
         console.print(message)

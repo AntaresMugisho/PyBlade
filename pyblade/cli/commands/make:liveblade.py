@@ -1,6 +1,8 @@
 from pathlib import Path
 
 from pyblade.cli import BaseCommand
+from pyblade.cli.utils import pascal_to_snake, snakebab_to_pascal
+from pyblade.config import settings
 
 
 class Command(BaseCommand):
@@ -9,65 +11,66 @@ class Command(BaseCommand):
     """
 
     name = "make:liveblade"
-    arguments = ["name"]
-    options = {
-        "name": {
-            "help": "Name of the component",
-            "default": "liveblade",
-        },
-    }
+
+    def config(self):
+        """Setup command arguments and options here"""
+        self.add_argument("name")
+        self.add_flag("-i", "--inline", help="Embed the HTML template in the Python component class file")
+        self.add_flag("-f", "--force", help="Create the Liveblade component even if it already exists")
 
     def handle(self, **kwargs):
-        """Create a new LiveBlade component."""
-        component_name = kwargs.get("name")
+        """Create a new Liveblade component."""
 
-        templates_dir = self.settings.pyblade_root / Path(self.settings.project_name) / "templates"
-        liveblade_dir = templates_dir / "liveblade"
-        components_dir = Path(self.settings.pyblade_root) / "liveblade"
+        component_name = pascal_to_snake(kwargs.get("name"))
 
-        # Ensure liveblade directory exists
-        if not liveblade_dir.exists():
-            liveblade_dir.mkdir(parents=True)
+        components_dir = Path(settings.liveblade.components_dir)
+        templates_dir = Path(settings.liveblade.templates_dir)
 
-        # Ensure components directory exists
-        if not components_dir.exists():
-            components_dir.mkdir(parents=True)
+        # Ensure liveblade directories exist
+        components_dir.mkdir(parents=True, exist_ok=True)
+        templates_dir.mkdir(parents=True, exist_ok=True)
 
         # Create component path
-        html_file = liveblade_dir / f"{component_name}.html"
+        html_file = templates_dir / f"{component_name}.html"
         python_file = components_dir / f"{component_name}.py"
 
         # Check for existing files
         if html_file.exists() or python_file.exists():
-            self.warning(f"Component '{component_name}' already exists at {html_file}")
-            overwrite = self.confirm("Do you want to overwrite it?", default=False)
-            if not overwrite:
+            if not kwargs.get("force"):
+                self.error(f"Component '{component_name}' already exists at {python_file}")
+                self.tip(
+                    "Use [bright_black]--force[/bright_black] to override the existing \
+                    component or choose a different name."
+                )
                 return
 
-        # Create HTML template
-        with open(html_file, "w") as f:
-            f.write(
-                """<div>
-    {# Component content goes here #}
-</div>
-"""
+        stubs_dir = settings.stubs_dir / "liveblade"
+
+        if not kwargs.get("inline"):
+            python_stub = stubs_dir / "component.py.stub"
+            html_stub = stubs_dir / "template.html.stub"
+
+            # Create HTML template
+            with open(html_stub, "r") as file:
+                html_template = file.read()
+
+            with open(html_file, "w") as file:
+                file.write(html_template)
+
+        else:
+            python_stub = stubs_dir / "inline_component.py.stub"
+
+        # Create Python component
+        with open(python_stub, "r") as file:
+            python_template = file.read()
+            python_template = python_template.format(
+                class_name=snakebab_to_pascal(component_name), template_name=html_file
             )
 
-        # Create Python file
-        with open(python_file, "w") as f:
-            f.write(
-                f"""from pyblade import liveblade
+        with open(python_file, "w") as file:
+            file.write(python_template)
 
-class {component_name.title()}Component(liveblade.Component):
-
-    def render(self):
-        # Render liveblade/{component_name}.html
-
-        return self.view(context={{}})
-"""
-            )
-
-        self.success("LiveBlade component created successfully:")
-        self.line(f"  - HTML: {html_file}")
+        self.success("Liveblade component created successfully:")
         self.line(f"  - Python: {python_file}")
-        self.newline()
+        if not kwargs.get("inline"):
+            self.line(f"  - HTML: {html_file}")

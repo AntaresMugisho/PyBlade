@@ -1,3 +1,4 @@
+import re
 import subprocess
 from pathlib import Path
 from typing import List, Optional
@@ -16,3 +17,14 @@ def run_command(command: List[str] | str, cwd: Optional[Path] = None) -> None:
         return result
     except subprocess.CalledProcessError as e:
         raise RunError(e)
+
+
+def pascal_to_snake(string: str) -> str:
+    """Convert a PascalCased string to snake_cased string"""
+    s1 = re.sub(r"(.)([A-Z][a-z]+)", r"\1_\2", string)
+    return re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", s1).lower().replace("-", "_")
+
+
+def snakebab_to_pascal(string: str) -> str:
+    """Converts a snake_cased or kebab-cased string to PascalCased string"""
+    return string.title().replace("_", "").replace("-", "")
