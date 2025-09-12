@@ -22,19 +22,17 @@ DEFAULT_COMMANDS = {
         # "deploy"
     ],
     "PyBlade commands": [
-        # "cache:clear",
-        # "config:cache",
+        "cache:clear",
         "docs",
-        "info",
         # "login",
         # "logout",
         "make:command",
         "make:component",
         "make:liveblade",
         "make:template",
-        "tailwind:configure",
         "route:list",
-        "stubs",
+        # "stubs",
+        "tailwind:configure",
         "upgrade",
     ],
 }

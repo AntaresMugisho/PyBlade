@@ -97,8 +97,9 @@ class DjangoCommand(BaseCommand):
 
     def create_parser(self):
         """Create a parser for the Django command to extract options."""
-        if not os.environ.get("DJANGO_SETTINGS_MODULE"):
-            os.environ.setdefault("DJANGO_SETTINGS_MODULE", "examples.django_backend.django_backend.settings")
+        # if not os.environ.get("DJANGO_SETTINGS_MODULE"):
+        # # TODO: Find a way to load the settings from the current project
+        #     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "examples.django_backend.django_backend.settings")
 
         cmd = self.load_django_command()
         parser = cmd.create_parser("", self.django_command_name)

@@ -28,3 +28,13 @@ def pascal_to_snake(string: str) -> str:
 def snakebab_to_pascal(string: str) -> str:
     """Converts a snake_cased or kebab-cased string to PascalCased string"""
     return string.title().replace("_", "").replace("-", "")
+
+
+def get_project_root():
+    """Find the project root directory by looking for pyblade.json."""
+    current = Path.cwd()
+
+    for directory in [current, *current.parents]:
+        if (directory / "pyblade.json").exists():
+            return directory
+    raise Exception(f"Not a PyBlade project (or any parent up to mount point {current.parents[-1]})")

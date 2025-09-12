@@ -31,5 +31,3 @@ class Command(BaseCommand):
         kwargs.setdefault(addr)
         if no_reload:
             kwargs.setdefault("--noreload")
-
-        print("Kwrgs => ", kwargs)

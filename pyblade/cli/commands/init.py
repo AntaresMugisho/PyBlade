@@ -23,7 +23,6 @@ class Command(BaseCommand):
     name = "init"
 
     def handle(self, **kwargs):
-
         try:
             self.project = self.form(
                 name=self.ask("What is your project name ?", default="my_project"),
@@ -115,16 +114,21 @@ class Command(BaseCommand):
     def _configure_pyblade(self):
         """Configures PyBlade for the project."""
 
-        self.settings = Config(config_file=f"{self.project.name}/pyblade.json")
+        self.settings = Config(config_file=Path(self.project.name, "pyblade.json"))
 
         self.settings.name = self.project.name
-        self.settings.root_dir = self.project.name
-        self.settings.core_dir = f"{self.project.name}/{self.project.name}"
+        self.settings.core_dir = self.project.name
         self.settings.settings_path = f"{self.settings.core_dir}/settings.py"
-        self.settings.framework = self.project.framework
+        self.settings.framework = {"name": self.project.framework, "version": get_version(self.project.framework)}
         self.settings.css_framework = self.project.css_framework
         self.settings.pyblade_version = get_version()
         self.settings.save()
+
+        # Update without saving to prevent absolute path in a file that might be pubished
+        # on a different server
+
+        self.settings.root_dir = Path(self.project.name)
+        self.settings.settings_path = self.settings.root_dir / self.settings.core_dir / "settings.py"
 
         # Create directories
         directories = [
@@ -134,7 +138,7 @@ class Command(BaseCommand):
         ]
 
         for directory in directories:
-            Path(self.settings.root_dir).mkdir(parents=True, exist_ok=True)
+            Path(self.settings.root_dir, directory).mkdir(parents=True, exist_ok=True)
 
         # Configure PyBlade in settings.py if it's a django project
         if self.project.framework == "django":

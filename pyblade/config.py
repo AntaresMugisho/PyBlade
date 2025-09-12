@@ -19,7 +19,7 @@ class Config:
 
     def __init__(
         self,
-        config_file: str = Path.cwd() / "pyblade.json",
+        config_file: str = Path("pyblade.json"),
         data: Dict | None = None,
         parent: Self | None = None,
         key: str | None = None,
