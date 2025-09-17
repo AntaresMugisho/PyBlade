@@ -1,5 +1,7 @@
 import importlib
+import os
 import pkgutil
+import sys
 from pathlib import Path
 
 import click
@@ -7,6 +9,8 @@ from rich.console import Console
 from rich.table import Table
 
 from pyblade.cli import BaseCommand
+from pyblade.cli.utils import get_project_root
+from pyblade.config import settings
 from pyblade.utils import get_version
 
 from .django_base import DjangoCommand
@@ -31,33 +35,13 @@ DEFAULT_COMMANDS = {
         "make:liveblade",
         "make:template",
         "route:list",
-        # "stubs",
-        "tailwind:configure",
+        "tailwind:config",
         "upgrade",
     ],
 }
 
 # Cache for commands
 _CACHED_COMMANDS = {}
-
-
-def get_project_config():
-    """
-    Get project configuration from pyblade.json.
-    Returns None if the file doesn't exist or is invalid.
-    """
-
-    return None
-
-
-def find_project_root():
-    """Find the project root directory by looking for pyblade.json."""
-    current_dir = Path.cwd()
-    while current_dir != current_dir.parent:
-        if (current_dir / "pyblade.json").exists():
-            return current_dir
-        current_dir = current_dir.parent
-    return None
 
 
 def load_commands():
@@ -74,17 +58,24 @@ def load_commands():
                 console.print(f"[red]Failed to load PyBlade Command {cmd_name}: {str(e)}[/red]")
 
     # Load Django commands if the project is based on Django Framework
-    commands = load_django_commands()
-    if commands:
-        _CACHED_COMMANDS["Django commands"] = commands
+    if settings.framework and settings.framework == "django":
+        commands = load_django_commands()
+        if commands:
+            _CACHED_COMMANDS["Django commands"] = commands
 
-    # Load custom commands
+    # Load custom pyblade commands
     # load_custom_commands()
 
 
 def load_django_commands():
     """Load and register all Django commands."""
     django_commands = []
+
+    root_dir = get_project_root()
+    sys.path.insert(0, root_dir)
+    settings_path_wo_ext = os.path.splitext(settings.settings_path)[0]
+    settings_module = settings_path_wo_ext.replace("/", ".")
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", settings_module)
 
     try:
         from django.core.management import get_commands as get_django_commands
@@ -101,8 +92,8 @@ def load_django_commands():
                 # Add command to our list
                 django_commands.append(click_cmd)
 
-            except Exception as e:
-                click.echo(f"Failed to load Django command {cmd_name}: {str(e)}", err=True)
+            except Exception:
+                pass
 
         return sorted(django_commands, key=lambda c: c.name)
 

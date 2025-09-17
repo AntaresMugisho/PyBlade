@@ -1,5 +1,3 @@
-import os
-
 import click
 
 from pyblade.cli import BaseCommand
@@ -73,7 +71,7 @@ class DjangoCommand(BaseCommand):
                     if isinstance(value, bool):
                         argv.append(f"--{option}")
                     else:
-                        # Hanlle options
+                        # Handle options
                         argv.append(f"--{option}={value}")
 
         cmd = ["python", "manage.py", self.django_command_name, *argv]
@@ -105,7 +103,7 @@ class DjangoCommand(BaseCommand):
         parser = cmd.create_parser("", self.django_command_name)
 
         # Remove the DJANGO8SETTINGS_MODULE from env to prevent conflicts
-        os.environ.pop("DJANGO_SETTINGS_MODULE")
+        # os.environ.pop("DJANGO_SETTINGS_MODULE")
 
         return parser
 

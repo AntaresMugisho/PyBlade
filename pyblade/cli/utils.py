@@ -38,3 +38,7 @@ def get_project_root():
         if (directory / "pyblade.json").exists():
             return directory
     raise Exception(f"Not a PyBlade project (or any parent up to mount point {current.parents[-1]})")
+
+
+def setup_django():
+    pass

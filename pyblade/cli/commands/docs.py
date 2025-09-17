@@ -5,7 +5,7 @@ from pyblade.cli import BaseCommand
 
 class Command(BaseCommand):
     """
-    Open the PyBlade CLI documentation in your default browser.
+    Open the PyBlade documentation in your default browser.
     """
 
     name = "docs"

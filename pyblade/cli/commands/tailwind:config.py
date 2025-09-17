@@ -11,11 +11,11 @@ class Command(BaseCommand):
     Install and configure Tailwind CSS 4 in the current project.
     """
 
-    name = "tailwind:configure"
-    aliases = ["tailwind:config"]  # Other possible names for the command
+    name = "tailwind:config"
+    aliases = ["tw:config"]  # Other possible names for the command
 
     def handle(self, **kwargs):
-        """Execute the 'pyblade tailwind:configure' command"""
+        """Execute the 'pyblade tailwind:config' command"""
         self.settings = Config(config_file="pyblade.json")
 
         self.settings.css_framework = "TailwindCSS 4"
