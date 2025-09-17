@@ -34,7 +34,7 @@ DEFAULT_COMMANDS = {
         "make:component",
         "make:liveblade",
         "make:template",
-        "route:list",
+        # "route:list",
         "tailwind:config",
         "upgrade",
     ],
@@ -186,7 +186,7 @@ version = get_version()
 
 
 @click.group(cls=CommandGroup)
-@click.version_option(version, "-v", "--version", message=f"\npyblade {version}\n")
+@click.version_option(version, "-v", "--version", message=f"\nPyBlade {version}\n")
 @click.help_option("-h", "--help")
 def cli():
     """PyBlade CLI - The modern Python web frameworks development toolkit"""
