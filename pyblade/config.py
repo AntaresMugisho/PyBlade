@@ -8,12 +8,12 @@ class Config:
 
     DEFAULTS = {
         "templates_dir": Path("templates"),
-        "components_dir": Path("templates/components"),
+        "components_dir": Path("components"),
         "stubs_dir": Path(__file__).parent / "cli/stubs",
         "liveblade": {
             "paginator": "undefined",
             "components_dir": Path("liveblade"),
-            "templates_dir": Path("templates/liveblade"),
+            "templates_dir": Path("liveblade"),
         },
     }
 

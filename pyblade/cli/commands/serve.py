@@ -21,13 +21,7 @@ class Command(BaseCommand):
         self.add_option("--no-reload", "--noreload", help="Disable auto-reload", is_flag=True)
 
     def handle(self, **kwargs):
-        host = kwargs.pop("host")
-        port = kwargs.pop("port")
-        no_reload = kwargs.pop("no_reload")
-        addrport = kwargs.pop("addrport")
-
-        # Construct the address
-        addr = addrport or f"{host}:{port}"
-        kwargs.setdefault(addr)
-        if no_reload:
-            kwargs.setdefault("--noreload")
+        # For django, the run server command will automatically be called
+        self.warning(
+            "Enable to detect the framework. Make sure you are in the root directory of a valid PyBlade project."
+        )

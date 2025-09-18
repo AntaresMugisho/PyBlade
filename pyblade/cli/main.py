@@ -58,7 +58,7 @@ def load_commands():
                 console.print(f"[red]Failed to load PyBlade Command {cmd_name}: {str(e)}[/red]")
 
     # Load Django commands if the project is based on Django Framework
-    if settings.framework and settings.framework == "django":
+    if settings.framework and settings.framework.name == "django":
         commands = load_django_commands()
         if commands:
             _CACHED_COMMANDS["Django commands"] = commands

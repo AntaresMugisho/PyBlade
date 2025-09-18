@@ -5,7 +5,6 @@ PyBlade template rendering engine.
 from typing import Dict, List, Optional
 
 from . import loader
-from .exceptions import TemplateNotFoundError
 from .parsing.template_processor import TemplateProcessor
 
 
@@ -71,13 +70,9 @@ class PyBlade:
         Raises:
             TemplateNotFoundError: If the template file cannot be found
         """
-        try:
-            template = loader.load_template(template_name, self._template_dirs, self)
-            return template
-        except Exception as e:
-            raise TemplateNotFoundError(
-                f"No template named '{template_name}.html'.\n Searched in the following directories: {self._template_dirs}"
-            )
+
+        template = loader.load_template(template_name, self._template_dirs, self)
+        return template
 
     def from_string(self, template_code, context):
         pass

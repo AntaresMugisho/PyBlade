@@ -4,7 +4,6 @@ Core template processing functionality.
 
 from typing import Any, Dict
 
-from ..exceptions import TemplateRenderingError
 from .cache import TemplateCache
 from .directives import DirectiveParser
 from .variables import VariableParser
@@ -54,7 +53,7 @@ class TemplateProcessor:
             return result
 
         except Exception as e:
-            raise TemplateRenderingError(f"Error rendering template: {str(e)}")
+            raise e
 
     def _process_template(self, template: str, context: Dict[str, Any]) -> str:
         """

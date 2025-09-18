@@ -31,9 +31,10 @@ class TemplateLoader:
         Args:
             directories: List of directory paths
         """
+
         for directory in directories:
             path = Path(directory)
-            if path.is_dir():
+            if path.is_dir() and path not in self._template_dirs:
                 self._template_dirs.append(path)
 
     def load_template(self, template_name: str) -> Template:
@@ -66,7 +67,10 @@ class TemplateLoader:
             except (IOError, OSError):
                 continue
 
-        raise TemplateNotFoundError(f"{template_name}{self._extension}")
+        raise TemplateNotFoundError(
+            f"No template named '{template_path}{self._extension}'\n"
+            "Searched in the following directories:\n- " + "\n- ".join([str(p) for p in self._template_dirs])
+        )
 
     def _read_template(self, path: Path) -> str:
         """

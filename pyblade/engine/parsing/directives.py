@@ -13,6 +13,8 @@ from pprint import pformat, pprint  # noqa
 from typing import Any, Dict, Match, Pattern, Tuple
 from uuid import uuid4
 
+from pyblade.cli.utils import pascal_to_snake
+from pyblade.config import settings
 from pyblade.engine import loader
 
 from ..contexts import (
@@ -693,7 +695,8 @@ class DirectiveParser:
 
     def _handle_pyblade_tags(self, match):
         component_name = match.group("component")
-        component = loader.load_template(f"components.{component_name}")
+        component_name = pascal_to_snake(component_name)
+        component = loader.load_template(f"{settings.components_dir}.{component_name}")
 
         attr_string = match.group("attributes")
         attr_pattern = re.compile(r"(?P<attribute>:?\w+)(?:\s*=\s*(?P<value>[\"']?.*?[\"']))?", re.DOTALL)
@@ -716,9 +719,10 @@ class DirectiveParser:
 
             attributes[name] = value
 
-        component_context.update(attributes)
-
         new_content, props = self._parse_props(component.content)
+
+        component_context.update({**props, **attributes})
+
         component.content = new_content
 
         attributes = AttributesContext(props, attributes, component_context)
@@ -751,18 +755,20 @@ class DirectiveParser:
         def replace_component(match: Match) -> str:
             try:
                 component_name = self._validate_string(match.group("name"))
+
                 data = match.group("data")
 
-                component = loader.load_template(f"components.{component_name}")
+                component = loader.load_template(f"{settings.components_dir}.{pascal_to_snake(component_name)}")
+                new_content, props = self._parse_props(component.content)
 
-                component_context = {}
+                component_context = props
                 if data:
                     try:
-                        component_context = eval(data, {}, self._context)
+                        attrs = eval(data, {}, self._context)
+                        component_context.update(attrs)
                     except Exception as e:
                         raise DirectiveParsingError(f"Error processing component data: {str(e)}")
 
-                new_content, props = self._parse_props(component.content)
                 attributes = AttributesContext(props, {}, component_context)
                 component_context["attributes"] = attributes
 
@@ -1312,7 +1318,9 @@ class DirectiveParser:
             # Get the form field using dot notation
             parts = field_path.split(".")
             if len(parts) < 2 or len(parts) > 2:
-                raise DirectiveParsingError(f"Invalid field : {field_path}. Must be in format 'form.field_name'")
+                raise DirectiveParsingError(
+                    f"Invalid field name in the '@error' directive : {field_path}. Must be in format 'form.field_name'"
+                )
             else:
                 form_name, field_name = parts
 
@@ -1383,17 +1391,21 @@ class DirectiveParser:
         def replace_field(match: Match) -> str:
             try:
                 # Get field path and attributes
-                field_path = match.group("field").strip()
-                attrs_str = match.group("attributes").strip()
+                field_path = match.group("field")
+                attrs_str = match.group("attributes")
+
+                if not field_path:
+                    raise DirectiveParsingError(
+                        "Error in @field directive: You must provide the 'form.field_name' to render."
+                    )
 
                 # Parse variables in case the field path or attributes are variables
                 field_path = self._variable_parser.parse_variables(field_path, self._context)
-                attrs_str = self._variable_parser.parse_variables(attrs_str, self._context)
 
                 parts = field_path.split(".")
                 if len(parts) < 2 or len(parts) > 2:
                     raise DirectiveParsingError(
-                        f"Invalid form field : {field_path}. Must be in format 'form.field_name'"
+                        f"Invalid form field : {field_path}. Must be in the format 'form.field_name'"
                     )
                 else:
                     form_name, field_name = parts
@@ -1411,7 +1423,8 @@ class DirectiveParser:
                 attributes = {}
 
                 if attrs_str:
-                    attrs = attrs_str.strip().split(" ")
+                    attrs_str = self._variable_parser.parse_variables(attrs_str, self._context)
+                    attrs = [a.strip() for a in attrs_str.split(",")]
                     for attr in attrs:
                         if len(attr.split("=")) > 1:
                             attributes[attr.split("=")[0]] = attr.split("=")[1].strip("\"'")
