@@ -110,13 +110,14 @@ class DirectiveParser:
     _SLOT_TAG_PATTERN: Pattern = re.compile(
         r"<b-slot(?::|\s+name\s*=\s*)(?P<name>.*?)>\s*(?P<content>.*?)\s*</b-slot(?::(?P=name))?>", re.DOTALL
     )
+    _ATTRIBUTES_PATTERN = re.compile(r"(?P<attribute>:?\w+)(?:\s*=\s*(?P<value>[\"']?.*?[\"']))?", re.DOTALL)
     _LIVEBLADE_PATTERN = re.compile(r"@liveblade\s*\(\s*(?P<component>.*?)\s*\)", re.DOTALL)
     _LIVEBLADE_SCRIPTS_PATTERN: Pattern = re.compile(
         r"@(?:liveblade_scripts|livebladeScripts)(?:\s*\(\s*(?P<attributes>.*?)\s*\))?", re.DOTALL
     )
     _INCLUDE_PATTERN: Pattern = re.compile(r"@include\s*\(\s*(?P<path>.*?)\s*\)", re.DOTALL)
     _FIELD_PATTERN: Pattern = re.compile(
-        r"@field\s*\((?P<field>.*?)\s*(?:,\s*(?P<attributes>.*?\)?\s*\}?\}?))?\)", re.DOTALL
+        r"@field\s*\((?P<field>.*?)\s*(?:,\s*(?P<attributes>.*?\}?\)?\s*\}?\}?))?\)", re.DOTALL
     )
     _ERROR_PATTERN: Pattern = re.compile(r"@error\s*\((?P<field>.*?)\s*\)\s*(?P<slot>.*?)\s*@enderror", re.DOTALL)
     _OPENING_TAG_PATTERN: Pattern = re.compile(r"<(?P<tag>\w+)\s*(?P<attributes>.*?)>")
@@ -699,8 +700,7 @@ class DirectiveParser:
         component = loader.load_template(f"{settings.components_dir}.{component_name}")
 
         attr_string = match.group("attributes")
-        attr_pattern = re.compile(r"(?P<attribute>:?\w+)(?:\s*=\s*(?P<value>[\"']?.*?[\"']))?", re.DOTALL)
-        attrs = attr_pattern.findall(attr_string)
+        attrs = self._ATTRIBUTES_PATTERN.findall(attr_string)
 
         attributes = {}
         component_context = {}
@@ -1280,8 +1280,8 @@ class DirectiveParser:
                 expression = "True"
 
             if expression is True or (eval(expression, {}, self._context)):
-                return directive if directive != "autocomplete" else "on"
-            return "" if directive != "autocomplete" else "off"
+                return directive if directive != "autocomplete" else 'autocomplete="on"'
+            return "" if directive != "autocomplete" else 'autocomplete="off"'
 
         return self._CONDITIONAL_ATTRIBUTES_PATTERN.sub(handle_conditional_attributes, template)
 
@@ -1327,12 +1327,12 @@ class DirectiveParser:
             # Get the form
             form = self._context.get(form_name)
             if not form:
-                raise UndefinedVariableError(f"Undefined variable '{form_name}'")
+                raise UndefinedVariableError(f"Variable '{form_name}' is not defined")
 
             # Get the field
             field = form.fields.get(field_name)
             if not field:
-                raise AttributeError(f"{form_name} has no attribute {field_name}.")
+                raise AttributeError(f"{form_name.__class__.__name__} has no field {field_name}.")
 
             # Check if the field got an error
             errors = form._errors or {}
@@ -1379,7 +1379,7 @@ class DirectiveParser:
         Process @field directive to render Django form fields with HTML-like attributes.
 
         Example:
-            @field(form.email, class="form-control" id="email-input" required)
+            @field("form.email", class="form-control" id="email-input" required)
 
         Args:
             template: The template string
@@ -1412,24 +1412,20 @@ class DirectiveParser:
 
                 form = self._context.get(form_name)
                 if not form:
-                    raise UndefinedVariableError(f"Undefined variable '{form_name}'")
+                    raise UndefinedVariableError(f"Variable '{form_name}' is not defined")
 
                 # Get the field
                 field = form.fields.get(field_name)
                 if not field:
-                    raise DirectiveParsingError(f"Field '{field_name}' not found in the form")
+                    raise DirectiveParsingError(f"{form.__class__.__name__} has no field '{field_name}'")
 
                 # Parse HTML-like attributes
                 attributes = {}
 
                 if attrs_str:
                     attrs_str = self._variable_parser.parse_variables(attrs_str, self._context)
-                    attrs = [a.strip() for a in attrs_str.split(",")]
-                    for attr in attrs:
-                        if len(attr.split("=")) > 1:
-                            attributes[attr.split("=")[0]] = attr.split("=")[1].strip("\"'")
-                        else:
-                            attributes[attr.split("=")[0]] = attr.split("=")[0]
+                    attrs = self._ATTRIBUTES_PATTERN.findall(attrs_str)
+                    attributes = {k: v[1:-1].strip() for k, v in attrs}
 
                 # Update the field widget attributes
                 widget = field.widget

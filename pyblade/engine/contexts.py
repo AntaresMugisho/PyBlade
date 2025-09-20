@@ -149,19 +149,11 @@ class AttributesContext:
             raise TypeError("Attributes must be a dictionary")
 
         for key, value in attrs.items():
-            self._attributes[key] = f"{value} {self._attributes[key]}"
+            self._attributes[key] = f"{value} {self._attributes.get(key, '')}"
         return self
 
     def prepends(self, attrs: dict):
         pass
-
-    def class_(self, attrs: dict):
-        """
-        Conditionally marge classes
-        :param attrs: A dictionary containing a class : condition key values.
-        :return:
-        """
-        return ClassContext(attrs, self._context)
 
     # TODO: Complete all these functions
     def where_starts_with(self, needle: str) -> str:
