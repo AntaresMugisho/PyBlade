@@ -3,6 +3,7 @@ from pathlib import Path
 from pyblade.cli import BaseCommand
 from pyblade.cli.utils import pascal_to_snake, snakebab_to_pascal
 from pyblade.config import settings
+from pyblade.utils import split_dotted_path
 
 
 class Command(BaseCommand):
@@ -21,10 +22,11 @@ class Command(BaseCommand):
     def handle(self, **kwargs):
         """Create a new Liveblade component."""
 
-        component_name = pascal_to_snake(kwargs.get("name"))
+        name = pascal_to_snake(kwargs.get("name"))
+        path, component_name = split_dotted_path(name)
 
-        components_dir = Path(settings.liveblade.components_dir)
-        templates_dir = Path(settings.liveblade.templates_dir)
+        components_dir = Path(settings.liveblade.components_dir / path)
+        templates_dir = Path(settings.templates_dir, settings.liveblade.templates_dir / path)
 
         # Ensure liveblade directories exist
         components_dir.mkdir(parents=True, exist_ok=True)

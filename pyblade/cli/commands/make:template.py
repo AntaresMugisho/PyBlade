@@ -2,6 +2,7 @@ from pathlib import Path
 
 from pyblade.cli import BaseCommand
 from pyblade.config import settings
+from pyblade.utils import split_dotted_path
 
 
 class Command(BaseCommand):
@@ -20,12 +21,13 @@ class Command(BaseCommand):
     def handle(self, **kwargs):
         """Execute the 'pyblade make:template' command"""
 
-        template_name = kwargs.get("name").split(".")
+        name = kwargs.get("name")
+        path, template_name = split_dotted_path(name)
 
-        p = Path(settings.templates_dir, *template_name[:-1])
+        p = Path(settings.templates_dir, path)
         p.mkdir(parents=True, exist_ok=True)
 
-        html_path = p / f"{template_name[-1]}.html"
+        html_path = p / f"{template_name}.html"
 
         if html_path.exists():
             if not kwargs.get("force"):
