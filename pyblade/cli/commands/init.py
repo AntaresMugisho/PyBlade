@@ -5,9 +5,8 @@ from questionary import Choice
 
 from pyblade.cli import BaseCommand
 from pyblade.cli.exceptions import RunError
-from pyblade.cli.utils import run_command
 from pyblade.config import Config
-from pyblade.utils import get_version
+from pyblade.utils import get_version, run_command
 
 _SETTINGS_PATERN = re.compile(
     r"\"\"\"(?P<banner>.*?)\"\"\"\s*.*?\s*INSTALLED_APPS\s=\s\[\s*(?P<installed_apps>.*?)\s*\]\s*.*?\s*MIDDLEWARE\s=\s\[\s*(?P<middleware>.*?)\s*\]\s*.*?\s*TEMPLATES\s=\s*\[\s*(?P<templates>\{.*?\},)\n\]",  # noqa E501
@@ -144,7 +143,7 @@ class Command(BaseCommand):
         if self.project.framework == "django":
             try:
                 new_temp_settings = """{
-        "BACKEND": "pyblade.backends.PyBladeEngine",
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
         "DIRS": [BASE_DIR / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
@@ -158,7 +157,7 @@ class Command(BaseCommand):
     },
 
     {
-        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "BACKEND": "pyblade.backends.PyBladeEngine",
         "DIRS": [BASE_DIR / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
@@ -168,7 +167,7 @@ class Command(BaseCommand):
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
             ],
-        },
+        },"BACKEND": "pyblade.backends.PyBladeEngine",
     },
     """
                 with open(self.settings.settings_path, "r") as file:

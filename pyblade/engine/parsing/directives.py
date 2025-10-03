@@ -13,9 +13,9 @@ from pprint import pformat, pprint  # noqa
 from typing import Any, Dict, Match, Pattern, Tuple
 from uuid import uuid4
 
-from pyblade.cli.utils import pascal_to_snake
 from pyblade.config import settings
 from pyblade.engine import loader
+from pyblade.utils import pascal_to_snake
 
 from ..contexts import (
     AttributesContext,
@@ -78,6 +78,7 @@ class DirectiveParser:
     _NOW_PATTERN: Pattern = re.compile(
         r"@now\s*\((?P<format>.*?)(?:(?P<alias>\s*as\s*)(?P<variable>\w+))?\)", re.DOTALL
     )
+    _URLIS_PATTERN: Pattern = re.compile(r"@urlis\((?P<route>.*?)(?:,(?P<param>.*?))?\)", re.DOTALL)
     _QUERYSTRING_PATTERN: Pattern = re.compile(r"@querystring(?:\s*\((?P<updates>.*?)\))?", re.DOTALL)
     _REGROUP_PATTERN: Pattern = re.compile(
         r"@regroup\s*\((?P<expression>.*?)\s+by\s+(?P<grouper>.*?)\s+as\s+(?P<var_name>.*?)\)", re.DOTALL
@@ -171,16 +172,38 @@ class DirectiveParser:
         Returns:
             The processed template
         """
+
         self._context = context
+        self._django_context = {}
+
+        if settings.framework.name == "django":
+            django_context_keys = [
+                "DEFAULT_MESSAGE_LEVELS",
+                "csrf_input",
+                "csrf_token",
+                "messages",
+                "perms",
+                "request",
+                "user",
+            ]
+            for k in django_context_keys:
+                self._django_context.setdefault(k, self._context.get(k))
+
         self._check_unclosed_tags(template)
 
-        # Process slots first to ensure they're captured before component rendering
-        # template = self._process_slots(template, context)
-
         # Process directives in order
+        # Comments and non-parsable texts
         template = self._parse_comments(template)
         template = self._parse_verbatim_shorthand(template)
         template = self._parse_verbatim(template)
+
+        # CSS directives directives
+        template = self._process_bootstrap_css(template, context)
+        template = self._process_bootstrap_javascript(template, context)
+        template = self._process_tailwind_preload_css(template, context)
+        template = self._process_tailwind_css(template, context)
+
+        # Loops and conditionnal directives
         template = self._parse_for(template)
         template = self._parse_if(template)
         template = self._parse_switch(template)
@@ -190,7 +213,7 @@ class DirectiveParser:
         template = self._parse_anonymous(template)
         template = self._parse_class(template)
         template = self._parse_style(template)
-        template = self._parse_active(template)
+        template = self._parse_urlis(template)
 
         # Form helpers
         template = self._parse_csrf(template)
@@ -226,17 +249,9 @@ class DirectiveParser:
         template = self._parse_url(template)
         template = self._parse_autoescape(template)
 
-        # Process liveblade
+        # Liveblade directives
         template = self._parse_liveblade_scripts(template)
         template = self._parse_liveblade(template)
-
-        # Process Bootstrap directives
-        template = self._process_bootstrap_css(template, context)
-        template = self._process_bootstrap_javascript(template, context)
-
-        # Process Tailwind directives
-        template = self._process_tailwind_preload_css(template, context)
-        template = self._process_tailwind_css(template, context)
 
         # Restore verbatim content
         template = self._restore_verbatim(template)
@@ -446,11 +461,6 @@ class DirectiveParser:
                         except Exception as e:
                             raise DirectiveParsingError(f"Error evaluating URL parameter '{value}': {str(e)}")
 
-            # Get URL patterns from context
-            urlconf = self._context.get("urlconf", None)
-            if not urlconf:
-                raise DirectiveParsingError("URL configuration not found in context")
-
             try:
                 # Resolve URL pattern
                 from django.urls import reverse
@@ -586,7 +596,7 @@ class DirectiveParser:
                     partial_template = loader.load_template(path)
                     return self.parse_directives(partial_template.content, self._context)
                 except Exception as e:
-                    raise DirectiveParsingError(f"Error loading partial template {path}: {str(e)}")
+                    raise DirectiveParsingError(f" {path}: {str(e)}")
 
             except Exception as e:
                 raise DirectiveParsingError(f"Error in @include directive: {str(e)}")
@@ -703,7 +713,7 @@ class DirectiveParser:
         attrs = self._ATTRIBUTES_PATTERN.findall(attr_string)
 
         attributes = {}
-        component_context = {}
+        component_context = self._django_context.copy()
 
         for attr in attrs:
             name, value = attr
@@ -1349,27 +1359,28 @@ class DirectiveParser:
 
         return self._ERROR_PATTERN.sub(handle_error, template)
 
-    def _parse_active(self, template):
+    def _parse_urlis(self, template, context={}):
         """Use the @active('route_name', 'active_class') directive to set an active class in a nav link"""
-        pattern = re.compile(r"@active\((?P<route>.*?)(?:,(?P<param>.*?))?\)", re.DOTALL)
-        return pattern.sub(lambda match: self._handle_active(match), template)
+        context = {**self._context, **context}
+        return self._URLIS_PATTERN.sub(lambda match: self._handle_urlis(match, context), template)
 
-    def _handle_active(self, match):
-        try:
-            route = ast.literal_eval(match.group("route"))
-            param = ast.literal_eval(match.group("param")) if match.group("param") else "active"
-        except SyntaxError as e:
-            raise e
-        except ValueError as e:
-            raise e
+    def _handle_urlis(self, match, context):
+        route = match.group("route")
+        param = match.group("param")
+
+        if not route:
+            raise DirectiveParsingError("@urlis directive requires a route name")
+
+        # Parse variables as the route may be a variable
+        route = self._variable_parser.parse_variables(route, context)
 
         try:
             from django.urls import resolve
-        except ImportError:
-            raise Exception("@active directive is currenctly supported by django only")
-        else:
-            resolver_match = resolve(self._context.get("request").path_info)
 
+            resolver_match = resolve(self._context.get("request").path_info)
+        except Exception as e:
+            raise DirectiveParsingError(str(e)) from e
+        else:
             if route == resolver_match.url_name:
                 return param
             return ""

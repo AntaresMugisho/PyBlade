@@ -1,6 +1,5 @@
 from pyblade.cli import BaseCommand
-from pyblade.cli.utils import run_command
-from pyblade.utils import get_version
+from pyblade.utils import get_version, run_command
 
 
 class Command(BaseCommand):

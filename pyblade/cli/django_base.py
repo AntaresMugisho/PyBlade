@@ -1,25 +1,30 @@
 import click
 
 from pyblade.cli import BaseCommand
-from pyblade.cli.utils import run_command
 from pyblade.config import settings
+from pyblade.utils import run_command
 
 # Mapping of Django commands to PyBlade command aliases
 DJANGO_COMMAND_ALIASES = {
     "check": [],
     "compilemessages": ["messages:compile"],
-    "createcachetable": [],
+    "changepassword": ["password:change"],
+    "clearsessions": ["sessions:clear"],
+    "createcachetable": ["make:cachetable"],
+    "createsuperuser": ["make:superuser"],
+    "collectstatic": ["static:collect"],
     "dbshell": ["db:shell"],
-    "diffsettings": [],
+    "diffsettings": ["settings:diff"],
     "dumpdata": ["data:dump"],
     "flush": [],
+    "findstatic": ["static:find"],
     "inspectdb": ["db:inspect"],
     "loaddata": ["data:load"],
     "makemessages": ["make:messages", "messages:make"],
     "makemigrations": ["make:migrations"],
     "migrate": [],
     "optimizemigration": ["migrations:optimize"],
-    "runserver": ["serve"],
+    "runserver": [],
     "sendtestemail": [],
     "shell": [],
     "showmigrations": ["migrations:show"],

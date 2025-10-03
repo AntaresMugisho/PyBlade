@@ -9,9 +9,8 @@ from rich.console import Console
 from rich.table import Table
 
 from pyblade.cli import BaseCommand
-from pyblade.cli.utils import get_project_root
 from pyblade.config import settings
-from pyblade.utils import get_version
+from pyblade.utils import get_project_root, get_version
 
 from .django_base import DjangoCommand
 
@@ -26,7 +25,6 @@ DEFAULT_COMMANDS = {
         # "deploy"
     ],
     "PyBlade commands": [
-        "cache:clear",
         "docs",
         # "login",
         # "logout",
@@ -34,7 +32,6 @@ DEFAULT_COMMANDS = {
         "make:component",
         "make:liveblade",
         "make:template",
-        # "route:list",
         "tailwind:config",
         "upgrade",
     ],
@@ -72,14 +69,16 @@ def load_django_commands():
     django_commands = []
 
     root_dir = get_project_root()
-    sys.path.insert(0, root_dir)
+    sys.path.insert(0, str(root_dir))  # MUST BE PASSED AS STRING
     settings_path_wo_ext = os.path.splitext(settings.settings_path)[0]
     settings_module = settings_path_wo_ext.replace("/", ".")
-    os.environ.setdefault("DJANGO_SETTINGS_MODULE", settings_module)
+    os.environ["DJANGO_SETTINGS_MODULE"] = settings_module
 
     try:
+        import django
         from django.core.management import get_commands as get_django_commands
 
+        django.setup()
         django_commands_dict = get_django_commands()
 
         # Process Django commands
@@ -97,8 +96,8 @@ def load_django_commands():
 
         return sorted(django_commands, key=lambda c: c.name)
 
-    except ImportError:
-        click.echo("Django not found. Django commands will not be available.", err=True)
+    except ImportError as e:
+        click.echo(f"Django not found. Django commands will not be available. {e}", err=True)
         return []
 
 

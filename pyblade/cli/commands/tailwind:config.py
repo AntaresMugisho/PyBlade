@@ -2,13 +2,13 @@ from pathlib import Path
 
 from pyblade.cli import BaseCommand
 from pyblade.cli.exceptions import RunError
-from pyblade.cli.utils import run_command
 from pyblade.config import Config
+from pyblade.utils import run_command
 
 
 class Command(BaseCommand):
     """
-    Install and configure Tailwind CSS 4 in the current project.
+    Install and configure TailwindCSS 4 in the current project.
     """
 
     name = "tailwind:config"

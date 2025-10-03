@@ -1,14 +1,13 @@
 from pathlib import Path
 
 from pyblade.cli import BaseCommand
-from pyblade.cli.utils import pascal_to_snake, snakebab_to_pascal
 from pyblade.config import settings
-from pyblade.utils import split_dotted_path
+from pyblade.utils import pascal_to_snake, snakebab_to_pascal, split_dotted_path
 
 
 class Command(BaseCommand):
     """
-    Create a new LiveBlade component.
+    Create a new Liveblade component.
     """
 
     name = "make:liveblade"

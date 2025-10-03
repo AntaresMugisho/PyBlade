@@ -109,7 +109,7 @@ class BaseCommand:
     # Main command function handler
     def handle(self, **kwargs):
         """Used to define the command bihavior"""
-        raise NotImplementedError("Command must implement handle method")
+        raise NotImplementedError("PyBlade Command must implement a 'handle' method")
 
     # Helpers
     def argument(self, arg: str):
@@ -142,19 +142,19 @@ class BaseCommand:
 
     # Command output
     def info(self, message: str):
-        console.print(f" [info] INFO [/info] {message}\n")
+        console.print(f"\n [info] INFO [/info] {message}\n")
 
     def success(self, message: str):
-        console.print(f"[green] ✔️[/green] [bold] {message}[bold]\n")
+        console.print(f"\n[green] ✔️[/green] [bold] {message}[bold]\n")
 
     def error(self, message: str):
-        console.print(f" [danger] ERROR [/danger] {message}\n")
+        console.print(f"\n [danger] ERROR [/danger] {message}\n")
 
     def warning(self, message: str):
-        console.print(f" [warning] WARN [/warning] {message}\n")
+        console.print(f"\n [warning] WARN [/warning] {message}\n")
 
     def tip(self, message: str):
-        console.print(f" [tip] TIPS [/tip] {message}\n")
+        console.print(f" [tip] TIP [/tip] {message}\n")
 
     def line(self, message: str):
         console.print(message)

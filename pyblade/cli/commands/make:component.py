@@ -1,9 +1,8 @@
 from pathlib import Path
 
 from pyblade.cli import BaseCommand
-from pyblade.cli.utils import pascal_to_snake
 from pyblade.config import settings
-from pyblade.utils import split_dotted_path
+from pyblade.utils import pascal_to_snake, split_dotted_path
 
 
 class Command(BaseCommand):
@@ -22,6 +21,10 @@ class Command(BaseCommand):
         """Create a new component in the templates directory."""
         name = pascal_to_snake(kwargs.get("name"))
         path, component_name = split_dotted_path(name)
+
+        if not path and component_name == "slot":
+            self.error("You are not allowed to create a 'slot' component at the root level.")
+            return
 
         components_dir = Path(settings.templates_dir, settings.components_dir, path)
         components_dir.mkdir(parents=True, exist_ok=True)

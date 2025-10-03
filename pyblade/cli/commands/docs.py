@@ -11,6 +11,6 @@ class Command(BaseCommand):
     name = "docs"
 
     def handle(self):
-        url = "https://pyblade.vercel.app"
+        url = "https://docs.pyblade.dev"
         self.info(f"Opening PyBlade documentation in your browser: {url}")
         webbrowser.open(url)
