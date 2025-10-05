@@ -20,7 +20,7 @@ console = Console()
 DEFAULT_COMMANDS = {
     "Project commands": [
         "init",
-        "convert",
+        # "convert",
         "serve",
         # "deploy"
     ],

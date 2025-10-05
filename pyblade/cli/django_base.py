@@ -1,8 +1,10 @@
+from pathlib import Path
+from typing import List, Optional
+
 import click
 
 from pyblade.cli import BaseCommand
-from pyblade.config import settings
-from pyblade.utils import run_command
+from pyblade.utils import get_project_root
 
 # Mapping of Django commands to PyBlade command aliases
 DJANGO_COMMAND_ALIASES = {
@@ -37,6 +39,29 @@ DJANGO_COMMAND_ALIASES = {
     "test": [],
     "testserver": ["server:test"],
 }
+
+
+def run_django_command(command: List[str] | str, cwd: Optional[Path] = None) -> None:
+    if isinstance(command, str):
+        command = command.split(" ")
+
+    root_dir = get_project_root()
+    if command[0] != "manage.py":
+        command = [str(root_dir / "manage.py")] + command
+
+    if not cwd:
+        cwd = Path.cwd()
+
+    try:
+        from django.core.management import execute_from_command_line
+    except ImportError as exc:
+        raise ImportError(
+            "Couldn't import Django. Are you sure it's installed and "
+            "available on your PYTHONPATH environment variable? Did you "
+            "forget to activate a virtual environment?"
+        ) from exc
+
+    execute_from_command_line(command)
 
 
 class DjangoCommand(BaseCommand):
@@ -79,11 +104,11 @@ class DjangoCommand(BaseCommand):
                         # Handle options
                         argv.append(f"--{option}={value}")
 
-        cmd = ["python", "manage.py", self.django_command_name, *argv]
+        cmd = [self.django_command_name, *argv]
         try:
-            run_command(cmd, cwd=settings.root_dir)
-        except Exception:
-            pass
+            run_django_command(cmd)
+        except Exception as e:
+            print("Error:", str(e))
 
     def load_django_command(self):
         """Load the actual Django command to extract help text and arguments."""
@@ -100,15 +125,9 @@ class DjangoCommand(BaseCommand):
 
     def create_parser(self):
         """Create a parser for the Django command to extract options."""
-        # if not os.environ.get("DJANGO_SETTINGS_MODULE"):
-        # # TODO: Find a way to load the settings from the current project
-        #     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "examples.django_backend.django_backend.settings")
 
         cmd = self.load_django_command()
         parser = cmd.create_parser("", self.django_command_name)
-
-        # Remove the DJANGO8SETTINGS_MODULE from env to prevent conflicts
-        # os.environ.pop("DJANGO_SETTINGS_MODULE")
 
         return parser
 

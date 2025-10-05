@@ -3,6 +3,8 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Dict, Self
 
+from pyblade.utils import get_project_root
+
 
 class Config:
 
@@ -11,7 +13,7 @@ class Config:
         "components_dir": Path("components"),
         "stubs_dir": Path(__file__).parent / "cli/stubs",
         "liveblade": {
-            "paginator": "undefined",
+            "paginator": None,
             "components_dir": Path("liveblade"),
             "templates_dir": Path("liveblade"),
         },
@@ -19,7 +21,7 @@ class Config:
 
     def __init__(
         self,
-        config_file: str = Path("pyblade.json"),
+        config_file: str = get_project_root() / "pyblade.json",
         data: Dict | None = None,
         parent: Self | None = None,
         key: str | None = None,
@@ -36,8 +38,12 @@ class Config:
 
     def load(self):
         if self._config_file.exists():
+            print(f"Loading config from {self._config_file}")
             with open(self._config_file, "r") as file:
                 self._data = json.load(file)
+        else:
+            print(f"No config file found at {self._config_file}, using defaults")
+            self._data = deepcopy(self._defaults)
 
     def save(self):
         if self._parent:

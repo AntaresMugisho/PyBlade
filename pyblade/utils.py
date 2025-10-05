@@ -1,14 +1,10 @@
-import os
 import re
 import subprocess
-
-# import sys
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import List, Optional, Tuple
 
 from pyblade.cli.exceptions import RunError
-from pyblade.config import settings
 
 
 def get_version(package_name: str = "pyblade"):
@@ -42,35 +38,6 @@ def run_command(command: List[str] | str, cwd: Optional[Path] = None) -> None:
         return result
     except subprocess.CalledProcessError as e:
         raise RunError(e)
-
-
-def run_django_command(command: List[str] | str, cwd: Optional[Path] = None) -> None:
-    if isinstance(command, str):
-        command = command.split(" ")
-
-    root_dir = get_project_root()
-    if command[0] != "manage.py":
-        command = [str(root_dir / "manage.py")] + command
-
-    if not cwd:
-        cwd = Path.cwd()
-
-    # sys.path.insert(0, str(root_dir)) # MUST BE PASSED AS STRING
-    settings_path_wo_ext = os.path.splitext(settings.settings_path)[0]
-    settings_module = settings_path_wo_ext.replace("/", ".")
-    os.environ["DJANGO_SETTINGS_MODULE"] = settings_module
-
-    try:
-        from django.core.management import execute_from_command_line
-    except ImportError as exc:
-        raise ImportError(
-            "Couldn't import Django. Are you sure it's installed and "
-            "available on your PYTHONPATH environment variable? Did you "
-            "forget to activate a virtual environment?"
-        ) from exc
-
-    print(f"Running Django command: {' '.join(command)} in {cwd or root_dir}")
-    execute_from_command_line(command)
 
 
 def pascal_to_snake(string: str) -> str:
