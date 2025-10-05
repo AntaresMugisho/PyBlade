@@ -11,6 +11,7 @@ class Config:
     DEFAULTS = {
         "templates_dir": Path("templates"),
         "components_dir": Path("components"),
+        "commands_dir": Path("management/commands"),
         "stubs_dir": Path(__file__).parent / "cli/stubs",
         "liveblade": {
             "paginator": None,
@@ -38,7 +39,6 @@ class Config:
 
     def load(self):
         if self._config_file.exists():
-            print(f"Loading config from {self._config_file}")
             with open(self._config_file, "r") as file:
                 self._data = json.load(file)
         else:

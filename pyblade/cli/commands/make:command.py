@@ -1,6 +1,6 @@
-from pathlib import Path
-
 from pyblade.cli import BaseCommand
+from pyblade.config import settings
+from pyblade.utils import get_project_root
 
 
 class Command(BaseCommand):
@@ -17,9 +17,8 @@ class Command(BaseCommand):
 
     def handle(self, **kwargs):
         name = kwargs.get("name")
-        description = kwargs.get("description") or "Help message for this command goes here"
-        # commands_dir = self.settings.pyblade_root / "management" / "commands"
-        commands_dir = Path("/home/antares/coding/pyblade/pyblade/cli/commands")
+        description = kwargs.get("description") or "Help message for this command should go here"
+        commands_dir = get_project_root() / "management/commands"
         commands_dir.mkdir(parents=True, exist_ok=True)
 
         cmd_path = commands_dir / f"{name}.py"
@@ -27,26 +26,28 @@ class Command(BaseCommand):
         if not (kwargs.get("force")):
             if cmd_path.exists():
                 self.error(f"A command with the name '{name}' already exists.")
+                self.tip(
+                    "Use [bright_black]--force[/bright_black] to override the existing "
+                    "command or choose a different name."
+                )
                 return
+
+        stubs_dir = settings.stubs_dir / "commands"
+        cmd_template = stubs_dir / "command.py.stub"
+
+        if not cmd_template.exists():
+            self.error("Command stub not found.")
+            return
+
+        with open(cmd_template, "r") as file:
+            cmd_template = file.read()
 
         with open(cmd_path, "w") as file:
             file.write(
-                f'''from pyblade.cli import BaseCommand
-
-class Command(BaseCommand):
-    """
-    {description}
-    """
-
-    name = "{name}"
-    aliases = [] # Other possible names for the command
-
-    def config(self):
-        """Setup command arguments and options here"""
-        ...
-
-    def handle(self, **kwargs):
-        """Execute the 'pyblade {name}' command"""
-        ...
-'''
+                cmd_template.format(
+                    name=name,
+                    description=description,
+                )
             )
+
+        self.success(f"Command created successfully at '{cmd_path}'")

@@ -176,7 +176,7 @@ class DirectiveParser:
         self._context = context
         self._django_context = {}
 
-        if settings.framework.name == "django":
+        if settings.framework == "django":
             django_context_keys = [
                 "DEFAULT_MESSAGE_LEVELS",
                 "csrf_input",

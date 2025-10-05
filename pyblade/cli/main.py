@@ -2,7 +2,6 @@ import importlib
 import os
 import pkgutil
 import sys
-from pathlib import Path
 
 import click
 from rich.console import Console
@@ -55,13 +54,13 @@ def load_commands():
                 console.print(f"[red]Failed to load PyBlade Command {cmd_name}: {str(e)}[/red]")
 
     # Load Django commands if the project is based on Django Framework
-    if settings.framework and settings.framework.name == "django":
+    if settings.framework and settings.framework == "django":
         commands = load_django_commands()
         if commands:
             _CACHED_COMMANDS["Django commands"] = commands
 
     # Load custom pyblade commands
-    # load_custom_commands()
+    load_custom_commands()
 
 
 def load_django_commands():
@@ -104,19 +103,17 @@ def load_django_commands():
 def load_custom_commands():
     """Load custom commands from the project."""
     try:
-        # Look for custom commands in multiple possible locations
-        possible_dirs = [Path("management/commands"), Path("commands"), Path("cli/commands")]
-
-        for custom_commands_dir in possible_dirs:
-            if custom_commands_dir.exists():
-                for cmd_name in find_commands(custom_commands_dir):
-                    try:
-                        module_dir = str(custom_commands_dir).replace("/", ".")
-                        cmd = load_command(module_dir, cmd_name)
-                        click_cmd = register(cmd)
-                        _CACHED_COMMANDS.setdefault("Custom Commands", []).append(click_cmd)
-                    except Exception as e:
-                        console.print(f"[red]Failed to load custom command {cmd_name}: {str(e)}[/red]")
+        # Look for custom commands in multiple the management/commands folder
+        custom_commands_dir = settings.commands_dir
+        if custom_commands_dir.exists():
+            for cmd_name in find_commands(custom_commands_dir):
+                try:
+                    module_dir = str(custom_commands_dir).replace("/", ".")
+                    cmd = load_command(module_dir, cmd_name)
+                    click_cmd = register(cmd)
+                    _CACHED_COMMANDS.setdefault("Custom Commands", []).append(click_cmd)
+                except Exception as e:
+                    console.print(f"[red]Failed to load custom command {cmd_name}: {str(e)}[/red]")
     except Exception as e:
         console.print(f"[red]Error while loading custom commands: {str(e)}[/red]")
 

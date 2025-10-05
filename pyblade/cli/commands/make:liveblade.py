@@ -51,6 +51,14 @@ class Command(BaseCommand):
             python_stub = stubs_dir / "component.py.stub"
             html_stub = stubs_dir / "template.html.stub"
 
+            if not python_stub.exists():
+                self.error("Python stub not found.")
+                return
+
+            if not html_stub.exists():
+                self.error("HTML stub not found.")
+                return
+
             # Create HTML template
             with open(html_stub, "r") as file:
                 html_template = file.read()

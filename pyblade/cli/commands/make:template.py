@@ -38,8 +38,14 @@ class Command(BaseCommand):
                 )
                 return
 
-        stubs_path = Path(__file__).parent.parent / "stubs"
-        with open(stubs_path / "template.html.stub", "r") as file:
+        stubs_path = settings.stubs_dir / "templates"
+        template_stub = stubs_path / "template.html.stub"
+
+        if not template_stub.exists():
+            self.error("Template stub not found.")
+            return
+
+        with open(template_stub, "r") as file:
             template = file.read()
 
         with open(html_path, "w") as file:

@@ -118,7 +118,7 @@ class Command(BaseCommand):
         self.settings.name = self.project.name
         self.settings.core_dir = self.project.name
         self.settings.settings_path = f"{self.settings.core_dir}/settings.py"
-        self.settings.framework = {"name": self.project.framework, "version": get_version(self.project.framework)}
+        self.settings.framework = self.project.framework
         self.settings.css_framework = self.project.css_framework
         self.settings.pyblade_version = get_version()
         self.settings.save()

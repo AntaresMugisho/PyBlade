@@ -40,6 +40,9 @@ class Command(BaseCommand):
             return
 
         html_stub = settings.stubs_dir / "component.html.stub"
+        if not html_stub.exists():
+            self.error("Component stub not found.")
+            return
 
         with open(html_stub, "r") as file:
             component_template = file.read()
