@@ -1,9 +1,0 @@
-@props({
-    "name" : "Olivier",
-    "active" : True
-})
-
-<li {{ attributes.merge({"class": "nav-item"}) }}>
-    <a @class({"nav-link": True, "active": active}) href="{{ attributes.get('href') }}">{{ slot }}</a>
-</li>
-@liveblade('submit', context={'id':5, 'bg':"redp", items:{'item1':'prince'}})

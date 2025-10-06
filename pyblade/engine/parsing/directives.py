@@ -80,6 +80,8 @@ class DirectiveParser:
     )
     _URLIS_PATTERN: Pattern = re.compile(r"@urlis\((?P<route>.*?)(?:,(?P<param>.*?))?\)", re.DOTALL)
     _QUERYSTRING_PATTERN: Pattern = re.compile(r"@querystring(?:\s*\((?P<updates>.*?)\))?", re.DOTALL)
+    _GET_STATIC_PREFIX_PATTERN: Pattern = re.compile(r"@(get_static_prefix|gsp)", re.DOTALL)
+    _GET_MEDIA_PREFIX_PATTERN: Pattern = re.compile(r"@(get_media_prefix|gmp)", re.DOTALL)
     _REGROUP_PATTERN: Pattern = re.compile(
         r"@regroup\s*\((?P<expression>.*?)\s+by\s+(?P<grouper>.*?)\s+as\s+(?P<var_name>.*?)\)", re.DOTALL
     )
@@ -87,8 +89,8 @@ class DirectiveParser:
     _STYLE_PATTERN: Pattern = re.compile(r"@style\s*\((?P<styles>.*?)\)", re.DOTALL)
     _CLASS_PATTERN: Pattern = re.compile(r"@class\s*\((?P<classes>.*?)\)", re.DOTALL)
     _TEMPLATETAG_PATTERN: Pattern = re.compile(r"@templatetag\s*\((?P<tag>.*?)\)", re.DOTALL)
-    _WIDTHRATIO_PATTERN: Pattern = re.compile(
-        r"@widthratio\s*\((?P<value>.*?)\s*,\s*(?P<max_value>.*?)\s*,\s*(?P<max_width>.*?)\)", re.DOTALL
+    _RATIO_PATTERN: Pattern = re.compile(
+        r"@(ratio|widthratio)\s*\((?P<value>.*?)\s*,\s*(?P<max_value>.*?)\s*,\s*(?P<max_width>.*?)\)", re.DOTALL
     )
     _WITH_PATTERN: Pattern = re.compile(
         r"@with\s*\((?P<expression>.*?)\s*as\s*(?P<variable>.*?)\)\s*(?P<content>.*?)\s*@endwith", re.DOTALL
@@ -226,12 +228,14 @@ class DirectiveParser:
         # Parse slots first to ensure they're captured before any component rendering
         template = self._parse_slot_tags(template)
         template = self._parse_pyblade_tags(template)
-        template = self._parse_component(template)
         template = self._parse_include(template)
+        template = self._parse_component(template)
         template = self._parse_extends(template)
 
         # Django-like directives
         template = self._parse_static(template)
+        template = self._parse_get_static_prefix(template)
+        template = self._parse_get_media_prefix(template)
         template = self._parse_now(template)
         template = self._parse_cycle(template)
         template = self._parse_debug(template)
@@ -243,7 +247,7 @@ class DirectiveParser:
         template = self._parse_regroup(template)
         template = self._parse_spaceless(template)
         template = self._parse_templatetag(template)
-        template = self._parse_widthratio(template)
+        template = self._parse_ratio(template)
         template = self._parse_with(template)
         template = self._parse_component(template)
         template = self._parse_url(template)
@@ -441,9 +445,13 @@ class DirectiveParser:
         """Process @url directive with support for Django-style 'as' variable assignment."""
 
         def replace_url(match: Match) -> str:
-            url_pattern = match.group("pattern").strip("'\"")
+            url_pattern = match.group("pattern").strip("'\"").strip()
             params = match.group("params")
             as_var = match.group("as_var")
+
+            # Try to get URL Pattern from the context if it's a variable
+            # or fallback to the passed string
+            url_pattern = self._context.get(url_pattern, url_pattern)
 
             # Build URL parameters
             url_params = []
@@ -482,11 +490,37 @@ class DirectiveParser:
 
         # Updated pattern to support 'as' variable assignment
         url_pattern = re.compile(
-            r"@url\s*\(\s*(?P<pattern>['\"].*?['\"])\s*(?:,\s*(?P<params>.*?))?\s*(?:\s+as\s+(?P<as_var>\w+))?\s*\)",
+            r"@url\s*\(\s*(?P<pattern>.*?)\s*(?:,\s*(?P<params>.*?))?\s*(?:\s+as\s+(?P<as_var>\w+))?\s*\)",
             re.DOTALL,
         )
 
         return url_pattern.sub(replace_url, template)
+
+    def _parse_get_static_prefix(self, template: str) -> Tuple[bool, str]:
+        """Process @get_static_prefix directives."""
+
+        def get_static_prefix(match: Match) -> str:
+            try:
+                from django.conf import settings as djago_settings
+
+                return djago_settings.STATIC_URL
+            except Exception as e:
+                raise DirectiveParsingError(f"Error in @get_static_prefix directive: {str(e)}")
+
+        return self._GET_STATIC_PREFIX_PATTERN.sub(get_static_prefix, template)
+
+    def _parse_get_media_prefix(self, template: str) -> Tuple[bool, str]:
+        """Process @get_media_prefix directives."""
+
+        def get_media_prefix(match: Match) -> str:
+            try:
+                from django.conf import settings as djago_settings
+
+                return djago_settings.MEDIA_URL
+            except Exception as e:
+                raise DirectiveParsingError(f"Error in @get_media_prefix directive: {str(e)}")
+
+        return self._GET_MEDIA_PREFIX_PATTERN.sub(get_media_prefix, template)
 
     def _parse_break(self, template: str, context: Dict[str, Any]) -> Tuple[bool, str]:
         """Process @break directives."""
@@ -594,7 +628,7 @@ class DirectiveParser:
 
                 try:
                     partial_template = loader.load_template(path)
-                    return self.parse_directives(partial_template.content, self._context)
+                    return partial_template.render(self._context)
                 except Exception as e:
                     raise DirectiveParsingError(f" {path}: {str(e)}")
 
@@ -713,7 +747,7 @@ class DirectiveParser:
         attrs = self._ATTRIBUTES_PATTERN.findall(attr_string)
 
         attributes = {}
-        component_context = self._django_context.copy()
+        component_context = {}
 
         for attr in attrs:
             name, value = attr
@@ -732,14 +766,13 @@ class DirectiveParser:
         new_content, props = self._parse_props(component.content)
 
         component_context.update({**props, **attributes})
-
         component.content = new_content
 
         attributes = AttributesContext(props, attributes, component_context)
         component_context["attributes"] = attributes
         component_context["slot"] = SlotContext(match.group("slot"))
 
-        parsed_component = component.render(component_context)
+        parsed_component = component.render(component_context, request=self._context.get("request"))
         return parsed_component
 
     def _parse_props(self, component: str) -> tuple:
@@ -783,7 +816,7 @@ class DirectiveParser:
                 component_context["attributes"] = attributes
 
                 component.content = new_content
-                return component.render(component_context)
+                return component.render(component_context, request=self._context.get("request"))
 
             except Exception as e:
                 raise DirectiveParsingError(f"Error in @component directive: {str(e)}")
@@ -1134,6 +1167,7 @@ class DirectiveParser:
 
                 now = datetime.now().strftime(format_string)
                 if var_name:
+                    var_name = self._validate_variable_name(var_name)
                     self._context[var_name] = now
 
                 return now
@@ -1228,7 +1262,7 @@ class DirectiveParser:
 
         return self._TEMPLATETAG_PATTERN.sub(replace_templatetag, template)
 
-    def _parse_widthratio(self, template: str) -> str:
+    def _parse_ratio(self, template: str) -> str:
         """Process @widthratio directive to calculate a width ratio."""
 
         def replace_widthratio(match: Match) -> str:
@@ -1240,7 +1274,7 @@ class DirectiveParser:
             except Exception as e:
                 raise DirectiveParsingError(f"Error in @widthratio directive: {str(e)}")
 
-        return self._WIDTHRATIO_PATTERN.sub(replace_widthratio, template)
+        return self._RATIO_PATTERN.sub(replace_widthratio, template)
 
     def _parse_with(self, template: str) -> str:
         """Process @with directive to assign a value to a variable."""
@@ -1365,25 +1399,23 @@ class DirectiveParser:
         return self._URLIS_PATTERN.sub(lambda match: self._handle_urlis(match, context), template)
 
     def _handle_urlis(self, match, context):
-        route = match.group("route")
-        param = match.group("param")
+        route = match.group("route").strip("\"'").strip()
+        param = match.group("param") or ""
 
-        if not route:
-            raise DirectiveParsingError("@urlis directive requires a route name")
+        param = self._validate_string(param.strip())
 
         # Parse variables as the route may be a variable
         route = self._variable_parser.parse_variables(route, context)
+        route = self._context.get(route, route)
 
         try:
-            from django.urls import resolve
-
-            resolver_match = resolve(self._context.get("request").path_info)
-        except Exception as e:
-            raise DirectiveParsingError(str(e)) from e
-        else:
-            if route == resolver_match.url_name:
+            req = self._context.get("request")
+            if req.resolver_match.url_name == route:
                 return param
-            return ""
+        except Exception as e:
+            raise DirectiveParsingError(str(e))
+
+        return ""
 
     def _parse_field(self, template: str) -> str:
         """
@@ -1540,7 +1572,7 @@ class DirectiveParser:
             text = match.group("text")
             translation_context = match.group("context")
             if translation_context:
-                return pgettext(translation_context.strip('"'), text.strip('"'))
+                return pgettext(translation_context.strip('"').strip("'"), text.strip('"').strip("'"))
             return _(text.strip('"'))
 
         # Handle @blocktranslate with @plural and @endblocktranslate
