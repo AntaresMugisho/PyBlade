@@ -35,7 +35,7 @@ from .variables import VariableParser
 class DirectiveParser:
     """Handles parsing and processing of template directives."""
 
-    # Cached regex patterns
+    # Regex patterns
     _ESCAPED_VAR_PATTERN: Pattern = re.compile(r"{{\s*(.*?)\s*}}")
     _FOR_PATTERN: Pattern = re.compile(r"@for\s*\((.*?)\s+in\s+(.*?)\)\s*(.*?)(?:@empty\s*(.*?))?@endfor", re.DOTALL)
     _IF_PATTERN: Pattern = re.compile(
@@ -94,6 +94,14 @@ class DirectiveParser:
     )
     _WITH_PATTERN: Pattern = re.compile(
         r"@with\s*\((?P<expression>.*?)\s*as\s*(?P<variable>.*?)\)\s*(?P<content>.*?)\s*@endwith", re.DOTALL
+    )
+    _TRANSLATE_PATTERN = re.compile(
+        r"@(?:trans|translate)\s*\(\s*(?P<text>.*?)\s*,?\s*\s*"
+        r"(?:context=(?P<context>.*?))?\s*(?:as\s*(?P<alias>.*?))?\)",
+        re.DOTALL,
+    )
+    _BLOCK_TRANSLATE_PATTERN = re.compile(
+        r"@blocktranslate(?:\s+count\s+(?P<count>\w+))?\s*\{(?P<block>.*?)@endblocktranslate\}", re.DOTALL
     )
     _COMMENT_PATTERN: Pattern = re.compile(r"@comment\s*(?P<content>.*?)@endcomment", re.DOTALL)
     _VERBATIM_PATTERN: Pattern = re.compile(r"@verbatim\s*(?P<content>.*?)@endverbatim", re.DOTALL)
@@ -252,6 +260,7 @@ class DirectiveParser:
         template = self._parse_component(template)
         template = self._parse_url(template)
         template = self._parse_autoescape(template)
+        template = self._parse_translations(template)
 
         # Liveblade directives
         template = self._parse_liveblade_scripts(template)
@@ -1564,16 +1573,30 @@ class DirectiveParser:
         Process @translate, @trans, @blocktranslate, and @plural directives in PyBlade templates.
         """
 
-        from django.utils.translation import gettext_lazy as _
-        from django.utils.translation import ngettext, pgettext
+        try:
+            from django.utils.translation import gettext_lazy as _
+            from django.utils.translation import ngettext, pgettext
+        except ImportError as e:
+            raise e
 
         # Handle @translate and @trans with optional context
         def replace_trans(match):
             text = match.group("text")
             translation_context = match.group("context")
+            alias = match.group("alias")
+
+            if text:
+                text = self._validate_string(text)
             if translation_context:
-                return pgettext(translation_context.strip('"').strip("'"), text.strip('"').strip("'"))
-            return _(text.strip('"'))
+                translation_context = self._validate_string(translation_context)
+                return str(pgettext(translation_context, text))
+
+            translated = str(_(text))
+
+            if alias:
+                self._context[alias] = translated
+
+            return translated
 
         # Handle @blocktranslate with @plural and @endblocktranslate
         def replace_blocktrans(match):
@@ -1581,6 +1604,9 @@ class DirectiveParser:
             count_var = match.group("count")
             plural = None
             singular = None
+
+            print(block_content)
+            print(count_var)
 
             # Parse the block for @plural
             plural_match = re.search(r"(?P<singular>.*)@plural\s*(?P<plural>.*)", block_content, re.DOTALL)
@@ -1598,19 +1624,9 @@ class DirectiveParser:
                 return ngettext(singular, plural, count)
             return _(singular)
 
-        # Regex patterns
-        translate_pattern = re.compile(
-            r"@(?:trans|translate)\(\s*(?P<text>'[^']+'|\"[^\"]+\")\s*"
-            r"(?:,\s*context\s*=\s*(?P<context>'[^']+'|\"[^\"]+\"))?\s*\)",
-            re.DOTALL,
-        )
-        blocktranslate_pattern = re.compile(
-            r"@blocktranslate(?:\s+count\s+(?P<count>\w+))?\s*\{(?P<block>.*?)@endblocktranslate\}", re.DOTALL
-        )
-
         # Replace directives in content
-        template = translate_pattern.sub(replace_trans, template)
-        template = blocktranslate_pattern.sub(replace_blocktrans, template)
+        template = self._TRANSLATE_PATTERN.sub(replace_trans, template)
+        template = self._BLOCK_TRANSLATE_PATTERN.sub(replace_blocktrans, template)
 
         return template
 
