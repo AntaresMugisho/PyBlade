@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PyBlade Error</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .animate-slide-down {
+            animation: slideDown 0.4s ease-out;
+        }
+        .line-highlight {
+            background: linear-gradient(90deg, rgba(255, 212, 59, 0.15) 0%, rgba(255, 212, 59, 0.05) 100%);
+            border-left: 4px solid #FFD43B;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 min-h-screen text-slate-100 p-8">
+    <div class="max-w-5xl mx-auto animate-slide-down">
+        <!-- Header -->
+        <div class="mb-8 flex items-center gap-4">
+            <div class="flex items-center gap-2">
+                <img src="./pyblade.png" alt="PyBlade Logo" class="w-12 h-12">
+
+                <h1 class="text-4xl font-bold text-blue-400">
+                    Py<span class="text-yellow-300">Blade</span>
+                </h1>
+            </div>
+            <div class="flex-1"></div>
+            <span class="px-4 py-2 bg-red-500/20 text-red-300 rounded-full text-sm font-medium border border-red-500/30">
+                Development Mode
+            </span>
+        </div>
+
+        <!-- Error Card -->
+        <div class="bg-slate-800/50 backdrop-blur-sm rounded-2xl shadow-2xl border border-slate-700/50 overflow-hidden">
+            <!-- Error Header -->
+            <div class="bg-gradient-to-r from-red-500/20 to-red-600/20 border-b border-red-500/30 p-6">
+                <div class="flex items-start gap-4">
+                    <div class="bg-red-500 rounded-full p-3 flex-shrink-0">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                        </svg>
+                    </div>
+                    <div class="flex-1">
+                        <h2 class="text-2xl font-bold text-red-300 mb-2">Template Rendering Error</h2>
+                        <p class="text-slate-300 text-lg font-mono" id="error-message">
+                            NameError: name 'undefined_variable' is not defined
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- File Info -->
+            <div class="bg-slate-800/80 border-b border-slate-700/50 px-6 py-4">
+                <div class="flex items-center gap-6 text-sm">
+                    <div class="flex items-center gap-2">
+                        <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                        <span class="text-slate-400">Template file:</span>
+                        <span class="text-slate-200 font-mono" id="file-path">templates/index.html</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-slate-400">Line:</span>
+                        <svg class="w-4 h-4 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14"/>
+                        </svg>
+                        <span class="text-yellow-300 font-mono font-bold" id="error-line">42</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Code Preview -->
+            <div class="p-6">
+                <div class="bg-slate-900/80 rounded-xl border border-slate-700/50 overflow-hidden">
+                    <div class="bg-slate-800/50 px-4 py-2 border-b border-slate-700/50 flex items-center gap-2">
+                        <div class="flex gap-1.5">
+                            <div class="w-3 h-3 rounded-full bg-red-500/80"></div>
+                            <div class="w-3 h-3 rounded-full bg-yellow-500/80"></div>
+                            <div class="w-3 h-3 rounded-full bg-green-500/80"></div>
+                        </div>
+                        <span class="text-xs text-slate-400 ml-2 font-mono">Code Context</span>
+                    </div>
+                    <div class="p-4 overflow-x-auto">
+                        <div class="font-mono text-sm" id="code-lines">
+                            <div class="flex hover:bg-slate-800/30 transition-colors duration-150">
+                                <span class="text-slate-500 select-none w-12 text-right pr-4 flex-shrink-0">40</span>
+                                <span class="text-slate-300">&lt;div class="container"&gt;</span>
+                            </div>
+                            <div class="flex hover:bg-slate-800/30 transition-colors duration-150">
+                                <span class="text-slate-500 select-none w-12 text-right pr-4 flex-shrink-0">41</span>
+                                <span class="text-slate-300">    &lt;h1&gt;{{ title }}&lt;/h1&gt;</span>
+                            </div>
+                            <div class="flex line-highlight">
+                                <span class="text-yellow-400 font-bold select-none w-12 text-right pr-4 flex-shrink-0">42</span>
+                                <span class="text-slate-100">    &lt;p&gt;{{ undefined_variable }}&lt;/p&gt;</span>
+                                <svg class="w-5 h-5 text-red-400 ml-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                                </svg>
+                            </div>
+                            <div class="flex hover:bg-slate-800/30 transition-colors duration-150">
+                                <span class="text-slate-500 select-none w-12 text-right pr-4 flex-shrink-0">43</span>
+                                <span class="text-slate-300">    &lt;p&gt;{{ description }}&lt;/p&gt;</span>
+                            </div>
+                            <div class="flex hover:bg-slate-800/30 transition-colors duration-150">
+                                <span class="text-slate-500 select-none w-12 text-right pr-4 flex-shrink-0">44</span>
+                                <span class="text-slate-300">&lt;/div&gt;</span>
+                            </div>
+                            <div class="flex hover:bg-slate-800/30 transition-colors duration-150">
+                                <span class="text-slate-500 select-none w-12 text-right pr-4 flex-shrink-0">45</span>
+                                <span class="text-slate-300"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="bg-slate-800/30 border-t border-slate-700/50 px-6 py-4">
+                <div class="flex items-center gap-2 text-sm text-slate-400">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+                    </svg>
+                    <span>This detailed error page is only shown in development mode. In production, users will see a generic error message.</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Additional Info -->
+        <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="bg-slate-800/30 backdrop-blur-sm rounded-lg border border-slate-700/50 p-4">
+                <h3 class="text-sm font-semibold text-blue-400 mb-2 flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                    </svg>
+                    Quick Fix
+                </h3>
+                <p class="text-sm text-slate-300">Check if the variable is defined in your template context or if there's a typo in the variable name.</p>
+            </div>
+            <div class="bg-slate-800/30 backdrop-blur-sm rounded-lg border border-slate-700/50 p-4">
+                <h3 class="text-sm font-semibold text-yellow-400 mb-2 flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+                    </svg>
+                    Documentation
+                </h3>
+                <p class="text-sm text-slate-300">Visit PyBlade documentation for more information about template syntax and error handling.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // This script would be populated by PyBlade with actual error data
+        // Example usage:
+        // const errorData = {
+        //     message: "NameError: name 'undefined_variable' is not defined",
+        //     file: "templates/index.html",
+        //     line: 42,
+        //     codeLines: [
+        //         { lineNumber: 40, content: '<div class="container">', isError: false },
+        //         { lineNumber: 41, content: '    <h1>{{ title }}</h1>', isError: false },
+        //         { lineNumber: 42, content: '    <p>{{ undefined_variable }}</p>', isError: true },
+        //         { lineNumber: 43, content: '    <p>{{ description }}</p>', isError: false },
+        //         { lineNumber: 44, content: '</div>', isError: false },
+        //         { lineNumber: 45, content: '', isError: false }
+        //     ]
+        // };
+    </script>
+</body>
+</html>
