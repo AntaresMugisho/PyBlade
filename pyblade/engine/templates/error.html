@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PyBlade Error</title>
+    <title>Pyblade - {{ error_type }}</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @keyframes slideDown {
@@ -30,7 +30,9 @@
         <!-- Header -->
         <div class="mb-8 flex items-center gap-4">
             <div class="flex items-center gap-2">
-                <img src="./pyblade.png" alt="PyBlade Logo" class="w-12 h-12">
+                <div class="h-12 w-12">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 109.48 100.66"><title>&#x8D44;&#x6E90; 30</title><path d="M50.24 32.3c-.8-2-1.43-3.52-2-5-2.1-5.3-4.12-10.61-6.24-15.84a2.25 2.25 0 0 1 .79-3.16c24-18.53 60.78-4.31 66 25.55C112.21 53.6 103 71.56 85 79.93 64.41 89.56 38.62 80 29.82 59 22.27 41 15.39 22.64 8.23 4.44a22.89 22.89 0 0 1-.62-2.39c1.19-.07 2.07-.15 3-.16 5.91 0 11.83.05 17.74 0a3.17 3.17 0 0 1 3.5 2.38c5.7 14.78 11.41 29.62 17.45 44.33 2.79 6.81 7.7 11.63 15.42 12.76 8.11 1.19 14.67-1.62 19.3-8.26 4.85-6.94 5.08-14.4.65-21.62a19.71 19.71 0 0 0-33.06-1c-.33.43-.68.88-1.37 1.82z" fill="#34678E"/><path d="M19.53 52.22c.86 2.13 1.78 4.24 2.58 6.39a48 48 0 0 0 9.65 15.89 2.83 2.83 0 0 1 .62 3.5c-2.83 6.93-5.51 13.92-8.38 20.84-.3.75-1.27 1.75-1.94 1.76-7 .11-14 0-21 0a4.84 4.84 0 0 1-1.06-.45l18.8-47.9z" fill="#F2BB30"/></svg>
+                </div>
 
                 <h1 class="text-4xl font-bold text-blue-400">
                     Py<span class="text-yellow-300">Blade</span>
@@ -53,9 +55,9 @@
                         </svg>
                     </div>
                     <div class="flex-1">
-                        <h2 class="text-2xl font-bold text-red-300 mb-2">Template Rendering Error</h2>
+                        <h2 class="text-2xl font-bold text-red-300 mb-2">{{ error_type }}</h2>
                         <p class="text-slate-300 text-lg font-mono" id="error-message">
-                            NameError: name 'undefined_variable' is not defined
+                            {{ error_message }}
                         </p>
                     </div>
                 </div>
@@ -69,14 +71,14 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                         </svg>
                         <span class="text-slate-400">Template file:</span>
-                        <span class="text-slate-200 font-mono" id="file-path">templates/index.html</span>
+                        <span class="text-slate-200 font-mono" id="file-path">{{template_name}}</span>
                     </div>
                     <div class="flex items-center gap-2">
                         <span class="text-slate-400">Line:</span>
                         <svg class="w-4 h-4 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14"/>
                         </svg>
-                        <span class="text-yellow-300 font-mono font-bold" id="error-line">42</span>
+                        <span class="text-yellow-300 font-mono font-bold" id="error-line">{{ line_number }}</span>
                     </div>
                 </div>
             </div>
@@ -94,14 +96,13 @@
                     </div>
                     <div class="p-4 overflow-x-auto">
                         <div class="font-mono text-sm" id="code-lines">
+                            @for(line in [1, 3, 4])
                             <div class="flex hover:bg-slate-800/30 transition-colors duration-150">
                                 <span class="text-slate-500 select-none w-12 text-right pr-4 flex-shrink-0">40</span>
                                 <span class="text-slate-300">&lt;div class="container"&gt;</span>
                             </div>
-                            <div class="flex hover:bg-slate-800/30 transition-colors duration-150">
-                                <span class="text-slate-500 select-none w-12 text-right pr-4 flex-shrink-0">41</span>
-                                <span class="text-slate-300">    &lt;h1&gt;{{ title }}&lt;/h1&gt;</span>
-                            </div>
+                            @endfor
+
                             <div class="flex line-highlight">
                                 <span class="text-yellow-400 font-bold select-none w-12 text-right pr-4 flex-shrink-0">42</span>
                                 <span class="text-slate-100">    &lt;p&gt;{{ undefined_variable }}&lt;/p&gt;</span>

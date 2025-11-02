@@ -5,7 +5,7 @@ Template class for representing loaded templates.
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
-from .parsing.template_processor import TemplateProcessor
+from .processor import TemplateProcessor
 
 try:
     from django.template.backends.utils import csrf_input_lazy, csrf_token_lazy
@@ -63,7 +63,7 @@ class Template:
 
         if context is None:
             context = {}
-            
+
         # Handle Django-specific context if available
         if request is not None and DJANGO_AVAILABLE:
             context["request"] = request
@@ -76,9 +76,9 @@ class Template:
 
         if not self.engine:
             self._processor = TemplateProcessor()
-            return self._processor.render(self.content, context)
+            return self._processor.render(self.content, context, template_name=self.name, template_path=self.path)
 
-        return self.engine.render(self.content, context)
+        return self.engine.render(self.content, context, template_name=self.name, template_path=self.path)
 
     def get_relative_path(self, base_dir: Optional[Union[str, Path]] = None) -> str:
         """

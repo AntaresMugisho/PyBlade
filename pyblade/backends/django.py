@@ -38,6 +38,7 @@ class Template:
     def __init__(self, pyblade_template, backend):
         self.pyblade_template = pyblade_template
         self.pyblade_template.set_backend(backend)
+        self.pyblade_template.set_engine(backend.engine)
         self.backend = backend
 
     def render(self, context=None, request=None):
