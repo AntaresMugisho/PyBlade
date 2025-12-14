@@ -34,10 +34,7 @@ def safe_eval(
     try:
         return eval(expression, {"__builtins__": builtins}, context)
     except Exception as e:
-        # If it's a syntax error or name error that might be handled by chaining, re-raise?
-        # The caller (ExpressionEvaluator) catches Exception and tries chaining.
-        # But if it's a NameError for 'range', chaining won't help unless 'range' is in context.
-        # So we want eval to succeed if it's a builtin.
+        print(f"DEBUG: safe_eval failed for '{expression}': {e}")
         raise e
 
 
@@ -136,7 +133,7 @@ class ExpressionEvaluator:
         # If it has operators like +, -, *, /, etc., it's not a simple chain
         if any(
             op in expression
-            for op in ["+", "-", "*", "/", "%", "==", "!=", "<", ">", "<=", ">=", " and ", " or ", " not "]
+            for op in ["+", "-", "*", "/", "%", "==", "!=", "<", ">", "<=", ">=", " and ", " or ", " not ", "(", ")"]
         ):
             return False
         # If it has dots, it's likely a chain

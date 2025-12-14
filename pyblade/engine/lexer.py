@@ -106,7 +106,7 @@ class Lexer:
                 # Match plain text segments. This must be the last "match anything" rule.
                 # It matches any character that is NOT the start of a special block
                 # We need to be careful not to consume closing delimiters
-                text_segment = self._match_regex_at_current_pos(r"[^@\{}\!]+")
+                text_segment = self._match_regex_at_current_pos(r"[^@\{}\!#]+")
                 if text_segment:
                     self._add_token("TEXT", text_segment)
                 else:

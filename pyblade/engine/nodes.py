@@ -323,5 +323,149 @@ class ContinueNode(Node):
     def __init__(self, condition=None):
         self.condition = condition
 
+class TransNode(Node):
+    """Represents a @trans('message') directive."""
+
+    def __init__(self, message, context=None, noop=False):
+        self.message = message
+        self.context = context
+        self.noop = noop
+
     def __repr__(self):
-        return f"ContinueNode(condition='{self.condition}')"
+        return f"TransNode(message='{self.message}', context='{self.context}', noop={self.noop})"
+
+
+class BlockTranslateNode(Node):
+    """Represents a @blocktranslate...@endblocktranslate block."""
+
+    def __init__(self, body, count=None, context=None, trimmed=False):
+        self.body = body
+        self.count = count
+        self.context = context
+        self.trimmed = trimmed
+
+    def __repr__(self):
+        return f"BlockTranslateNode(body={self.body}, count='{self.count}', context='{self.context}', trimmed={self.trimmed})"
+
+
+class WithNode(Node):
+    """Represents a @with(vars)...@endwith block."""
+
+    def __init__(self, variables, body):
+        self.variables = variables  # Dictionary or list of assignments
+        self.body = body
+
+    def __repr__(self):
+        return f"WithNode(variables={self.variables}, body={self.body})"
+
+
+class NowNode(Node):
+    """Represents a @now('format') directive."""
+
+    def __init__(self, format_string):
+        self.format_string = format_string
+
+    def __repr__(self):
+        return f"NowNode(format_string='{self.format_string}')"
+
+
+class RegroupNode(Node):
+    """Represents a @regroup(target, by, as_name) directive."""
+
+    def __init__(self, target, by, as_name):
+        self.target = target
+        self.by = by
+        self.as_name = as_name
+
+    def __repr__(self):
+        return f"RegroupNode(target='{self.target}', by='{self.by}', as_name='{self.as_name}')"
+
+
+class SelectedNode(Node):
+    """Represents a @selected(condition) directive."""
+
+    def __init__(self, condition):
+        self.condition = condition
+
+    def __repr__(self):
+        return f"SelectedNode(condition='{self.condition}')"
+
+
+class RequiredNode(Node):
+    """Represents a @required(condition) directive."""
+
+    def __init__(self, condition):
+        self.condition = condition
+
+    def __repr__(self):
+        return f"RequiredNode(condition='{self.condition}')"
+
+
+class CheckedNode(Node):
+    """Represents a @checked(condition) directive."""
+
+    def __init__(self, condition):
+        self.condition = condition
+
+    def __repr__(self):
+        return f"CheckedNode(condition='{self.condition}')"
+
+
+class AutocompleteNode(Node):
+    """Represents a @autocomplete(value) directive."""
+
+    def __init__(self, value):
+        self.value = value
+
+    def __repr__(self):
+        return f"AutocompleteNode(value='{self.value}')"
+
+
+class RatioNode(Node):
+    """Represents a @ratio(w, h) directive."""
+
+    def __init__(self, width, height):
+        self.width = width
+        self.height = height
+
+    def __repr__(self):
+        return f"RatioNode(width='{self.width}', height='{self.height}')"
+
+
+class GetStaticPrefixNode(Node):
+    """Represents a @get_static_prefix directive."""
+    def __repr__(self):
+        return "GetStaticPrefixNode()"
+
+
+class GetMediaPrefixNode(Node):
+    """Represents a @get_media_prefix directive."""
+    def __repr__(self):
+        return "GetMediaPrefixNode()"
+
+
+class QuerystringNode(Node):
+    """Represents a @querystring(kwargs) directive."""
+
+    def __init__(self, kwargs_expr):
+        self.kwargs_expr = kwargs_expr
+
+    def __repr__(self):
+        return f"QuerystringNode(kwargs_expr='{self.kwargs_expr}')"
+
+
+class LiveBladeNode(Node):
+    """Represents a @liveblade directive."""
+    def __repr__(self):
+        return "LiveBladeNode()"
+
+
+class BlockNode(Node):
+    """Represents a @block('name')...@endblock block (Django style)."""
+
+    def __init__(self, name, body):
+        self.name = name
+        self.body = body
+
+    def __repr__(self):
+        return f"BlockNode(name='{self.name}', body={self.body})"
