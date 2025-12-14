@@ -1,4 +1,10 @@
+from datetime import date, datetime
 from typing import Any
+
+from .collection import DictWrapper, ListWrapper
+from .datetime import DateTimeWrapper
+from .number import NumberWrapper
+from .string import StringWrapper
 
 
 class BaseWrapper:
@@ -15,3 +21,21 @@ class BaseWrapper:
 
     def __bool__(self):
         return bool(self._value)
+
+
+def wrap_value(value: Any):
+    """Automatically wrap values with appropriate wrapper based on type."""
+    if isinstance(value, (StringWrapper, NumberWrapper, ListWrapper, DictWrapper, DateTimeWrapper)):
+        return value  # Already wrapped
+    elif isinstance(value, str):
+        return StringWrapper(value)
+    elif isinstance(value, (int, float)):
+        return NumberWrapper(value)
+    elif isinstance(value, (list, tuple)):
+        return ListWrapper(value)
+    elif isinstance(value, dict):
+        return DictWrapper(value)
+    elif isinstance(value, (datetime, date)):
+        return DateTimeWrapper(value)
+    else:
+        return value  # Return as-is for other types

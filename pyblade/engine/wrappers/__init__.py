@@ -1,4 +1,4 @@
-from .base import BaseWrapper
+from .base import BaseWrapper, wrap_value
 from .collection import DictWrapper, ListWrapper
 from .datetime import DateTimeWrapper
 from .number import NumberWrapper

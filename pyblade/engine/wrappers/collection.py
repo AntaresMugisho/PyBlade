@@ -1,6 +1,5 @@
 from .number import NumberWrapper
 from .string import StringWrapper
-from .wrapper import wrap_value
 
 
 class ListWrapper:
@@ -60,7 +59,7 @@ class DictWrapper:
 
     def get(self, key, default=None):
         """Get value by key with default."""
-        return wrap_value(self._value.get(key, default))
+        return self._value.get(key, default)
 
     def __str__(self):
         return str(self._value)

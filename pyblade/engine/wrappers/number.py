@@ -1,4 +1,4 @@
-from . import StringWrapper
+from .string import StringWrapper
 
 
 class NumberWrapper:
