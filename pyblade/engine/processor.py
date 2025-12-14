@@ -121,7 +121,6 @@ class TemplateProcessor:
             result_str = str(result)
 
             # Auto-escape HTML unless it's raw interpolation
-            print("\nVAR: ", result_str)
             if node.escaped:
                 return html.escape(result_str)
             else:

@@ -81,7 +81,7 @@ class Parser:
                     ast.append(self._parse_for(directive_args_str))
                 elif directive_name in ["elif", "else", "endif", "empty", "endfor"]:
                     # These are control flow directives handled by their parent block parsers.
-                    # Encountering them at the top level or out of sequence is a syntax error.
+                    # # Encountering them at the top level or out of sequence is a syntax error.
                     raise DirectiveParsingError(
                         f"Unexpected directive '@{directive_name}' at top level or outside its block.",
                         line=token.line,
@@ -226,12 +226,15 @@ class Parser:
                     body.append(self._parse_if(directive_args_str))
                 elif directive_name == "for":
                     body.append(self._parse_for(directive_args_str))
+                # TODO: Add more directives
                 else:
-                    raise DirectiveParsingError(
-                        f"Unexpected directive '@{directive_name}' inside a block.",
-                        line=token.line,
-                        column=token.column,
-                    )
+                    # raise DirectiveParsingError(
+                    #     f"Unexpected directive '@{directive_name}' inside a block.",
+                    #     line=token.line,
+                    #     column=token.column,
+                    # )
+                    pass
+
             elif token.type == "TEXT":
                 body.append(TextNode(token.value))
                 self.advance()

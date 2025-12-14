@@ -6,7 +6,13 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from pyblade.config import settings
-from pyblade.engine.exceptions import PyBladeException, UndefinedVariableError
+from pyblade.engine.exceptions import (
+    PyBladeException,
+    UndefinedVariableError,
+    DirectiveParsingError,
+    TemplateNotFoundError,
+    TemplateRenderError
+)
 
 from . import loader
 from .processor import TemplateProcessor
@@ -51,101 +57,81 @@ class PyBlade:
             except Exception:
                 return False
         elif self.framework == "fastapi":
-            # FastAPI doesn't have built-in DEBUG, check environment
+            # FastAPI doesn't have built-in DEBUG, so we check environment
             import os
-
             return os.getenv("DEBUG", "False").lower() == "true"
 
         return False
 
     def _handle_error(
-        self, error: Exception, template_name: str = None, template_source: str = None, context: dict = None
+        self, error: Exception, template_path: Path = None, template_source: str = None, context: dict = None
     ) -> str:
-        """Handle rendering errors and return appropriate error page."""
+        """Handle rendering errors and return error page."""
 
         if self.debug:
-            return self._render_debug_error(error, template_name, template_source, context)
-        else:
-            return self._render_production_error(error)
+            # Extract error details
+            error_type = type(error).__name__
+            error_message = str(error)
+            line_number = getattr(error, "line_number", None)
 
-    def _render_debug_error(
-        self, error: Exception, template_name: str = None, template_source: str = None, context: dict = None
-    ) -> str:
-        """Render detailed debug error page."""
+            # Get code context if we have line number and source
+            code_lines = []
+            if template_source and line_number:
+                lines = template_source.split("\n")
+                start = max(0, line_number - 4)
+                end = min(len(lines), line_number + 3)
 
-        # Extract error details
-        error_type = type(error).__name__
-        error_message = str(error)
-        line_number = getattr(error, "line_number", None)
+                for i in range(start, end):
+                    code_lines.append(
+                        {"number": i + 1, "content": lines[i] if i < len(lines) else "", "is_error": (i + 1) == line_number}
+                    )
 
-        # Get code context if we have line number and source
-        code_lines = []
-        if template_source and line_number:
-            lines = template_source.split("\n")
-            start = max(0, line_number - 3)
-            end = min(len(lines), line_number + 3)
+            # Get quick fix tip based on error type
+            quick_fix = self._get_quick_fix(error)
 
-            for i in range(start, end):
-                code_lines.append(
-                    {"number": i + 1, "content": lines[i] if i < len(lines) else "", "is_error": (i + 1) == line_number}
-                )
+            # Render error template
+            context = {
+                "error_type": error_type,
+                "error_message": error_message,
+                "template_path": template_path,
+                "line_number": line_number,
+                "code_lines": code_lines,
+                "quick_fix": quick_fix,
+            }
 
-        # Get suggestions based on error type
-        suggestions = self._get_error_suggestions(error)
+            template = loader.load_template("error", [Path(__file__).parent / "templates"])
+            return template.render(context)
 
-        # Render error template
-        context = {
-            "error_type": error_type,
-            "error_message": error_message,
-            "template_name": template_name or "Unknown",
-            "line_number": line_number,
-            "code_lines": code_lines,
-            "suggestions": suggestions,
-        }
-
-        from pprint import pprint
-
-        pprint(context)
-
-        template = loader.load_template("error", [Path(__file__).parent / "templates"])
-        return template.render(context)
-
-    def _get_error_suggestions(self, error: Exception) -> list:
+    def _get_quick_fix(self, error: Exception) -> str:
         """Get helpful suggestions based on error type."""
-        suggestions = []
-
-        if isinstance(error, (NameError, UndefinedVariableError)):
-            suggestions.append(
-                {
-                    "title": "Variable Not Found",
-                    "message": "Check if the variable is defined in your template context.",
-                }
-            )
-            if hasattr(error, "available_vars") and error.available_vars:
-                suggestions.append(
-                    {
-                        "title": "Available Variables",
-                        "message": f"Available: {', '.join(error.available_vars[:10])}",
-                    }
-                )
-
-        elif isinstance(error, AttributeError):
-            suggestions.append(
-                {
-                    "title": "Attribute Error",
-                    "message": "The object does not have this attribute. Check the object type and available methods.",
-                }
+        if isinstance(error, TemplateNotFoundError):
+            return (
+                "Ensure the template file exists, the path is correct, "
+                "and that it is accessible by the application."
             )
 
-        elif isinstance(error, TypeError):
-            suggestions.append(
-                {
-                    "title": "Type Error",
-                    "message": "Check that you are calling methods correctly and passing the right types.",
-                }
+        elif isinstance(error, TemplateRenderError):
+            return (
+                "Verify that the template syntax is valid and that all required "
+                "variables and directives are correctly defined."
             )
 
-        return suggestions
+        elif isinstance(error, DirectiveParsingError):
+            return (
+                "Check the syntax of the directive and ensure it is supported "
+                "by the current version of PyBlade."
+            )
+
+        elif isinstance(error, UndefinedVariableError):
+            return (
+                "Confirm that the variable is defined in the template context "
+                "and that its name is spelled correctly."
+            )
+
+        return (
+            "No automatic fix is available. Please consult the PyBlade "
+            "documentation or enable debug mode for more details."
+        )
 
     def render(
         self,
@@ -171,7 +157,7 @@ class PyBlade:
         try:
             template = self._processor.render(template, context)
         except PyBladeException as e:
-            return self._handle_error(error=e, template_source=template, template_name=template_path, context=context)
+            return self._handle_error(error=e, template_source=template, template_path=template_path, context=context)
 
         return template
 
