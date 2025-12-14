@@ -3,15 +3,42 @@ from typing import Any, Dict
 from .wrappers import DictWrapper, wrap_value
 
 
+SAFE_BUILTINS = {
+    "range": range,
+    "len": len,
+    "str": str,
+    "int": int,
+    "float": float,
+    "list": list,
+    "dict": dict,
+    "tuple": tuple,
+    "set": set,
+    "bool": bool,
+    "enumerate": enumerate,
+    "zip": zip,
+    "min": min,
+    "max": max,
+    "abs": abs,
+    "round": round,
+    "sum": sum,
+}
+
+
 def safe_eval(
     expression: str,
     context: Dict[str, Any] | None = None,
     builtins: Dict[str, Any] | None = None,
 ):
+    if builtins is None:
+        builtins = SAFE_BUILTINS
     try:
-        return eval(expression, {"__builtins__": {}}, context)
+        return eval(expression, {"__builtins__": builtins}, context)
     except Exception as e:
-        return f"Error evaluating '{expression}': {e}"
+        # If it's a syntax error or name error that might be handled by chaining, re-raise?
+        # The caller (ExpressionEvaluator) catches Exception and tries chaining.
+        # But if it's a NameError for 'range', chaining won't help unless 'range' is in context.
+        # So we want eval to succeed if it's a builtin.
+        raise e
 
 
 class ExpressionEvaluator:

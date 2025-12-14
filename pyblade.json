@@ -1,0 +1,5 @@
+{
+    "framework": "django",
+    "templates_dir": "templates",
+    "components_dir": "components"
+}

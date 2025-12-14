@@ -74,3 +74,254 @@ class ForNode(Node):
             f"  empty_body={self.empty_body}\n"
             f")"
         )
+
+
+class UnlessNode(Node):
+    """Represents an @unless...@endunless block."""
+
+    def __init__(self, condition, body):
+        self.condition = condition
+        self.body = body
+
+    def __repr__(self):
+        return f"UnlessNode(condition='{self.condition}', body={self.body})"
+
+
+class SwitchNode(Node):
+    """Represents an @switch...@endswitch block."""
+
+    def __init__(self, expression, cases, default_body=None):
+        self.expression = expression
+        self.cases = cases  # List of (value_expr, body_nodes) tuples
+        self.default_body = default_body
+
+    def __repr__(self):
+        cases_repr = ", ".join([f"(val='{v}', body={b})" for v, b in self.cases])
+        return (
+            f"SwitchNode(\n"
+            f"  expression='{self.expression}',\n"
+            f"  cases=[{cases_repr}],\n"
+            f"  default_body={self.default_body}\n"
+            f")"
+        )
+
+
+class AuthNode(Node):
+    """Represents an @auth...@endauth block."""
+
+    def __init__(self, body, else_body=None, guard=None):
+        self.body = body
+        self.else_body = else_body
+        self.guard = guard
+
+    def __repr__(self):
+        return f"AuthNode(body={self.body}, else_body={self.else_body}, guard='{self.guard}')"
+
+
+class GuestNode(Node):
+    """Represents an @guest...@endguest block."""
+
+    def __init__(self, body, else_body=None, guard=None):
+        self.body = body
+        self.else_body = else_body
+        self.guard = guard
+
+    def __repr__(self):
+        return f"GuestNode(body={self.body}, else_body={self.else_body}, guard='{self.guard}')"
+
+
+class IncludeNode(Node):
+    """Represents an @include('path', data) directive."""
+
+    def __init__(self, path, data_expr=None):
+        self.path = path
+        self.data_expr = data_expr
+
+    def __repr__(self):
+        return f"IncludeNode(path='{self.path}', data_expr='{self.data_expr}')"
+
+
+class ExtendsNode(Node):
+    """Represents an @extends('layout') directive."""
+
+    def __init__(self, layout):
+        self.layout = layout
+
+    def __repr__(self):
+        return f"ExtendsNode(layout='{self.layout}')"
+
+
+class SectionNode(Node):
+    """Represents an @section('name')...@endsection block."""
+
+    def __init__(self, name, body):
+        self.name = name
+        self.body = body
+
+    def __repr__(self):
+        return f"SectionNode(name='{self.name}', body={self.body})"
+
+
+class YieldNode(Node):
+    """Represents an @yield('name', default) directive."""
+
+    def __init__(self, name, default=None):
+        self.name = name
+        self.default = default
+
+    def __repr__(self):
+        return f"YieldNode(name='{self.name}', default='{self.default}')"
+
+
+class ComponentNode(Node):
+    """Represents an @component('name', data)...@endcomponent block."""
+
+    def __init__(self, name, data_expr=None, body=None):
+        self.name = name
+        self.data_expr = data_expr
+        self.body = body  # The default slot content
+
+    def __repr__(self):
+        return f"ComponentNode(name='{self.name}', data_expr='{self.data_expr}', body={self.body})"
+
+
+class SlotNode(Node):
+    """Represents an @slot('name')...@endslot block."""
+
+    def __init__(self, name, body):
+        self.name = name
+        self.body = body
+
+    def __repr__(self):
+        return f"SlotNode(name='{self.name}', body={self.body})"
+
+
+class VerbatimNode(Node):
+    """Represents an @verbatim...@endverbatim block."""
+
+    def __init__(self, content):
+        self.content = content
+
+    def __repr__(self):
+        return f"VerbatimNode(content='{repr(self.content)}')"
+
+
+class PythonNode(Node):
+    """Represents an @python...@endpython block."""
+
+    def __init__(self, code):
+        self.code = code
+
+    def __repr__(self):
+        return f"PythonNode(code='{repr(self.code)}')"
+
+
+class CommentNode(Node):
+    """Represents an @comment...@endcomment block."""
+
+    def __init__(self, content):
+        self.content = content
+
+    def __repr__(self):
+        return f"CommentNode(content='{repr(self.content)}')"
+
+
+class CycleNode(Node):
+    """Represents an @cycle(values) directive."""
+
+    def __init__(self, values, as_name=None):
+        self.values = values  # List of expressions
+        self.as_name = as_name
+
+    def __repr__(self):
+        return f"CycleNode(values={self.values}, as_name='{self.as_name}')"
+
+
+class FirstOfNode(Node):
+    """Represents an @firstof(values, default) directive."""
+
+    def __init__(self, values, default=None):
+        self.values = values  # List of expressions
+        self.default = default
+
+    def __repr__(self):
+        return f"FirstOfNode(values={self.values}, default='{self.default}')"
+
+
+class UrlNode(Node):
+    """Represents an @url('name', params) directive."""
+
+    def __init__(self, name, params_expr=None, as_name=None):
+        self.name = name
+        self.params_expr = params_expr
+        self.as_name = as_name
+
+    def __repr__(self):
+        return f"UrlNode(name='{self.name}', params_expr='{self.params_expr}', as_name='{self.as_name}')"
+
+
+class StaticNode(Node):
+    """Represents an @static('path') directive."""
+
+    def __init__(self, path):
+        self.path = path
+
+    def __repr__(self):
+        return f"StaticNode(path='{self.path}')"
+
+
+class CsrfNode(Node):
+    """Represents an @csrf directive."""
+
+    def __repr__(self):
+        return "CsrfNode()"
+
+
+class MethodNode(Node):
+    """Represents an @method('POST') directive."""
+
+    def __init__(self, method):
+        self.method = method
+
+    def __repr__(self):
+        return f"MethodNode(method='{self.method}')"
+
+
+class StyleNode(Node):
+    """Represents an @style(dict) directive."""
+
+    def __init__(self, expression):
+        self.expression = expression
+
+    def __repr__(self):
+        return f"StyleNode(expression='{self.expression}')"
+
+
+class ClassNode(Node):
+    """Represents an @class(dict) directive."""
+
+    def __init__(self, expression):
+        self.expression = expression
+
+    def __repr__(self):
+        return f"ClassNode(expression='{self.expression}')"
+
+
+class BreakNode(Node):
+    """Represents an @break(condition) directive."""
+
+    def __init__(self, condition=None):
+        self.condition = condition
+
+    def __repr__(self):
+        return f"BreakNode(condition='{self.condition}')"
+
+
+class ContinueNode(Node):
+    """Represents an @continue(condition) directive."""
+
+    def __init__(self, condition=None):
+        self.condition = condition
+
+    def __repr__(self):
+        return f"ContinueNode(condition='{self.condition}')"

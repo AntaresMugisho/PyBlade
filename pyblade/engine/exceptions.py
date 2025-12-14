@@ -57,3 +57,13 @@ class TemplateRenderError(PyBladeException):
     def __init__(self, message: str, template_name: str = None, line: int = None, context: dict = None):
         self.context = context or {}
         super().__init__(message, template_name, line)
+
+
+class BreakLoop(Exception):
+    """Signal to break out of a loop."""
+    pass
+
+
+class ContinueLoop(Exception):
+    """Signal to continue to next iteration of a loop."""
+    pass
