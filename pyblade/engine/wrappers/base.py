@@ -1,10 +1,10 @@
 from datetime import date, datetime
 from typing import Any
 
-from .collection import DictWrapper, ListWrapper
-from .datetime import DateTimeWrapper
-from .number import NumberWrapper
-from .string import StringWrapper
+from .collection import TList, TDict
+from .datetime import TDateTime
+from .number import TNumber
+from .string import TString
 
 
 class BaseWrapper:
@@ -25,17 +25,17 @@ class BaseWrapper:
 
 def wrap_value(value: Any):
     """Automatically wrap values with appropriate wrapper based on type."""
-    if isinstance(value, (StringWrapper, NumberWrapper, ListWrapper, DictWrapper, DateTimeWrapper)):
+    if isinstance(value, (TString, TNumber, TList, TDict, TDateTime)):
         return value  # Already wrapped
     elif isinstance(value, str):
-        return StringWrapper(value)
+        return TString(value)
     elif isinstance(value, (int, float)):
-        return NumberWrapper(value)
+        return TNumber(value)
     elif isinstance(value, (list, tuple)):
-        return ListWrapper(value)
+        return TList(value)
     elif isinstance(value, dict):
-        return DictWrapper(value)
+        return TDict(value)
     elif isinstance(value, (datetime, date)):
-        return DateTimeWrapper(value)
+        return TDateTime(value)
     else:
         return value  # Return as-is for other types

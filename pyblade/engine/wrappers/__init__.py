@@ -1,7 +1,7 @@
 from .base import BaseWrapper, wrap_value
-from .collection import DictWrapper, ListWrapper
-from .datetime import DateTimeWrapper
-from .number import NumberWrapper
-from .string import StringWrapper
+from .collection import TDict, TList
+from .datetime import TDateTime
+from .number import TNumber
+from .string import TString
 
-__all__ = ["BaseWrapper", "StringWrapper", "NumberWrapper", "ListWrapper", "DictWrapper", "DateTimeWrapper"]
+__all__ = ["BaseWrapper", "TString", "TNumber", "TList", "TDict", "TDateTime"]

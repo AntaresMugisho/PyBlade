@@ -294,12 +294,11 @@ class TemplateProcessor:
                 return result_str
 
         except Exception as e:
-            return f"<!-- Error rendering '{node.expression}': {e} -->"
+            raise e
 
     def render_if(self, node: IfNode) -> str:
         """Process @if, @elif, and @else directives."""
-        
-=        try:
+        try:
             condition_result = self.eval(node.condition, self.context)
             if condition_result:
                 output = []
@@ -329,20 +328,20 @@ class TemplateProcessor:
                             output.append(result)
                     return "".join(output)
         except Exception as e:
-            return f"<!-- Error evaluating if condition '{node.condition}': {e} -->"
+            raise e
 
         return ""
 
     def render_for(self, node: ForNode) -> str:
         try:
-            from .wrappers import DictWrapper, ListWrapper, wrap_value
+            from .wrappers import TDict, TList, wrap_value
 
             iterable = self.eval(node.collection_expr, self.context)
 
             # Unwrap if it's a wrapper object
-            if isinstance(iterable, DictWrapper):
+            if isinstance(iterable, TDict):
                 iterable = iterable._value
-            elif isinstance(iterable, ListWrapper):
+            elif isinstance(iterable, TList):
                 iterable = iterable._value
 
             if not hasattr(iterable, '__iter__'):
@@ -521,16 +520,7 @@ class TemplateProcessor:
             path = args_tuple[0]
             data = args_tuple[1] if len(args_tuple) > 1 else {}
             
-            # Load template
-            # We need a way to load template. Processor doesn't have loader directly?
-            # It imports loader? No, it imports TemplateCache.
-            # We need to import loader.
-            from . import loader
-            
-            # Convert dot notation to path if needed (simple heuristic)
-            if not path.endswith(".html") and "." in path:
-                path = path.replace(".", "/") + ".html"
-                
+            from . import loader                
             template = loader.load_template(path)
             
             # Merge context
@@ -544,7 +534,7 @@ class TemplateProcessor:
             return template.render(new_context)
             
         except Exception as e:
-            return f"<!-- Error including '{node.path}': {e} -->"
+            raise e
 
     def render_extends(self, node: ExtendsNode) -> str:
         """Process @extends directive."""
@@ -553,7 +543,7 @@ class TemplateProcessor:
             self.context['__extends'] = layout_path
             return ""
         except Exception as e:
-            return f"<!-- Error extending '{node.layout}': {e} -->"
+            raise e
 
     def render_section(self, node: SectionNode) -> str:
         """Process @section directive."""
@@ -640,11 +630,6 @@ class TemplateProcessor:
 
     def render_python(self, node: PythonNode) -> str:
         # Execute python code?
-        # For now, maybe just ignore or comment?
-        # Docs said "not to include raw Python code execution".
-        # But we added it.
-        # Let's try to exec it?
-        # exec(node.code, {}, self.context)
         return ""
 
     def render_comment(self, node: CommentNode) -> str:

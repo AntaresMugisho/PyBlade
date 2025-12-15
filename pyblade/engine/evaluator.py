@@ -1,6 +1,6 @@
 from typing import Any, Dict
 
-from .wrappers import DictWrapper, wrap_value
+from .wrappers import TDict, wrap_value
 
 
 SAFE_BUILTINS = {
@@ -77,8 +77,8 @@ class ExpressionEvaluator:
                     result = result.get(part["name"])
                     if result is None:
                         return None
-                elif isinstance(result, DictWrapper):
-                    # Access the internal dictionary of DictWrapper
+                elif isinstance(result, TDict):
+                    # Access the internal dictionary of TDict
                     result = result._value.get(part["name"])
                     if result is None:
                         return None

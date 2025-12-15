@@ -1,8 +1,8 @@
-from .number import NumberWrapper
-from .string import StringWrapper
+from .number import TNumber
+from .string import TString
 
 
-class ListWrapper:
+class TList:
     """Wrapper for lists that adds template-specific methods."""
 
     def __init__(self, value):
@@ -10,7 +10,7 @@ class ListWrapper:
 
     def join(self, separator=", "):
         """Join list elements into string."""
-        return StringWrapper(separator.join(str(item) for item in self._value))
+        return TString(separator.join(str(item) for item in self._value))
 
     def first(self):
         """Get first element."""
@@ -22,24 +22,24 @@ class ListWrapper:
 
     def count(self):
         """Get list length."""
-        return NumberWrapper(len(self._value))
+        return TNumber(len(self._value))
 
     def reverse(self):
         """Reverse list."""
-        return ListWrapper(list(reversed(self._value)))
+        return TList(list(reversed(self._value)))
 
     def sort(self):
         """Sort list."""
-        return ListWrapper(sorted(self._value))
+        return TList(sorted(self._value))
 
     def __str__(self):
         return str(self._value)
 
     def __repr__(self):
-        return f"ListWrapper({self._value})"
+        return f"TList({self._value})"
 
 
-class DictWrapper:
+class TDict:
     """Wrapper for dictionaries that adds template-specific methods."""
 
     def __init__(self, value):
@@ -47,15 +47,15 @@ class DictWrapper:
 
     def keys(self):
         """Get dictionary keys."""
-        return ListWrapper(list(self._value.keys()))
+        return TList(list(self._value.keys()))
 
     def values(self):
         """Get dictionary values."""
-        return ListWrapper(list(self._value.values()))
+        return TList(list(self._value.values()))
 
     def items(self):
         """Get dictionary items."""
-        return ListWrapper(list(self._value.items()))
+        return TList(list(self._value.items()))
 
     def get(self, key, default=None):
         """Get value by key with default."""
@@ -65,4 +65,4 @@ class DictWrapper:
         return str(self._value)
 
     def __repr__(self):
-        return f"DictWrapper({self._value})"
+        return f"TDict({self._value})"
