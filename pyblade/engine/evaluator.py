@@ -21,6 +21,7 @@ SAFE_BUILTINS = {
     "abs": abs,
     "round": round,
     "sum": sum,
+    "type": type
 }
 
 
@@ -34,7 +35,7 @@ def safe_eval(
     try:
         return eval(expression, {"__builtins__": builtins}, context)
     except Exception as e:
-        print(f"DEBUG: safe_eval failed for '{expression}': {e}")
+        # print(f"DEBUG: safe_eval failed for '{expression}': {e}")
         raise e
 
 

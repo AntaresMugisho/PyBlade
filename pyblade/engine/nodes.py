@@ -88,7 +88,7 @@ class UnlessNode(Node):
 
 
 class SwitchNode(Node):
-    """Represents an @switch...@endswitch block."""
+    """Represents an @switch...@endswitch block"""
 
     def __init__(self, expression, cases, default_body=None):
         self.expression = expression

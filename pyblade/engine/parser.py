@@ -169,7 +169,7 @@ class Parser:
                     ast.append(self._parse_break(directive_args_str))
                 elif directive_name == "continue":
                     ast.append(self._parse_continue(directive_args_str))
-                elif directive_name == "trans":
+                elif directive_name == "trans" or "translate":
                     ast.append(self._parse_trans(directive_args_str))
                 elif directive_name == "blocktranslate":
                     ast.append(self._parse_blocktranslate(directive_args_str))
@@ -201,7 +201,7 @@ class Parser:
                     ast.append(LiveBladeNode())
                 elif directive_name == "block":
                     ast.append(self._parse_block(directive_args_str))
-                elif directive_name in ["elif", "else", "endif", "empty", "endfor", "endunless", "case", "default", "endswitch", "endauth", "endguest", "endcomponent", "endslot", "endverbatim", "endpython", "endcomment", "endblocktranslate", "endwith", "endblock"]:
+                elif directive_name in ["elif", "else", "endif", "empty", "endfor", "endunless", "case", "default", "endswitch", "endswitch", "endauth", "endguest", "endcomponent", "endslot", "endverbatim", "endpython", "endcomment", "endblocktranslate", "endwith", "endblock"]:
                     # These are control flow directives handled by their parent block parsers.
                     # Encountering them at the top level or out of sequence is a syntax error.
                     raise DirectiveParsingError(
@@ -309,7 +309,11 @@ class Parser:
         # loop_expression_str should be like "(item in collection)"
         match = re.match(r"^\s*\(\s*([a-zA-Z_][a-zA-Z0-9_]*)\s+in\s+(.+?)\s*\)\s*$", loop_expression_str)
         if not match:
-            raise SyntaxError(f"Invalid @for loop syntax: '{loop_expression_str}'. Expected '(item in collection)'.")
+            raise DirectiveParsingError(
+                f"Invalid @for loop syntax: \'@for{loop_expression_str}\'. Expected \'@for(item in itterable)\'.",
+                line=self.current_token().line,
+                column=self.current_token().column,
+            )
 
         item_var = match.group(1)  # e.g., 'fruit'
         collection_expr = match.group(2).strip()  # e.g., 'fruits'
@@ -406,14 +410,6 @@ class Parser:
                     body.append(self._parse_break(directive_args_str))
                 elif directive_name == "continue":
                     body.append(self._parse_continue(directive_args_str))
-                # TODO: Add more directives
-                else:
-                    # raise DirectiveParsingError(
-                    #     f"Unexpected directive '@{directive_name}' inside a block.",
-                    #     line=token.line,
-                    #     column=token.column,
-                    # )
-                    pass
 
             elif token.type == "TEXT":
                 body.append(TextNode(token.value))

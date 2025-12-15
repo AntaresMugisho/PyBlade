@@ -295,7 +295,8 @@ class TemplateProcessor:
 
     def render_if(self, node: IfNode) -> str:
         """Process @if, @elif, and @else directives."""
-
+        
+        print("NODE CONDITION", type(node.condition), node.condition)
         try:
             condition_result = self.eval(node.condition, self.context)
             if condition_result:
@@ -368,7 +369,7 @@ class TemplateProcessor:
                 wrapped_item = wrap_value(item)
                 self.context[node.item_var] = wrapped_item
                 self.context["loop"] = loop
-
+                
                 try:
                     for child_node in node.body:
                         result = self.render_node(child_node)
@@ -393,7 +394,8 @@ class TemplateProcessor:
             return "".join(output)
 
         except Exception as e:
-            return f"<!-- Error evaluating for loop '{node.collection_expr}': {e} -->"
+            raise e
+
     def render_unless(self, node: UnlessNode) -> str:
         """Process @unless directive."""
         try:
@@ -406,8 +408,7 @@ class TemplateProcessor:
                         output.append(result)
                 return "".join(output)
         except Exception as e:
-            return f"<!-- Error evaluating unless condition '{node.condition}': {e} -->"
-        return ""
+            raise e
 
     def render_switch(self, node: SwitchNode) -> str:
         """Process @switch directive."""
@@ -433,8 +434,7 @@ class TemplateProcessor:
                 return "".join(output)
                 
         except Exception as e:
-            return f"<!-- Error evaluating switch '{node.expression}': {e} -->"
-        return ""
+            raise e
 
     def render_auth(self, node: AuthNode) -> str:
         """Process @auth directive."""
@@ -456,7 +456,6 @@ class TemplateProcessor:
                     is_authenticated = is_authenticated()
         
         # TODO: Handle guard if provided
-        
         if is_authenticated:
             output = []
             for child_node in node.body:
@@ -853,7 +852,7 @@ class TemplateProcessor:
                     groups.append({'grouper': key, 'list': list(group)})
                 
                 self.context[as_name] = groups
-                print(f"DEBUG: Regrouped into {as_name}: {len(groups)} groups")
+                # print(f"DEBUG: Regrouped into {as_name}: {len(groups)} groups")
                 return ""
                 
         return "<!-- Invalid @regroup syntax -->"
@@ -895,23 +894,26 @@ class TemplateProcessor:
         return "/media/" # TODO: Get from settings
 
     def render_querystring(self, node: QuerystringNode) -> str:
-        # node.kwargs_expr is "a=1, b=2"
-        # We want to update current query params with these.
-        # But we don't have access to request.GET here easily unless in context.
-        # Let's assume request is in context.
+        # node.kwargs_expr is "a=1, b=2" or "(a=1, b=2)"
         request = self.context.get('request')
         query_dict = {}
         if request:
             query_dict = request.GET.copy().dict()
         
         try:
-            updates = self.eval(f"dict({node.kwargs_expr})", self.context)
+            # Strip parens if present
+            kwargs_expr = node.kwargs_expr.strip()
+            if kwargs_expr.startswith("(") and kwargs_expr.endswith(")"):
+                kwargs_expr = kwargs_expr[1:-1]
+                
+            updates = self.eval(f"dict({kwargs_expr})", self.context)
             query_dict.update(updates)
             
             # Encode
             from urllib.parse import urlencode
             return "?" + urlencode(query_dict)
-        except:
+        except Exception as e:
+            # print(f"DEBUG: querystring error: {e}")
             return ""
 
     def render_liveblade(self, node: LiveBladeNode) -> str:
@@ -919,208 +921,26 @@ class TemplateProcessor:
         return '<script src="/liveblade.js"></script>'
 
     def render_block(self, node: BlockNode) -> str:
-        # Similar to section/yield.
-        # In Django, block defines a block that can be overridden.
-        # If we are extending, we store the block content.
-        # If we are parent, we render the block content (either from child or default).
-        
         name = self.eval(node.name, self.context)
-        
-        # Check if we have an override from a child
-        # We need a way to pass blocks from child to parent.
-        # In render_extends, we said we'd handle this.
-        # But actually, inheritance usually works by rendering the child first,
-        # collecting blocks, and then rendering the parent.
-        # So if we are in a child (extending), we render the block body and store it.
-        # If we are in the parent, we check if we have a stored block.
+        # print(f"DEBUG: render_block name={name}, extends={self.context.get('__extends')}")
         
         blocks = self.context.get('__blocks', {})
         
-        if '__extends' in self.context:
-            # We are in a child template (or parsing one)
-            # Render default content
-            output = []
-            for child_node in node.body:
-                result = self.render_node(child_node)
-                if result:
-                    output.append(result)
-            content = "".join(output)
+        if name in blocks:
+            return blocks[name]
             
-            # Store it. If child defines it, it overrides.
-            # But wait, if we are in child, we are defining the override.
-            # So we store it.
-            # But if we are in parent, we use it.
-            # The issue is order. Child is rendered first?
-            # If child is rendered first, it sets __blocks['name'] = content.
-            # Then parent is rendered. It sees __blocks['name'] and uses it.
-            # If not present, it renders its own body.
-            
-            # So here:
-            # If we are rendering, we check if we have an override.
-            if name in blocks:
-                return blocks[name]
-            
-            # If not, we render our body.
-            # But wait, if we are the child, we ARE defining the block.
-            # So we should store our body into blocks[name].
-            # But we only do that if we are extending?
-            # Yes.
-            
-            # Actually, the logic is:
-            # 1. Child renders. It sees @extends. It sets __extends.
-            # 2. Child sees @block. It renders body and puts into __blocks.
-            # 3. Child finishes.
-            # 4. Processor sees __extends. It loads parent.
-            # 5. Processor renders parent.
-            # 6. Parent sees @block. It checks __blocks. If found, returns it. Else renders body.
-            
-            # So:
-            # If we are in "recording mode" (child), we store.
-            # If we are in "rendering mode" (parent), we use.
-            # How do we know?
-            # We can check if we are currently extending?
-            # But render_extends sets __extends.
-            
-            # Let's assume if we are in the "first pass" (child), we store.
-            # But we don't have passes.
-            # We just render.
-            
-            # If we are extending, we shouldn't output anything except blocks?
-            # Yes.
-            
-            # So:
-            output = []
-            for child_node in node.body:
-                result = self.render_node(child_node)
-                if result:
-                    output.append(result)
-            content = "".join(output)
-            
-            # Always store/update?
-            # If we are child, we want to override.
-            # If we are parent, we want to use override if exists.
-            
-            # If name is already in blocks, it means a child (or previous block) defined it.
-            # So we use it?
-            # No, if we are parent, we use it.
-            # If we are child, we define it.
-            
-            # This implies we need to know if we are "defining" or "using".
-            # In Django, the child template is parsed, blocks are extracted.
-            # Then parent is rendered with those blocks.
-            
-            # Here we are executing directives.
-            # If we are in child, we execute @block.
-            # We should store it.
-            
-            # If we are in parent, we execute @block.
-            # We should check if stored, else use default.
-            
-            # How to distinguish?
-            # Maybe we can just always store if not present?
-            # No.
-            
-            # Let's look at `render_section`.
-            # It stores in `__sections`.
-            # And `render_yield` uses it.
-            # `@block` is like a combination of section and yield.
-            
-            # If we have `__blocks` in context, check if `name` is there.
-            if name in blocks:
-                return blocks[name]
-            
-            # If not, render body.
-            # But we also need to store it in case a parent needs it?
-            # No, parent is rendered AFTER child?
-            # If parent is rendered after child, then child has already populated `blocks`.
-            # So when parent runs, `name` IS in `blocks`.
-            # So parent returns `blocks[name]`.
-            # This works!
-            
-            # BUT, what if we are the child?
-            # We render body. We store it in `blocks`.
-            # And we return "" (because child output is discarded except blocks).
-            
-            # So:
-            # 1. Render body -> content.
-            # 2. If `name` NOT in `blocks` (or we want to override?):
-            #    Actually, if we are child, we want to SET `blocks[name]`.
-            #    If we are parent, we want to GET `blocks[name]`.
-            
-            # The problem is we use the SAME `render_block` function.
-            
-            # If we are child, we run first. `blocks` is empty.
-            # We set `blocks[name] = content`.
-            # We return "" (because `render_extends` suppresses output? No, `render_extends` returns "", but other nodes might return string).
-            # But if we are extending, the main `render` loop should probably discard output that is not in a block?
-            # Or `render_block` returns "" if extending?
-            
-            # If we are parent, we run second. `blocks` has content.
-            # We check `blocks`. It has content. We return it.
-            
-            # This seems to work for 1 level of inheritance.
-            # Child: `blocks[name] = content`. Returns "".
-            # Parent: `blocks[name]` exists. Returns it.
-            
-            # What if parent has default content?
-            # Parent runs. `blocks[name]` exists (from child). Returns it.
-            # Parent body is NOT rendered?
-            # Correct.
-            
-            # What if child didn't define it?
-            # Parent runs. `blocks[name]` not in `blocks`.
-            # Parent renders its own body. Returns it.
-            
-            # So the logic is:
-            # 1. If `name` in `blocks`: return `blocks[name]`.
-            # 2. Else:
-            #    Render body -> content.
-            #    If we are extending (child), store `blocks[name] = content` and return "".
-            #    If we are not extending (base/standalone), return `content`.
-            
-            # Wait, if we are child, we run FIRST.
-            # So `name` is NOT in `blocks`.
-            # We render body.
-            # We store in `blocks`.
-            # We return "".
-            
-            # Then parent runs.
-            # `name` IS in `blocks`.
-            # We return `blocks[name]`.
-            
-            # This looks correct!
-            
-            # One catch: `{{ block.super }}`.
-            # If child wants to include parent content.
-            # This requires access to parent's block content.
-            # But parent hasn't rendered yet!
-            # This is the tricky part of inheritance.
-            # Usually requires 2 passes or lazy rendering.
-            # For now, let's ignore `block.super` or implement simple override.
-            
-            if name in blocks:
-                return blocks[name]
-            
-            # Render body
-            output = []
-            for child_node in node.body:
-                result = self.render_node(child_node)
-                if result:
-                    output.append(result)
-            content = "".join(output)
-            
-            # If we are extending, store and hide.
-            # How do we know if we are extending?
-            # `render_extends` sets `__extends`.
-            # But `render_extends` might be at the top of the file.
-            # So `__extends` should be set.
-            
-            if self.context.get('__extends'):
-                self.context.setdefault('__blocks', {})[name] = content
-                return ""
-            
-            # If not extending, just return content
-            return content
+        output = []
+        for child_node in node.body:
+            result = self.render_node(child_node)
+            if result:
+                output.append(result)
+        content = "".join(output)
+        
+        if self.context.get('__extends'):
+            self.context.setdefault('__blocks', {})[name] = content
+            return ""
+        
+        return content
             
         return "" # Should not happen if logic matches
 
