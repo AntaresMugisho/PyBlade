@@ -108,7 +108,7 @@ class DjangoCommand(BaseCommand):
         try:
             run_django_command(cmd)
         except Exception as e:
-            print("Error:", str(e))
+           raise e
 
     def load_django_command(self):
         """Load the actual Django command to extract help text and arguments."""

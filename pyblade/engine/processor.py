@@ -3,7 +3,10 @@ Core template processing functionality.
 """
 
 import html
+import gettext
 from typing import Any, Dict
+import re
+
 
 from pyblade.config import settings
 
@@ -296,8 +299,7 @@ class TemplateProcessor:
     def render_if(self, node: IfNode) -> str:
         """Process @if, @elif, and @else directives."""
         
-        print("NODE CONDITION", type(node.condition), node.condition)
-        try:
+=        try:
             condition_result = self.eval(node.condition, self.context)
             if condition_result:
                 output = []
@@ -369,7 +371,7 @@ class TemplateProcessor:
                 wrapped_item = wrap_value(item)
                 self.context[node.item_var] = wrapped_item
                 self.context["loop"] = loop
-                
+
                 try:
                     for child_node in node.body:
                         result = self.render_node(child_node)
@@ -697,33 +699,182 @@ class TemplateProcessor:
         method = self.eval(node.method, self.context)
         return f'<input type="hidden" name="_method" value="{method}">'
     def render_trans(self, node: TransNode) -> str:
-        # node.message is the args string, e.g. "'Hello'" or "'Hello' context 'ctx'"
-        # We need to parse/eval it.
+
         try:
-            # Simplified: just eval the first arg as message
-            # TODO: Handle context, noop, etc. properly
-            args = self.eval(f"({node.message})", self.context)
-            if isinstance(args, tuple):
-                message = args[0]
+            # 1. Normalize argument string
+            args_str = node.message.strip()
+            if args_str.startswith("(") and args_str.endswith(")"):
+                args_str = args_str[1:-1]
+
+            # --------------------------------------------------
+            # 2. Detect Django-style: 'message' as variable
+            # --------------------------------------------------
+            as_variable = None
+
+            as_match = re.search(
+                r"""
+                ^
+                \s*
+                (?P<msg>['"].+?['"])
+                \s+as\s+
+                (?P<var>[a-zA-Z_][a-zA-Z0-9_]*)
+                \s*$
+                """,
+                args_str,
+                re.VERBOSE,
+            )
+
+            if as_match:
+                args_str = as_match.group("msg")
+                as_variable = as_match.group("var")
+
+            # --------------------------------------------------
+            # 3. Safe argument extraction
+            # --------------------------------------------------
+            def _extract(*args, **kwargs):
+                return args, kwargs
+
+            eval_context = dict(self.context)
+            eval_context["_extract"] = _extract
+
+            extracted_args, extracted_kwargs = self.eval(
+                f"_extract({args_str})",
+                eval_context
+            )
+
+            # --------------------------------------------------
+            # 4. Validate message
+            # --------------------------------------------------
+            if not extracted_args:
+                raise ValueError("@trans requires a string literal")
+
+            message = extracted_args[0]
+
+            if not isinstance(message, str):
+                raise TypeError("@trans message must be a string literal")
+
+            msg_context = extracted_kwargs.get("context")
+            noop = extracted_kwargs.get("noop", False)
+
+            if noop:
+                translated = message
             else:
-                message = args
-            
-            # TODO: Translation hook
-            return str(message)
-        except Exception as e:
-            return f"<!-- Error translating '{node.message}': {e} -->"
+                try:
+                    from django.utils.translation import gettext_lazy, pgettext
+                except ImportError as exc:
+                    raise RuntimeError(
+                        "Django is required to use @trans directive"
+                    ) from exc
+
+                if msg_context:
+                    if not isinstance(msg_context, str):
+                        raise TypeError("context must be a string")
+                    translated = pgettext(msg_context, message)
+                else:
+                    translated = gettext_lazy(message)
+
+            # --------------------------------------------------
+            # 5. Assignment mode (@trans('...' as var))
+            # --------------------------------------------------
+            if as_variable:
+                self.context[as_variable] = translated
+                return ""
+
+            # --------------------------------------------------
+            # 6. Direct output
+            # --------------------------------------------------
+            return translated
+
+        except Exception:
+            raise
+
 
     def render_blocktranslate(self, node: BlockTranslateNode) -> str:
-        # Render body
+        # node.count holds the args string, e.g. "(count=counter, trimmed=True)"
+        # Parse args
+        count_val = None
+        context_val = None
+        trimmed_val = False
+        
+        try:
+            if node.count:
+                # Strip outer parens if present
+                args_str = node.count.strip()
+                if args_str.startswith("(") and args_str.endswith(")"):
+                    args_str = args_str[1:-1]
+                    
+                # Use the same extraction trick
+                def _extract(*args, **kwargs):
+                    return args, kwargs
+                
+                # node.count might be just "count=counter" or "counter" (positional?)
+                # Docs say: @blocktranslate(count=counter)
+                extracted_args, extracted_kwargs = self.eval(f"_extract({args_str})", {**self.context, "_extract": _extract})
+                
+                # If positional args, assume first is count? Or maybe no positional args allowed?
+                # Let's assume kwargs mostly.
+                count_val = extracted_kwargs.get('count')
+                context_val = extracted_kwargs.get('context')
+                trimmed_val = extracted_kwargs.get('trimmed', False)
+        except Exception:
+            # Fallback or ignore error
+            pass
+            
+        # Render body (singular)
         output = []
         for child_node in node.body:
             result = self.render_node(child_node)
             if result:
                 output.append(result)
-        content = "".join(output)
+        singular_content = "".join(output)
         
-        # TODO: Translation hook with count/context
-        return content
+        if trimmed_val:
+            singular_content = singular_content.strip()
+            
+        # Render plural body if exists
+        plural_content = None
+        if node.plural_body:
+            output_plural = []
+            for child_node in node.plural_body:
+                result = self.render_node(child_node)
+                if result:
+                    output_plural.append(result)
+            plural_content = "".join(output_plural)
+            
+            if trimmed_val:
+                plural_content = plural_content.strip()
+        
+        # Translate
+        translated = ""
+        if count_val is not None and plural_content is not None:
+            if context_val:
+                translated = gettext.npgettext(context_val, singular_content, plural_content, count_val)
+            else:
+                translated = gettext.ngettext(singular_content, plural_content, count_val)
+        else:
+            if context_val:
+                translated = gettext.pgettext(context_val, singular_content)
+            else:
+                translated = gettext.gettext(singular_content)
+                
+        # Perform variable substitution
+        # The translated string might contain Python-style formatting placeholders like %(name)s
+        # We should format it with the current context.
+        try:
+            # We can use the context directly?
+            # But context might have objects that are not strings.
+            # And the placeholders must match context keys.
+            # Also, 'count' should be available as 'count' in the format?
+            # Django adds 'count' to the context for formatting.
+            format_context = self.context.copy()
+            if count_val is not None:
+                format_context['count'] = count_val
+                
+            return translated % format_context
+        except Exception:
+            # If formatting fails (e.g. missing key), return as is or try safe format?
+            # For now return as is to avoid crashing, but maybe log warning.
+            return translated
 
     def render_with(self, node: WithNode) -> str:
         # node.variables is args string, e.g. "a=1, b=2"
@@ -852,7 +1003,6 @@ class TemplateProcessor:
                     groups.append({'grouper': key, 'list': list(group)})
                 
                 self.context[as_name] = groups
-                # print(f"DEBUG: Regrouped into {as_name}: {len(groups)} groups")
                 return ""
                 
         return "<!-- Invalid @regroup syntax -->"
@@ -913,7 +1063,6 @@ class TemplateProcessor:
             from urllib.parse import urlencode
             return "?" + urlencode(query_dict)
         except Exception as e:
-            # print(f"DEBUG: querystring error: {e}")
             return ""
 
     def render_liveblade(self, node: LiveBladeNode) -> str:
@@ -921,9 +1070,7 @@ class TemplateProcessor:
         return '<script src="/liveblade.js"></script>'
 
     def render_block(self, node: BlockNode) -> str:
-        name = self.eval(node.name, self.context)
-        # print(f"DEBUG: render_block name={name}, extends={self.context.get('__extends')}")
-        
+        name = self.eval(node.name, self.context)        
         blocks = self.context.get('__blocks', {})
         
         if name in blocks:

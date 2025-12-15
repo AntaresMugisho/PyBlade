@@ -169,7 +169,7 @@ class Parser:
                     ast.append(self._parse_break(directive_args_str))
                 elif directive_name == "continue":
                     ast.append(self._parse_continue(directive_args_str))
-                elif directive_name == "trans" or "translate":
+                elif directive_name == "trans" or directive_name == "translate":
                     ast.append(self._parse_trans(directive_args_str))
                 elif directive_name == "blocktranslate":
                     ast.append(self._parse_blocktranslate(directive_args_str))
@@ -637,9 +637,38 @@ class Parser:
         # If it's @blocktranslate(args), args_str is inside parens.
         # Let's assume Python style: @blocktranslate(count=n, trimmed=True)
         
-        body = self._parse_until_directives(["@endblocktranslate"])
+        # Parse until @plural or @endblocktranslate
+        body = self._parse_until_directives(["@plural", "@endblocktranslate"])
+        plural_body = None
+        
+        if self.current_token() and self.current_token().value == "@plural":
+            self.advance() # Consume @plural
+            plural_body = self._parse_until_directives(["@endblocktranslate"])
+            
         self.expect("DIRECTIVE", value_prefix="@endblocktranslate")
-        return BlockTranslateNode(body, count=args_str)
+        
+        # We need to parse args_str to get count, context, trimmed
+        # args_str could be "count=n, trimmed=True" or "count n trimmed"
+        # For now, let's just pass args_str to the node and let processor handle it?
+        # But BlockTranslateNode expects specific args.
+        # Let's assume we can't easily parse args here without eval.
+        # So we'll modify BlockTranslateNode to accept args_str or we try to parse simple cases.
+        # Actually, the user wants "count=counter".
+        # Let's pass args_str as 'count' for now and let processor parse it, 
+        # OR we change BlockTranslateNode to accept `args_str`.
+        # But I just updated BlockTranslateNode to take specific args.
+        # Let's try to parse it here if it's simple, or pass it as `count` and handle later.
+        # Wait, `count` in `__init__` is supposed to be the count variable/value.
+        # If I pass "count=counter", that's not right.
+        # Let's change the parser to just pass the raw string if we can't parse it easily,
+        # but `BlockTranslateNode` signature is specific.
+        # I'll stick to passing `args_str` as `count` for now, but I should probably refactor `BlockTranslateNode` 
+        # to be more flexible or parse args here.
+        # Given the constraints, I'll pass `args_str` to `count` and let `render_blocktranslate` parse it.
+        # This is a bit hacky but avoids changing `Node` signature too much if I can reuse `count` field as "args blob".
+        # Better: I'll use `count` field to store the raw args string if it's not parsed.
+        
+        return BlockTranslateNode(body, plural_body=plural_body, count=args_str)
 
     def _parse_with(self, args_str):
         """Parses an @with(vars)...@endwith block."""

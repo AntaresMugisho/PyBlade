@@ -42,7 +42,6 @@ class Config:
             with open(self._config_file, "r") as file:
                 self._data = json.load(file)
         else:
-            print(f"No config file found at {self._config_file}, using defaults")
             self._data = deepcopy(self._defaults)
 
     def save(self):

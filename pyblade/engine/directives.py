@@ -1,5 +1,5 @@
 """
-Directive parsing implementation for the template engine.
+Old directive parsing implementation for the template engine using regex.
 """
 
 import ast
@@ -1604,9 +1604,6 @@ class DirectiveParser:
             count_var = match.group("count")
             plural = None
             singular = None
-
-            print(block_content)
-            print(count_var)
 
             # Parse the block for @plural
             plural_match = re.search(r"(?P<singular>.*)@plural\s*(?P<plural>.*)", block_content, re.DOTALL)

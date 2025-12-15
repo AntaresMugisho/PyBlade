@@ -35,7 +35,6 @@ def safe_eval(
     try:
         return eval(expression, {"__builtins__": builtins}, context)
     except Exception as e:
-        # print(f"DEBUG: safe_eval failed for '{expression}': {e}")
         raise e
 
 

@@ -5,8 +5,6 @@ class Node:
 
 
 # TEXT
-
-
 class TextNode(Node):
     """Represents plain text content in the template."""
 
@@ -18,8 +16,6 @@ class TextNode(Node):
 
 
 # VARIABLE
-
-
 class VarNode(Node):
     """Represents a variable display block (e.g., {{ user.name }})."""
 
@@ -33,8 +29,6 @@ class VarNode(Node):
 
 
 # DIRECTIVES
-
-
 class IfNode(Node):
     """Represents an @if...@elif...@else...@endif conditional block."""
 
@@ -336,16 +330,17 @@ class TransNode(Node):
 
 
 class BlockTranslateNode(Node):
-    """Represents a @blocktranslate...@endblocktranslate block."""
+    """Represents an @blocktranslate...@plural...@endblocktranslate block."""
 
-    def __init__(self, body, count=None, context=None, trimmed=False):
+    def __init__(self, body, plural_body=None, count=None, context=None, trimmed=False):
         self.body = body
+        self.plural_body = plural_body
         self.count = count
         self.context = context
         self.trimmed = trimmed
 
     def __repr__(self):
-        return f"BlockTranslateNode(body={self.body}, count='{self.count}', context='{self.context}', trimmed={self.trimmed})"
+        return f"BlockTranslateNode(body={self.body}, plural_body={self.plural_body}, count='{self.count}', context='{self.context}', trimmed={self.trimmed}')"
 
 
 class WithNode(Node):
