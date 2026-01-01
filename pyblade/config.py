@@ -63,6 +63,10 @@ class Config:
             return super().__getattribute__(key)
 
         value = self._data.get(key, self._defaults.get(key))
+
+        if key.endswith(('_dir', '_path')):
+            return Path(value)
+
         if isinstance(value, dict):
             return Config(
                 config_file=self._config_file,
@@ -71,7 +75,7 @@ class Config:
                 key=key,
                 defaults=self._defaults.get(key, {}),
             )
-
+            
         return value
 
     def __setattr__(self, key, value):

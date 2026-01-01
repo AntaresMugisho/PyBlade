@@ -60,6 +60,6 @@ def get_project_root():
     
     # Falback to CWD if no pyblade.json file was found
     return current
-
+    
 def setup_django():
     pass

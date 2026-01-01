@@ -69,11 +69,13 @@ def load_django_commands():
     django_commands = []
 
     root_dir = get_project_root()
+    if not (root_dir / "pyblade.json").exists():
+        return []
+
     sys.path.insert(0, str(root_dir))  # MUST BE PASSED AS STRING
     settings_path_wo_ext = os.path.splitext(settings.settings_path)[0]
     settings_module = settings_path_wo_ext.replace("/", ".")
     os.environ["DJANGO_SETTINGS_MODULE"] = settings_module
-
     try:
         import django
         from django.core.management import get_commands as get_django_commands
