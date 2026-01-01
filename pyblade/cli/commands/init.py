@@ -6,7 +6,7 @@ from questionary import Choice
 from pyblade.cli import BaseCommand
 from pyblade.cli.exceptions import CommandError
 from pyblade.config import Config
-from pyblade.utils import get_version, run_command
+from pyblade.utils import get_version, run_command, get_project_root
 
 _SETTINGS_PATERN = re.compile(
     r"\"\"\"(?P<banner>.*?)\"\"\"\s*.*?\s*INSTALLED_APPS\s=\s\[\s*(?P<installed_apps>.*?)\s*\]\s*.*?\s*MIDDLEWARE\s=\s\[\s*(?P<middleware>.*?)\s*\]\s*.*?\s*TEMPLATES\s=\s*\[\s*(?P<templates>\{.*?\},)\n\]",  # noqa E501
@@ -217,8 +217,8 @@ class Command(BaseCommand):
     def _configure_tailwind(self):
         """Configures Tailwind CSS for the project."""
 
-        stubs_path = Path(self.settings.stubs_dir)
-        root_dir = Path(self.settings.root_dir)
+        stubs_path = self.settings.stubs_dir
+        root_dir = get_project_root()
 
         input_css = root_dir / "static/css/input.css"
         input_css.parent.mkdir(parents=True, exist_ok=True)

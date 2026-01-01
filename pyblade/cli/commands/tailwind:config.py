@@ -3,7 +3,7 @@ from pathlib import Path
 from pyblade.cli import BaseCommand
 from pyblade.cli.exceptions import CommandError
 from pyblade.config import Config
-from pyblade.utils import run_command
+from pyblade.utils import run_command, get_project_root
 
 
 class Command(BaseCommand):
@@ -28,39 +28,38 @@ class Command(BaseCommand):
             self._configure_tailwind()
 
         self.settings.save()
-        self.success("Tailwind CSS 4 has been configured successfully.")
 
     def _configure_tailwind(self):
         """Configures Tailwind CSS for the project."""
 
-        stubs_path = Path(__file__).parent.parent / "stubs"
+        stubs_path = self.settings.stubs_dir
+        root_dir = get_project_root()
 
-        css_static_dir = Path("static") / "css"
-        css_static_dir.mkdir(parents=True, exist_ok=True)
-
-        templates_dir = Path("templates")
-        templates_dir.mkdir(parents=True, exist_ok=True)
+        input_css = root_dir / "static/css/input.css"
+        input_css.parent.mkdir(parents=True, exist_ok=True)
 
         try:
             # Create the input and output static files
-            with open(css_static_dir / "input.css", "w") as file:
+            with open(input_css, "w") as file:
                 file.write('@import "tailwindcss";')
 
             # Create tailwind layout
             with open(stubs_path / "tailwind_layout.html.stub", "r") as file:
                 base_template = file.read()
 
-            with open(templates_dir / "layout.html", "w") as file:
+            with open(root_dir / "templates/layout.html", "w") as file:
                 file.write(base_template)
 
-            
         except Exception as e:
-            self.error(f"Failed to configure Tailwind: {str(e)}")
+            self.warning(f"Failed to configure Tailwind: {str(e)}")
             return
+
+        self.success("Tailwind CSS 4 has been configured successfully.")
+
 
     def _npm_install(self, package: str):
         """Installs an NPM package using npm"""
         try:
-            return run_command(["npm", "install", package], self.settings.root_dir)
+            return run_command(["npm", "install", package], get_project_root())
         except CommandError as e:
             self.error(e.stderr)
