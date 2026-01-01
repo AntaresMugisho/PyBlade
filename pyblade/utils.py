@@ -4,7 +4,7 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-from pyblade.cli.exceptions import RunError
+from pyblade.cli.exceptions import CommandError
 
 
 def get_version(package_name: str = "pyblade"):
@@ -35,8 +35,8 @@ def run_command(command: List[str] | str, cwd: Optional[Path] = None) -> None:
     try:
         result = subprocess.check_call(command, text=True, cwd=cwd)
         return result
-    except subprocess.CalledProcessError as e:
-        raise RunError(e)
+    except Exception as e:
+        raise CommandError(str(e))
 
 
 def pascal_to_snake(string: str) -> str:
@@ -57,8 +57,9 @@ def get_project_root():
     for directory in [current, *current.parents]:
         if (directory / "pyblade.json").exists():
             return directory
-    raise Exception(f"Not a PyBlade project (or any parent up to mount point {current.parents[-1]})")
-
+    
+    # Falback to CWD if no pyblade.json file was found
+    return current
 
 def setup_django():
     pass

@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from pyblade.cli import BaseCommand
-from pyblade.cli.exceptions import RunError
+from pyblade.cli.exceptions import CommandError
 from pyblade.config import Config
 from pyblade.utils import run_command
 
@@ -27,6 +27,7 @@ class Command(BaseCommand):
             status.update("Configuring Tailwind CSS 4...")
             self._configure_tailwind()
 
+        self.settings.save()
         self.success("Tailwind CSS 4 has been configured successfully.")
 
     def _configure_tailwind(self):
@@ -52,6 +53,7 @@ class Command(BaseCommand):
             with open(templates_dir / "layout.html", "w") as file:
                 file.write(base_template)
 
+            
         except Exception as e:
             self.error(f"Failed to configure Tailwind: {str(e)}")
             return
@@ -60,5 +62,5 @@ class Command(BaseCommand):
         """Installs an NPM package using npm"""
         try:
             return run_command(["npm", "install", package], self.settings.root_dir)
-        except RunError as e:
+        except CommandError as e:
             self.error(e.stderr)

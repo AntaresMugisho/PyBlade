@@ -4,7 +4,7 @@ from pathlib import Path
 from questionary import Choice
 
 from pyblade.cli import BaseCommand
-from pyblade.cli.exceptions import RunError
+from pyblade.cli.exceptions import CommandError
 from pyblade.config import Config
 from pyblade.utils import get_version, run_command
 
@@ -27,7 +27,7 @@ class Command(BaseCommand):
                 name=self.ask("What is your project name ?", default="my_project"),
                 framework=self.choice(
                     "Which Python web framework would you like to use?",
-                    choices=[Choice("Django", "django"), Choice("Flask", "flask")],
+                    choices=[Choice("Django", "django")],
                 ),
                 css_framework=self.choice(
                     "Would you like to configure a CSS framework?",
@@ -73,7 +73,7 @@ class Command(BaseCommand):
                     case "django":
                         try:
                             run_command(f"django-admin startproject {self.project.name}")
-                        except RunError as e:
+                        except CommandError as e:
                             self.error(str(e))
                             return
 
@@ -99,7 +99,7 @@ class Command(BaseCommand):
                         status.update("Configuring TailwindCSS 4 ...")
                         self._configure_tailwind()
 
-                    elif "bootstrap" in self.css_framework.lower() and self.project.framework == "django":
+                    elif "bootstrap" in self.project.css_framework.lower() and self.project.framework == "django":
                         status.update("Installing django-bootstrap-v5 ...")
                         self._pip_install("django-bootstrap-v5")
 
@@ -107,7 +107,7 @@ class Command(BaseCommand):
                         self._configure_bootstrap()
 
                 status.update("Making things ready ...")
-                self.success("Project created successfully.")
+                self.success(f"Your [bold]{self.project.framework.capitalize()}[/bold] project powered by PyBlade was created and configured successfully.")
                 self.line("Run [blue]pyblade serve[/blue] to start a development server.\n")
 
     def _configure_pyblade(self):
@@ -180,24 +180,26 @@ class Command(BaseCommand):
                 with open(self.settings.settings_path, "w") as file:
                     file.write(new_temp_settings)
 
-                self.success("The template engine has been replaced with PyBlade.")
+                self.success("PyBlade Engine has been configured successfully.")
             except Exception as e:
                 self.error(f"Failed to properly configure PyBlade: {str(e)}")
 
     def _configure_bootstrap(self):
         """Configures Bootstrap 5 for the project."""
 
-        stubs_path = Path(__file__).parent.parent / "stubs"
+        stubs_path = Path(self.settings.stubs_dir)
+        settings_path = Path(self.settings.settings_path)
+        root_dir = Path(self.settings.root_dir)
 
-        if self.settings.framework == "django":
+        if self.settings.framework.lower() == "django":
             # Update settings.py
             try:
-                with open(self.settings.settings_path, "r") as file:
+                with open(settings_path, "r") as file:
                     settings = file.read()
 
                 # Add tailwind to INSTALLED_APPS
                 new_settings = settings.replace("INSTALLED_APPS = [", "INSTALLED_APPS = [\n\t'bootstrap5',\n")
-                with open(self.settings.settings_path, "w") as file:
+                with open(settings_path, "w") as file:
                     file.write(new_settings)
 
                 with open(stubs_path / "bootstrap_layout.html.stub", "r") as file:
@@ -215,18 +217,22 @@ class Command(BaseCommand):
     def _configure_tailwind(self):
         """Configures Tailwind CSS for the project."""
 
-        stubs_path = Path(__file__).parent.parent / "stubs"
+        stubs_path = Path(self.settings.stubs_dir)
+        root_dir = Path(self.settings.root_dir)
+
+        input_css = root_dir / "static/css/input.css"
+        input_css.parent.mkdir(parents=True, exist_ok=True)
 
         try:
             # Create the input and output static files
-            with open(self.settings.root_dir / "static/css/input.css") as file:
+            with open(input_css, "w") as file:
                 file.write('@import "tailwindcss";')
 
             # Create tailwind layout
             with open(stubs_path / "tailwind_layout.html.stub", "r") as file:
                 base_template = file.read()
 
-            with open(self.settings.root_dir / "templates/layout.html", "w") as file:
+            with open(root_dir / "templates/layout.html", "w") as file:
                 file.write(base_template)
 
         except Exception as e:
@@ -239,12 +245,12 @@ class Command(BaseCommand):
         """Installs a Python package using pip."""
         try:
             return run_command(["pip3", "install", package])
-        except RunError as e:
+        except CommandError as e:
             self.error(e.stderr)
 
     def _npm_install(self, package: str):
         """Installs an NPM package using npm"""
         try:
             return run_command(["npm", "install", package], self.settings.root_dir)
-        except RunError as e:
+        except CommandError as e:
             self.error(e.stderr)

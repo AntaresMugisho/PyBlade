@@ -2,6 +2,7 @@ import importlib
 import os
 import pkgutil
 import sys
+from pathlib import Path
 
 import click
 from rich.console import Console
@@ -104,7 +105,7 @@ def load_custom_commands():
     """Load custom commands from the project."""
     try:
         # Look for custom commands in multiple the management/commands folder
-        custom_commands_dir = settings.commands_dir
+        custom_commands_dir = Path(settings.commands_dir)
         if custom_commands_dir.exists():
             for cmd_name in find_commands(custom_commands_dir):
                 try:

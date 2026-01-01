@@ -9,20 +9,20 @@ from pyblade.utils import get_project_root
 class Config:
 
     DEFAULTS = {
-        "templates_dir": Path("templates"),
-        "components_dir": Path("components"),
-        "commands_dir": Path("management/commands"),
-        "stubs_dir": Path(__file__).parent / "cli/stubs",
+        "templates_dir": "templates",
+        "components_dir": "components",
+        "commands_dir": "management/commands",
+        "stubs_dir": str(Path(__file__).parent / "cli/stubs"),
         "liveblade": {
             "paginator": None,
-            "components_dir": Path("liveblade"),
-            "templates_dir": Path("liveblade"),
+            "components_dir": "liveblade",
+            "templates_dir": "liveblade",
         },
     }
 
     def __init__(
         self,
-        config_file: str = get_project_root() / "pyblade.json",
+        config_file: str = str(get_project_root() / "pyblade.json"),
         data: Dict | None = None,
         parent: Self | None = None,
         key: str | None = None,
@@ -49,7 +49,7 @@ class Config:
             return self._parent.save()
 
         with open(self._config_file, "w") as file:
-            json.dump(self._data, file, indent=4)
+            json.dump({k: v for k, v in self._data.items() if k not in self._defaults}, file, indent=4)
 
     def __str__(self):
         if self._parent and self.name:

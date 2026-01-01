@@ -1,6 +1,4 @@
-class RunError(Exception):
-    def __init__(self, exception) -> None:
-        super().__init__(exception)
-
-        if hasattr(exception, "__dict__"):
-            self.__dict__.update(exception.__dict__)
+class CommandError(Exception):
+    def __init__(self, message: str) -> None:
+        self.message = message
+        super().__init__(self.message)
