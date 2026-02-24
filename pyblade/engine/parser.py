@@ -4,7 +4,11 @@ from pyblade.engine.exceptions import DirectiveParsingError, TemplateRenderError
 
 from .nodes import (
     AuthNode,
+    AutocompleteNode,
+    BlockNode,
+    BlockTranslateNode,
     BreakNode,
+    CheckedNode,
     ClassNode,
     CommentNode,
     ComponentNode,
@@ -14,37 +18,32 @@ from .nodes import (
     ExtendsNode,
     FirstOfNode,
     ForNode,
+    GetMediaPrefixNode,
+    GetStaticPrefixNode,
     GuestNode,
     IfNode,
     IncludeNode,
-    MethodNode,
-    PythonNode,
-    SectionNode,
-    SlotNode,
-    StaticNode,
-    StyleNode,
-    SwitchNode,
-    TextNode,
-    UnlessNode,
-    UrlNode,
-    VarNode,
-    VerbatimNode,
-    YieldNode,
-    AutocompleteNode,
-    BlockNode,
-    BlockTranslateNode,
-    CheckedNode,
-    GetMediaPrefixNode,
-    GetStaticPrefixNode,
     LiveBladeNode,
+    MethodNode,
     NowNode,
     QuerystringNode,
     RatioNode,
     RegroupNode,
     RequiredNode,
+    SectionNode,
     SelectedNode,
-    TransNode,
+    SlotNode,
+    StaticNode,
+    StyleNode,
+    SwitchNode,
+    TextNode,
+    TranslateNode,
+    UnlessNode,
+    UrlNode,
+    VarNode,
+    VerbatimNode,
     WithNode,
+    YieldNode,
 )
 
 
@@ -145,8 +144,6 @@ class Parser:
                     ast.append(self._parse_slot(directive_args_str))
                 elif directive_name == "verbatim":
                     ast.append(self._parse_verbatim(directive_args_str))
-                elif directive_name == "python":
-                    ast.append(self._parse_python(directive_args_str))
                 elif directive_name == "comment":
                     ast.append(self._parse_comment(directive_args_str))
                 elif directive_name == "cycle":
@@ -201,11 +198,33 @@ class Parser:
                     ast.append(LiveBladeNode())
                 elif directive_name == "block":
                     ast.append(self._parse_block(directive_args_str))
-                elif directive_name in ["elif", "else", "endif", "empty", "endfor", "endunless", "case", "default", "endswitch", "endswitch", "endauth", "endguest", "endcomponent", "endslot", "endverbatim", "endpython", "endcomment", "endblocktranslate", "endwith", "endblock"]:
+                elif directive_name in [
+                    "elif",
+                    "else",
+                    "endif",
+                    "empty",
+                    "endfor",
+                    "endunless",
+                    "case",
+                    "default",
+                    "endswitch",
+                    "endswitch",
+                    "endauth",
+                    "endguest",
+                    "endcomponent",
+                    "endslot",
+                    "endverbatim",
+                    "endpython",
+                    "endcomment",
+                    "endblocktranslate",
+                    "endwith",
+                    "endblock",
+                ]:
                     # These are control flow directives handled by their parent block parsers.
                     # Encountering them at the top level or out of sequence is a syntax error.
                     raise DirectiveParsingError(
-                        f"Unexpected directive '@{directive_name}' found. It might be missing an opening directive or misplaced.",
+                        f"Unexpected directive '@{directive_name}' found. "
+                        "It might be missing an opening directive or misplaced.",
                         line=token.line,
                         column=token.column,
                     )
@@ -310,7 +329,7 @@ class Parser:
         match = re.match(r"^\s*\(\s*([a-zA-Z_][a-zA-Z0-9_]*)\s+in\s+(.+?)\s*\)\s*$", loop_expression_str)
         if not match:
             raise DirectiveParsingError(
-                f"Invalid @for loop syntax: \'@for{loop_expression_str}\'. Expected \'@for(item in itterable)\'.",
+                f"Invalid @for loop syntax: '@for{loop_expression_str}'. Expected '@for(item in itterable)'.",
                 line=self.current_token().line,
                 column=self.current_token().column,
             )
@@ -384,8 +403,6 @@ class Parser:
                     body.append(self._parse_slot(directive_args_str))
                 elif directive_name == "verbatim":
                     body.append(self._parse_verbatim(directive_args_str))
-                elif directive_name == "python":
-                    body.append(self._parse_python(directive_args_str))
                 elif directive_name == "comment":
                     body.append(self._parse_comment(directive_args_str))
                 elif directive_name == "include":
@@ -460,13 +477,6 @@ class Parser:
                 else:
                     # Ignore other directives or text between cases (usually whitespace)
                     # But if it's significant content, it might be an issue.
-                    # For now, we'll just skip non-case/default directives if they appear directly inside switch
-                    # but typically switch only contains cases.
-                    # Actually, strict switch usually only allows cases/default.
-                    # Let's assume anything else is ignored or error.
-                    # For robustness, we'll just advance if it's not what we expect, or maybe raise error.
-                    # But _parse_until_directives handles the body of cases.
-                    # The loop here is "between" cases.
                     self.advance()
             else:
                 # Ignore text/variables between cases (whitespace)
@@ -511,25 +521,6 @@ class Parser:
         """Parses an @include('path', data) directive."""
         # args_str is like "('path', data)"
         # We need to parse this. It's a python expression tuple or call args.
-        # Simplest way is to store the whole args string and eval it later,
-        # but we want to separate path and data if possible.
-        # For now, let's just store the raw args string and let the processor eval it.
-        # But wait, IncludeNode expects path and data_expr.
-        # Let's just store the whole args string as 'expression' in IncludeNode?
-        # No, IncludeNode has path and data_expr.
-        # Let's try to split it if it's simple, otherwise just pass the whole thing to be evaled.
-        # Actually, the processor can eval the whole args tuple.
-        # Let's change IncludeNode to just take 'expression' or 'args'.
-        # But for now, let's assume we pass the raw args string and the processor handles it.
-        # Wait, I defined IncludeNode(path, data_expr).
-        # I should probably just store the args_str and let processor parse it.
-        # Or I can try to parse it here.
-        # Let's just store the args_str as 'path' for now if it's just one arg,
-        # or we can change IncludeNode to be more flexible.
-        # Let's stick to the plan: pass the args string.
-        # But wait, IncludeNode signature is (path, data_expr).
-        # I'll just pass the whole args_str as 'path' and None as data_expr,
-        # and handle the splitting in processor.
         return IncludeNode(args_str)
 
     def _parse_extends(self, args_str):
@@ -582,20 +573,6 @@ class Parser:
         self.expect("DIRECTIVE", value_prefix="@endverbatim")
         return VerbatimNode("".join(content_parts))
 
-    def _parse_python(self, args_str):
-        """Parses an @python...@endpython block."""
-        # Similar to verbatim, but for python code.
-        content_parts = []
-        while self.current_token():
-            token = self.current_token()
-            if token.type == "DIRECTIVE" and token.value == "@endpython":
-                break
-            content_parts.append(token.value)
-            self.advance()
-
-        self.expect("DIRECTIVE", value_prefix="@endpython")
-        return PythonNode("".join(content_parts))
-
     def _parse_comment(self, args_str):
         """Parses an @comment...@endcomment block."""
         # Just consume until endcomment
@@ -609,65 +586,26 @@ class Parser:
 
         self.expect("DIRECTIVE", value_prefix="@endcomment")
         return CommentNode("".join(content_parts))
+
     def _parse_trans(self, args_str):
         """Parses an @trans('message') directive."""
         # args_str could be "('message')" or "('message', context='ctx', noop=True)"
         # We'll store the raw args string and let processor handle evaluation or parsing.
-        # But TransNode expects message, context, noop.
-        # For simplicity in AST, let's just store the whole args_str as 'message' if it's complex,
-        # or try to parse it.
-        # Given the complexity of python args, we'll pass the args string to TransNode
-        # and let the processor evaluate it to get the arguments.
-        # Wait, TransNode signature is (message, context, noop).
-        # I should probably change TransNode to take *args, **kwargs or just an expression.
-        # But I already defined it.
-        # Let's assume we pass the args_str as 'message' and None for others,
-        # and the processor will re-evaluate.
-        return TransNode(args_str)
+        return TranslateNode(args_str)
 
     def _parse_blocktranslate(self, args_str):
         """Parses an @blocktranslate...@endblocktranslate block."""
-        # args_str could be "count counter=n trimmed"
-        # This is Django style, space separated? Or Python style?
-        # PyBlade usually uses Python style args in parens.
-        # If it's @blocktranslate(count=n, trimmed=True), then it's Python style.
-        # If it's @blocktranslate count counter=n trimmed, it's Django style.
-        # The lexer captures args inside parens for @directive(args).
-        # If it's @blocktranslate, args_str is empty.
-        # If it's @blocktranslate(args), args_str is inside parens.
-        # Let's assume Python style: @blocktranslate(count=n, trimmed=True)
-        
+
         # Parse until @plural or @endblocktranslate
         body = self._parse_until_directives(["@plural", "@endblocktranslate"])
         plural_body = None
-        
+
         if self.current_token() and self.current_token().value == "@plural":
-            self.advance() # Consume @plural
+            self.advance()  # Consume @plural
             plural_body = self._parse_until_directives(["@endblocktranslate"])
-            
+
         self.expect("DIRECTIVE", value_prefix="@endblocktranslate")
-        
-        # We need to parse args_str to get count, context, trimmed
-        # args_str could be "count=n, trimmed=True" or "count n trimmed"
-        # For now, let's just pass args_str to the node and let processor handle it?
-        # But BlockTranslateNode expects specific args.
-        # Let's assume we can't easily parse args here without eval.
-        # So we'll modify BlockTranslateNode to accept args_str or we try to parse simple cases.
-        # Actually, the user wants "count=counter".
-        # Let's pass args_str as 'count' for now and let processor parse it, 
-        # OR we change BlockTranslateNode to accept `args_str`.
-        # But I just updated BlockTranslateNode to take specific args.
-        # Let's try to parse it here if it's simple, or pass it as `count` and handle later.
-        # Wait, `count` in `__init__` is supposed to be the count variable/value.
-        # If I pass "count=counter", that's not right.
-        # Let's change the parser to just pass the raw string if we can't parse it easily,
-        # but `BlockTranslateNode` signature is specific.
-        # I'll stick to passing `args_str` as `count` for now, but I should probably refactor `BlockTranslateNode` 
-        # to be more flexible or parse args here.
-        # Given the constraints, I'll pass `args_str` to `count` and let `render_blocktranslate` parse it.
-        # This is a bit hacky but avoids changing `Node` signature too much if I can reuse `count` field as "args blob".
-        # Better: I'll use `count` field to store the raw args string if it's not parsed.
-        
+
         return BlockTranslateNode(body, plural_body=plural_body, count=args_str)
 
     def _parse_with(self, args_str):
@@ -697,8 +635,9 @@ class Parser:
         return AutocompleteNode(args_str)
 
     def _parse_ratio(self, args_str):
-        # @ratio(w, h)
-        return RatioNode(args_str, None)
+        # @ratio(value, max_value, max_width)
+
+        return RatioNode(args_str)
 
     def _parse_querystring(self, args_str):
         return QuerystringNode(args_str)
@@ -709,6 +648,7 @@ class Parser:
         body = self._parse_until_directives(["@endblock"])
         self.expect("DIRECTIVE", value_prefix="@endblock")
         return BlockNode(name, body)
+
     def _parse_cycle(self, args_str):
         return CycleNode(args_str)
 
@@ -755,4 +695,3 @@ class Parser:
                 f"Expected parentheses, e.g., '({directive_name}(condition))'.",
             )
         return match.group(1).strip()
-

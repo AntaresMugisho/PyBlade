@@ -1,7 +1,20 @@
+from html import escape as html_escape
+
+from .sandbox import SafeEvaluator
+
+
 class Node:
     """Base class for all Abstract Syntax Tree nodes."""
 
-    pass
+    _evaluator = SafeEvaluator()
+
+    def eval(self, expression, context):
+        """Evaluate a Python-like expression string within the given context."""
+        return self._evaluator.evaluate(expression, context)
+
+    def render(self, context):
+        """Render this node to a string using the provided context."""
+        raise NotImplementedError
 
 
 # TEXT
@@ -13,6 +26,9 @@ class TextNode(Node):
 
     def __repr__(self):
         return f"TextNode(content='{repr(self.content)}')"
+
+    def render(self, context):
+        return self.content
 
 
 # VARIABLE
@@ -26,6 +42,14 @@ class VarNode(Node):
     def __repr__(self):
         escape_str = "escaped" if self.escaped else "unescaped"
         return f"VarNode(expression='{self.expression}', {escape_str})"
+
+    def render(self, context):
+        value = self.eval(self.expression, context)
+        if value is None:
+            rendered = ""
+        else:
+            rendered = str(value)
+        return html_escape(rendered) if self.escaped else rendered
 
 
 # DIRECTIVES
@@ -49,6 +73,19 @@ class IfNode(Node):
             f")"
         )
 
+    def render(self, context):
+        if self.eval(self.condition, context):
+            return "".join(node.render(context) for node in self.body)
+
+        for cond_expr, body_nodes in self.elif_blocks:
+            if self.eval(cond_expr, context):
+                return "".join(node.render(context) for node in body_nodes)
+
+        if self.else_body is not None:
+            return "".join(node.render(context) for node in self.else_body)
+
+        return ""
+
 
 class ForNode(Node):
     """Represents an @for...@empty...@endfor loop block."""
@@ -69,6 +106,25 @@ class ForNode(Node):
             f")"
         )
 
+    def render(self, context):
+        iterable = self.eval(self.collection_expr, context)
+
+        if not iterable:
+            if self.empty_body is not None:
+                return "".join(node.render(context) for node in self.empty_body)
+            return ""
+
+        # Make a shallow copy of context for loop modifications
+        local_context = dict(context)
+        output_parts = []
+
+        for item in iterable:
+            local_context[self.item_var] = item
+            for node in self.body:
+                output_parts.append(node.render(local_context))
+
+        return "".join(output_parts)
+
 
 class UnlessNode(Node):
     """Represents an @unless...@endunless block."""
@@ -79,6 +135,12 @@ class UnlessNode(Node):
 
     def __repr__(self):
         return f"UnlessNode(condition='{self.condition}', body={self.body})"
+
+    def render(self, context):
+        condition_result = self.eval(self.condition, context)
+        if not condition_result:
+            return "".join(node.render(context) for node in self.body)
+        return ""
 
 
 class SwitchNode(Node):
@@ -99,6 +161,18 @@ class SwitchNode(Node):
             f")"
         )
 
+    def render(self, context):
+        switch_value = self.eval(self.expression, context)
+
+        for case_expr, body in self.cases:
+            case_value = self.eval(case_expr, context)
+            if case_value == switch_value:
+                return "".join(node.render(context) for node in body)
+
+        if self.default_body is not None:
+            return "".join(node.render(context) for node in self.default_body)
+        return ""
+
 
 class AuthNode(Node):
     """Represents an @auth...@endauth block."""
@@ -110,6 +184,29 @@ class AuthNode(Node):
 
     def __repr__(self):
         return f"AuthNode(body={self.body}, else_body={self.else_body}, guard='{self.guard}')"
+
+    def render(self, context):
+        """Render content for authenticated users, mirroring TemplateProcessor.render_auth."""
+        user = context.get("user")
+        request = context.get("request")
+
+        is_authenticated = False
+        if user is not None:
+            is_authenticated = getattr(user, "is_authenticated", False)
+            if callable(is_authenticated):
+                is_authenticated = is_authenticated()
+        elif request is not None:
+            user = getattr(request, "user", None)
+            if user is not None:
+                is_authenticated = getattr(user, "is_authenticated", False)
+                if callable(is_authenticated):
+                    is_authenticated = is_authenticated()
+
+        if is_authenticated:
+            return "".join(node.render(context) for node in self.body)
+        if self.else_body:
+            return "".join(node.render(context) for node in self.else_body)
+        return ""
 
 
 class GuestNode(Node):
@@ -123,6 +220,29 @@ class GuestNode(Node):
     def __repr__(self):
         return f"GuestNode(body={self.body}, else_body={self.else_body}, guard='{self.guard}')"
 
+    def render(self, context):
+        """Render content for guests (unauthenticated users), mirroring TemplateProcessor.render_guest."""
+        user = context.get("user")
+        request = context.get("request")
+
+        is_authenticated = False
+        if user is not None:
+            is_authenticated = getattr(user, "is_authenticated", False)
+            if callable(is_authenticated):
+                is_authenticated = is_authenticated()
+        elif request is not None:
+            user = getattr(request, "user", None)
+            if user is not None:
+                is_authenticated = getattr(user, "is_authenticated", False)
+                if callable(is_authenticated):
+                    is_authenticated = is_authenticated()
+
+        if not is_authenticated:
+            return "".join(node.render(context) for node in self.body)
+        if self.else_body:
+            return "".join(node.render(context) for node in self.else_body)
+        return ""
+
 
 class IncludeNode(Node):
     """Represents an @include('path', data) directive."""
@@ -134,6 +254,36 @@ class IncludeNode(Node):
     def __repr__(self):
         return f"IncludeNode(path='{self.path}', data_expr='{self.data_expr}')"
 
+    def render(self, context):
+        """Render an included template.
+
+        Evaluates the include arguments to get (path, data) and delegates to
+        the loader to render the included template with a merged context.
+        Mirrors TemplateProcessor.render_include.
+        """
+        try:
+            # path/data are passed as a raw args string, e.g. "'partials.header', {'a': 1}"
+            args_tuple = self.eval(f"({self.path})", context)
+            if not isinstance(args_tuple, tuple):
+                args_tuple = (args_tuple,)
+
+            path = args_tuple[0]
+            data = args_tuple[1] if len(args_tuple) > 1 else {}
+
+            from . import loader
+
+            template = loader.load_template(path)
+
+            new_context = dict(context)
+            if isinstance(data, dict):
+                new_context.update(data)
+
+            return template.render(new_context)
+
+        except Exception:
+            # Propagate or log in higher layers; for now fail loudly to match prior behavior
+            raise
+
 
 class ExtendsNode(Node):
     """Represents an @extends('layout') directive."""
@@ -144,9 +294,20 @@ class ExtendsNode(Node):
     def __repr__(self):
         return f"ExtendsNode(layout='{self.layout}')"
 
+    def render(self, context):
+        """Mark the layout this template extends.
+
+        Stores the evaluated layout path in the special '__extends' key in
+        the rendering context. Actual inheritance resolution is handled by
+        the loader/framework layer.
+        """
+        layout_path = self.eval(self.layout, context)
+        context["__extends"] = layout_path
+        return ""
+
 
 class SectionNode(Node):
-    """Represents an @section('name')...@endsection block."""
+    """Represents an @section('name')...@endsection block (Laravel Blade style)."""
 
     def __init__(self, name, body):
         self.name = name
@@ -154,6 +315,59 @@ class SectionNode(Node):
 
     def __repr__(self):
         return f"SectionNode(name='{self.name}', body={self.body})"
+
+    def render(self, context):
+        """Render and register a named section.
+
+        Renders the body to a string and stores it in context['__sections']
+        under the evaluated section name, mirroring
+        TemplateProcessor.render_section.
+        """
+        output = []
+        for node in self.body:
+            rendered = node.render(context)
+            if rendered:
+                output.append(rendered)
+        content = "".join(output)
+
+        name = self.eval(self.name, context)
+        sections = context.setdefault("__sections", {})
+        sections[name] = content
+
+        return ""
+
+
+class BlockNode(Node):
+    """Represents a @block('name')...@endblock block (Django style)."""
+
+    def __init__(self, name, body):
+        self.name = name
+        self.body = body
+
+    def __repr__(self):
+        return f"BlockNode(name='{self.name}', body={self.body})"
+
+    def render(self, context):
+        """Render a block with optional override.
+
+        If context['__blocks'][name] exists, it is returned; otherwise the
+        block's own body is rendered. This matches the behavior relied on in
+        test_block_inheritance.
+        """
+        # Resolve block name (usually a string literal)
+        name = self.eval(self.name, context)
+
+        # Check for override
+        blocks = context.get("__blocks", {})
+        if isinstance(blocks, dict) and name in blocks:
+            return blocks[name]
+
+        output = []
+        for node in self.body:
+            rendered = node.render(context)
+            if rendered:
+                output.append(rendered)
+        return "".join(output)
 
 
 class YieldNode(Node):
@@ -165,6 +379,23 @@ class YieldNode(Node):
 
     def __repr__(self):
         return f"YieldNode(name='{self.name}', default='{self.default}')"
+
+    def render(self, context):
+        """Yield the content of a named section, with optional default.
+
+        Mirrors TemplateProcessor.render_yield by looking up the evaluated
+        name in context['__sections'] and falling back to the default
+        expression when no section content is present.
+        """
+        name = self.eval(self.name, context)
+        sections = context.get("__sections", {})
+        content = sections.get(name)
+
+        if content is None:
+            if self.default:
+                return self.eval(self.default, context)
+            return ""
+        return content
 
 
 class ComponentNode(Node):
@@ -178,6 +409,40 @@ class ComponentNode(Node):
     def __repr__(self):
         return f"ComponentNode(name='{self.name}', data_expr='{self.data_expr}', body={self.body})"
 
+    def render(self, context):
+        """Render a component, similar to TemplateProcessor.render_component."""
+        try:
+            args_tuple = self.eval(f"({self.name})", context)
+            if not isinstance(args_tuple, tuple):
+                args_tuple = (args_tuple,)
+
+            name = args_tuple[0]
+            data = args_tuple[1] if len(args_tuple) > 1 else {}
+
+            from . import loader
+
+            # Render body as default slot
+            output = []
+            if self.body:
+                for node in self.body:
+                    rendered = node.render(context)
+                    if rendered:
+                        output.append(rendered)
+            slot_content = "".join(output)
+
+            new_context = dict(context)
+            if isinstance(data, dict):
+                new_context.update(data)
+            new_context["slot"] = slot_content
+
+            path = f"components/{name}.html"
+            template = loader.load_template(path)
+
+            return template.render(new_context)
+
+        except Exception as exc:
+            return f"<!-- Error rendering component '{self.name}': {exc} -->"
+
 
 class SlotNode(Node):
     """Represents an @slot('name')...@endslot block."""
@@ -189,6 +454,19 @@ class SlotNode(Node):
     def __repr__(self):
         return f"SlotNode(name='{self.name}', body={self.body})"
 
+    def render(self, context):
+        """Render and register a named slot in the context."""
+        output = []
+        for node in self.body:
+            rendered = node.render(context)
+            if rendered:
+                output.append(rendered)
+        content = "".join(output)
+
+        name = self.eval(self.name, context)
+        context[name] = content
+        return ""
+
 
 class VerbatimNode(Node):
     """Represents an @verbatim...@endverbatim block."""
@@ -199,15 +477,8 @@ class VerbatimNode(Node):
     def __repr__(self):
         return f"VerbatimNode(content='{repr(self.content)}')"
 
-
-class PythonNode(Node):
-    """Represents an @python...@endpython block."""
-
-    def __init__(self, code):
-        self.code = code
-
-    def __repr__(self):
-        return f"PythonNode(code='{repr(self.code)}')"
+    def render(self, context):
+        return self.content
 
 
 class CommentNode(Node):
@@ -218,6 +489,10 @@ class CommentNode(Node):
 
     def __repr__(self):
         return f"CommentNode(content='{repr(self.content)}')"
+
+    def render(self, context):
+        # Comments are stripped from output
+        return ""
 
 
 class CycleNode(Node):
@@ -230,6 +505,23 @@ class CycleNode(Node):
     def __repr__(self):
         return f"CycleNode(values={self.values}, as_name='{self.as_name}')"
 
+    def render(self, context):
+        """Cycle through values based on the current loop index.
+
+        Mirrors TemplateProcessor.render_cycle behavior: evaluate the values
+        tuple once, then select based on loop.index when available.
+        """
+        # values is an args string like "'odd', 'even'"
+        values = self.eval(f"({self.values})", context)
+        if not isinstance(values, (list, tuple)):
+            values = [values]
+
+        loop = context.get("loop")
+        if loop is not None:
+            index = getattr(loop, "index", 0)
+            return str(values[index % len(values)])
+        return str(values[0]) if values else ""
+
 
 class FirstOfNode(Node):
     """Represents an @firstof(values, default) directive."""
@@ -240,6 +532,22 @@ class FirstOfNode(Node):
 
     def __repr__(self):
         return f"FirstOfNode(values={self.values}, default='{self.default}')"
+
+    def render(self, context):
+        """Return the first truthy value from the argument list, or default."""
+        args = self.eval(f"({self.values})", context)
+        if not isinstance(args, tuple):
+            args = (args,)
+
+        for arg in args:
+            if arg:
+                return str(arg)
+
+        if self.default is not None:
+            default_val = self.eval(self.default, context)
+            if default_val is not None:
+                return str(default_val)
+        return ""
 
 
 class UrlNode(Node):
@@ -253,6 +561,67 @@ class UrlNode(Node):
     def __repr__(self):
         return f"UrlNode(name='{self.name}', params_expr='{self.params_expr}', as_name='{self.as_name}')"
 
+    def render(self, context):
+        """Resolve a Django URL pattern if possible.
+
+        This is a simplified adaptation of directives._parse_url and
+        TemplateProcessor.render_url. If Django is not available, returns
+        an empty string.
+        """
+        pattern_expr = self.name
+        params_expr = self.params_expr
+        as_var = self.as_name
+
+        try:
+            # Resolve pattern: may be a literal or a variable name in context
+            url_pattern = self.eval(pattern_expr, context)
+        except Exception:
+            url_pattern = None
+
+        if not isinstance(url_pattern, str):
+            url_pattern = str(url_pattern)
+
+        url_pattern = context.get(url_pattern, url_pattern)
+
+        url_params = []
+        if params_expr:
+            params_str = params_expr
+            for param in params_str.split(","):
+                param = param.strip()
+                if not param:
+                    continue
+                if "=" in param:
+                    key, value = param.split("=", 1)
+                    key = key.strip()
+                    value = value.strip()
+                    try:
+                        evaluated = self.eval(value, context)
+                    except Exception:
+                        evaluated = value
+                    url_params.append((key, evaluated))
+                else:
+                    try:
+                        evaluated = self.eval(param, context)
+                    except Exception:
+                        evaluated = param
+                    url_params.append(("", evaluated))
+
+        try:
+            from django.urls import reverse
+        except ImportError:
+            return ""
+
+        url = reverse(
+            url_pattern,
+            args=[p[1] for p in url_params if not p[0]],
+            kwargs={p[0]: p[1] for p in url_params if p[0]},
+        )
+
+        if as_var:
+            context[as_var] = url
+            return ""
+        return url
+
 
 class StaticNode(Node):
     """Represents an @static('path') directive."""
@@ -263,12 +632,20 @@ class StaticNode(Node):
     def __repr__(self):
         return f"StaticNode(path='{self.path}')"
 
+    def render(self, context):
+        path = self.eval(self.path, context)
+        return f"/static/{path}"
+
 
 class CsrfNode(Node):
     """Represents an @csrf directive."""
 
     def __repr__(self):
         return "CsrfNode()"
+
+    def render(self, context):
+        token = context.get("csrf_token", "")
+        return f'<input type="hidden" name="csrfmiddlewaretoken" value="{token}">'
 
 
 class MethodNode(Node):
@@ -280,6 +657,10 @@ class MethodNode(Node):
     def __repr__(self):
         return f"MethodNode(method='{self.method}')"
 
+    def render(self, context):
+        method = self.eval(self.method, context)
+        return f'<input type="hidden" name="_method" value="{method}">'
+
 
 class StyleNode(Node):
     """Represents an @style(dict) directive."""
@@ -289,6 +670,16 @@ class StyleNode(Node):
 
     def __repr__(self):
         return f"StyleNode(expression='{self.expression}')"
+
+    def render(self, context):
+        styles = self.eval(self.expression, context)
+        if not isinstance(styles, dict):
+            return ""
+
+        parts = [key for key, value in styles.items() if value]
+        if not parts:
+            return ""
+        return f' style="{"; ".join(parts)}"'
 
 
 class ClassNode(Node):
@@ -300,6 +691,14 @@ class ClassNode(Node):
     def __repr__(self):
         return f"ClassNode(expression='{self.expression}')"
 
+    def render(self, context):
+        classes = self.eval(self.expression, context)
+        if isinstance(classes, dict):
+            class_list = [k for k, v in classes.items() if v]
+            if class_list:
+                return f' class="{" ".join(class_list)}"'
+        return ""
+
 
 class BreakNode(Node):
     """Represents an @break(condition) directive."""
@@ -310,6 +709,17 @@ class BreakNode(Node):
     def __repr__(self):
         return f"BreakNode(condition='{self.condition}')"
 
+    def render(self, context):
+        """Signal a loop break when the optional condition is met."""
+        from .exceptions import BreakLoop
+
+        if self.condition:
+            if self.eval(self.condition, context):
+                raise BreakLoop()
+        else:
+            raise BreakLoop()
+        return ""
+
 
 class ContinueNode(Node):
     """Represents an @continue(condition) directive."""
@@ -317,7 +727,19 @@ class ContinueNode(Node):
     def __init__(self, condition=None):
         self.condition = condition
 
-class TransNode(Node):
+    def render(self, context):
+        """Signal a loop continue when the optional condition is met."""
+        from .exceptions import ContinueLoop
+
+        if self.condition:
+            if self.eval(self.condition, context):
+                raise ContinueLoop()
+        else:
+            raise ContinueLoop()
+        return ""
+
+
+class TranslateNode(Node):
     """Represents a @trans('message') directive."""
 
     def __init__(self, message, context=None, noop=False):
@@ -326,7 +748,76 @@ class TransNode(Node):
         self.noop = noop
 
     def __repr__(self):
-        return f"TransNode(message='{self.message}', context='{self.context}', noop={self.noop})"
+        return f"TranslateNode(message='{self.message}', context='{self.context}', noop={self.noop})"
+
+    def render(self, context):
+        """Render a translated string using Django's i18n utilities when available.
+
+        Mirrors the behavior of TemplateProcessor.render_trans using the same
+        argument parsing strategy but localized to this node.
+        """
+        import re as _re
+
+        args_str = self.message.strip()
+        if args_str.startswith("(") and args_str.endswith(")"):
+            args_str = args_str[1:-1]
+
+        as_variable = None
+        as_match = _re.search(
+            r"""
+            ^
+            \s*
+            (?P<msg>['"].+?['"])
+            \s+as\s+
+            (?P<var>[a-zA-Z_][a-zA-Z0-9_]*)
+            \s*$
+            """,
+            args_str,
+            _re.VERBOSE,
+        )
+
+        if as_match:
+            args_str = as_match.group("msg")
+            as_variable = as_match.group("var")
+
+        def _extract(*args, **kwargs):
+            return args, kwargs
+
+        eval_context = dict(context)
+        eval_context["_extract"] = _extract
+
+        extracted_args, extracted_kwargs = self.eval(f"_extract({args_str})", eval_context)
+
+        if not extracted_args:
+            raise ValueError("@trans requires a string literal")
+
+        message = extracted_args[0]
+        if not isinstance(message, str):
+            raise TypeError("@trans message must be a string literal")
+
+        msg_context = extracted_kwargs.get("context")
+        noop = extracted_kwargs.get("noop", False)
+
+        if noop:
+            translated = message
+        else:
+            try:
+                from django.utils.translation import gettext_lazy, pgettext
+            except ImportError as exc:  # pragma: no cover - only when Django absent
+                raise RuntimeError("Django is required to use @trans directive") from exc
+
+            if msg_context:
+                if not isinstance(msg_context, str):
+                    raise TypeError("context must be a string")
+                translated = pgettext(msg_context, message)
+            else:
+                translated = gettext_lazy(message)
+
+        if as_variable:
+            context[as_variable] = translated
+            return ""
+
+        return translated
 
 
 class BlockTranslateNode(Node):
@@ -340,7 +831,11 @@ class BlockTranslateNode(Node):
         self.trimmed = trimmed
 
     def __repr__(self):
-        return f"BlockTranslateNode(body={self.body}, plural_body={self.plural_body}, count='{self.count}', context='{self.context}', trimmed={self.trimmed}')"
+        return f"BlockTranslateNode(body={self.body}, \
+        plural_body={self.plural_body}, \
+        count='{self.count}', \
+        context='{self.context}', \
+        trimmed={self.trimmed}')"
 
 
 class WithNode(Node):
@@ -353,6 +848,29 @@ class WithNode(Node):
     def __repr__(self):
         return f"WithNode(variables={self.variables}, body={self.body})"
 
+    def render(self, context):
+        """Render body with a temporary extended context.
+
+        Expects variables to be an argument string such as "a=1, b=2" or
+        "(a=1, b=2)" as produced by the parser, similar to the old
+        TemplateProcessor.render_with implementation.
+        """
+        vars_str = self.variables.strip()
+        if vars_str.startswith("(") and vars_str.endswith(")"):
+            vars_str = vars_str[1:-1]
+
+        # Evaluate using SafeEvaluator in the current context
+        vars_dict = self.eval(f"dict({vars_str})", context)
+
+        new_context = dict(context)
+        new_context.update(vars_dict)
+
+        output = []
+        for node in self.body:
+            output.append(node.render(new_context))
+
+        return "".join(output)
+
 
 class NowNode(Node):
     """Represents a @now('format') directive."""
@@ -362,6 +880,12 @@ class NowNode(Node):
 
     def __repr__(self):
         return f"NowNode(format_string='{self.format_string}')"
+
+    def render(self, context):
+        from datetime import datetime
+
+        fmt = self.eval(self.format_string, context)
+        return datetime.now().strftime(fmt)
 
 
 class RegroupNode(Node):
@@ -375,6 +899,36 @@ class RegroupNode(Node):
     def __repr__(self):
         return f"RegroupNode(target='{self.target}', by='{self.by}', as_name='{self.as_name}')"
 
+    def render(self, context):
+        """Regroup a list of dicts by a key, Django-style.
+
+        Populates context[as_name] with a list of objects that have
+        `.grouper` and `.list` attributes, similar to Django's regroup.
+        """
+        # Evaluate target and by expressions
+        target = self.eval(self.target, context)
+        by = self.eval(self.by, context)
+
+        if not target:
+            context[self.as_name] = []
+            return ""
+
+        from collections import defaultdict
+
+        groups = defaultdict(list)
+        for item in target:
+            key = item.get(by) if isinstance(item, dict) else getattr(item, by, None)
+            groups[key].append(item)
+
+        class Group:
+            def __init__(self, grouper, items):
+                self.grouper = grouper
+                self.list = items
+
+        result = [Group(k, v) for k, v in groups.items()]
+        context[self.as_name] = result
+        return ""
+
 
 class SelectedNode(Node):
     """Represents a @selected(condition) directive."""
@@ -384,6 +938,11 @@ class SelectedNode(Node):
 
     def __repr__(self):
         return f"SelectedNode(condition='{self.condition}')"
+
+    def render(self, context):
+        if self.eval(self.condition, context):
+            return " selected"
+        return ""
 
 
 class RequiredNode(Node):
@@ -395,6 +954,11 @@ class RequiredNode(Node):
     def __repr__(self):
         return f"RequiredNode(condition='{self.condition}')"
 
+    def render(self, context):
+        if self.eval(self.condition, context):
+            return " required"
+        return ""
+
 
 class CheckedNode(Node):
     """Represents a @checked(condition) directive."""
@@ -404,6 +968,11 @@ class CheckedNode(Node):
 
     def __repr__(self):
         return f"CheckedNode(condition='{self.condition}')"
+
+    def render(self, context):
+        if self.eval(self.condition, context):
+            return " checked"
+        return ""
 
 
 class AutocompleteNode(Node):
@@ -415,28 +984,78 @@ class AutocompleteNode(Node):
     def __repr__(self):
         return f"AutocompleteNode(value='{self.value}')"
 
+    def render(self, context):
+        value = self.eval(self.value, context) if isinstance(self.value, str) else self.value
+        if value is None:
+            return ""
+        return f' autocomplete="{value}"'
+
 
 class RatioNode(Node):
     """Represents a @ratio(w, h) directive."""
 
-    def __init__(self, width, height):
-        self.width = width
-        self.height = height
+    def __init__(self, args_expr):
+        self.args_expr = args_expr
 
     def __repr__(self):
-        return f"RatioNode(width='{self.width}', height='{self.height}')"
+        return f"RatioNode(args_expr='{self.args_expr}')"
+
+    def render(self, context):
+        expr = self.args_expr.strip()
+        if not expr:
+            return "0"
+
+        # Expect three comma-separated expressions: value, max_value, max_width
+        # We evaluate each part individually for clarity.
+        parts = [p.strip() for p in expr.split(",") if p.strip()]
+        if len(parts) != 3:
+            # Fallback: try to evaluate as a single expression
+            value = self.eval(expr, context)
+            return str(int(value)) if value is not None else "0"
+
+        val_expr, max_expr, width_expr = parts
+        val = self.eval(val_expr, context) or 0
+        max_val = self.eval(max_expr, context) or 0
+        width = self.eval(width_expr, context) or 0
+
+        try:
+            if not max_val:
+                return "0"
+            ratio = (float(val) / float(max_val)) * float(width)
+            return str(int(ratio))
+        except Exception:
+            return "0"
 
 
 class GetStaticPrefixNode(Node):
     """Represents a @get_static_prefix directive."""
+
     def __repr__(self):
         return "GetStaticPrefixNode()"
+
+    def render(self, context):
+        try:
+            from django.conf import settings as dj_settings
+
+            return dj_settings.STATIC_URL
+        except Exception:
+            # Fallback to a sensible default
+            return "/static/"
 
 
 class GetMediaPrefixNode(Node):
     """Represents a @get_media_prefix directive."""
+
     def __repr__(self):
         return "GetMediaPrefixNode()"
+
+    def render(self, context):
+        try:
+            from django.conf import settings as dj_settings
+
+            return dj_settings.MEDIA_URL
+        except Exception:
+            return "/media/"
 
 
 class QuerystringNode(Node):
@@ -448,19 +1067,36 @@ class QuerystringNode(Node):
     def __repr__(self):
         return f"QuerystringNode(kwargs_expr='{self.kwargs_expr}')"
 
+    def render(self, context):
+        """Build a querystring based on request.GET and overrides.
+
+        Mirrors TemplateProcessor.render_querystring using SafeEvaluator.
+        """
+        request = context.get("request")
+        if request is None or not hasattr(request, "GET"):
+            return ""
+
+        query_dict = request.GET.copy().dict()
+
+        # kwargs_expr is like "page=2"; wrap it in dict(...) for evaluation
+        expr = self.kwargs_expr.strip()
+        if expr:
+            overrides = self.eval(f"dict({expr})", context)
+            if isinstance(overrides, dict):
+                query_dict.update(overrides)
+
+        from urllib.parse import urlencode
+
+        return "?" + urlencode(query_dict)
+
 
 class LiveBladeNode(Node):
     """Represents a @liveblade directive."""
+
     def __repr__(self):
         return "LiveBladeNode()"
 
-
-class BlockNode(Node):
-    """Represents a @block('name')...@endblock block (Django style)."""
-
-    def __init__(self, name, body):
-        self.name = name
-        self.body = body
-
-    def __repr__(self):
-        return f"BlockNode(name='{self.name}', body={self.body})"
+    def render(self, context):
+        # Placeholder for future live-reload / interactive behavior.
+        # Currently behaves as a no-op marker.
+        return ""

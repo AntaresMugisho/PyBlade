@@ -4,4 +4,4 @@ from .datetime import TDateTime
 from .number import TNumber
 from .string import TString
 
-__all__ = ["BaseWrapper", "TString", "TNumber", "TList", "TDict", "TDateTime"]
+__all__ = ["BaseWrapper", "TString", "TNumber", "TList", "TDict", "TDateTime", "wrap_value"]
