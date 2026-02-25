@@ -74,7 +74,7 @@ class SafeEvaluator:
                 return self._builtins[node.id]
             return context.get(node.id)
 
-        # Attribute lookups: obj.attr
+        # Attribute lookups: obj.attr or mapping-style access for numeric keys
         if isinstance(node, ast.Attribute):
             if node.attr.startswith("_"):
                 raise AttributeError("Access to private attribute is not allowed in templates")
@@ -83,12 +83,30 @@ class SafeEvaluator:
             if owner is None:
                 return None
 
+            # Support items.0 syntax for sequences / mappings using string index/key
+            if node.attr.isdigit():
+                try:
+                    idx = int(node.attr)
+                    return owner[idx]
+                except Exception:
+                    # Fall back to normal attribute access if indexing fails
+                    pass
+
             # Delegate to wrapper objects when present (e.g. TemplateVariable/T* wrappers)
             try:
                 value = getattr(owner, node.attr)
             except AttributeError as exc:
                 # For mapping-like wrappers that expose their own access API, just re-raise
                 raise exc
+
+            # Allow zero-arg method chaining without parentheses: if the
+            # attribute is a bound method, call it with no arguments.
+            if callable(value) and hasattr(value, "__self__"):
+                try:
+                    return value()
+                except TypeError:
+                    # Method requires arguments; return the callable itself so it can be called explicitly.
+                    return value
 
             return value
 
@@ -143,6 +161,24 @@ class SafeEvaluator:
             args = [self._eval_node(arg, context) for arg in node.args]
             kwargs = {kw.arg: self._eval_node(kw.value, context) for kw in node.keywords}
             return func(*args, **kwargs)
+
+        # Indexing / slicing: obj[key]
+        if isinstance(node, ast.Subscript):
+            target = self._eval_node(node.value, context)
+            if target is None:
+                return None
+
+            # Only allow simple index keys (no slices or complex expressions)
+            index_node = node.slice
+            if isinstance(index_node, ast.Constant):
+                key = index_node.value
+            else:
+                key = self._eval_node(index_node, context)
+
+            try:
+                return target[key]
+            except Exception as exc:
+                raise TypeError(f"Invalid index/key access on object of type {type(target).__name__}") from exc
 
         # Allow simple literal containers if needed (lists, tuples, dicts)
         if isinstance(node, ast.List):

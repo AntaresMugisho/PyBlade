@@ -5,6 +5,7 @@ from pyblade.engine.exceptions import DirectiveParsingError, TemplateRenderError
 from .nodes import (
     AuthNode,
     AutocompleteNode,
+    AutoescapeNode,
     BlockNode,
     BlockTranslateNode,
     BreakNode,
@@ -15,6 +16,7 @@ from .nodes import (
     ContinueNode,
     CsrfNode,
     CycleNode,
+    DebugNode,
     ExtendsNode,
     FirstOfNode,
     ForNode,
@@ -24,6 +26,7 @@ from .nodes import (
     IfNode,
     IncludeNode,
     LiveBladeNode,
+    LoremNode,
     MethodNode,
     NowNode,
     QuerystringNode,
@@ -33,6 +36,7 @@ from .nodes import (
     SectionNode,
     SelectedNode,
     SlotNode,
+    SpacelessNode,
     StaticNode,
     StyleNode,
     SwitchNode,
@@ -166,6 +170,12 @@ class Parser:
                     ast.append(self._parse_break(directive_args_str))
                 elif directive_name == "continue":
                     ast.append(self._parse_continue(directive_args_str))
+                elif directive_name == "debug":
+                    ast.append(DebugNode())
+                elif directive_name == "lorem":
+                    ast.append(self._parse_lorem(directive_args_str))
+                elif directive_name == "spaceless":
+                    ast.append(self._parse_spaceless(directive_args_str))
                 elif directive_name == "trans" or directive_name == "translate":
                     ast.append(self._parse_trans(directive_args_str))
                 elif directive_name == "blocktranslate":
@@ -176,6 +186,8 @@ class Parser:
                     ast.append(self._parse_now(directive_args_str))
                 elif directive_name == "regroup":
                     ast.append(self._parse_regroup(directive_args_str))
+                elif directive_name == "autoescape":
+                    ast.append(self._parse_autoescape(directive_args_str))
                 elif directive_name == "match":
                     ast.append(self._parse_switch(directive_args_str))  # Alias to switch
                 elif directive_name == "selected":
@@ -214,7 +226,6 @@ class Parser:
                     "endcomponent",
                     "endslot",
                     "endverbatim",
-                    "endpython",
                     "endcomment",
                     "endblocktranslate",
                     "endwith",
@@ -229,14 +240,7 @@ class Parser:
                         column=token.column,
                     )
                 else:
-                    # Treat unknown directives as text or raise error?
-                    # For now, let's treat as text to be safe, or maybe warn.
-                    # But the user expects these to work.
-                    # If we don't recognize it, it's better to error if we are strict,
-                    # or just append as text if we are lenient.
-                    # Given we are implementing a specific set, let's error on unknown directives to help debugging.
-                    # But wait, maybe custom directives?
-                    # For now, let's assume strict.
+                    # Unknown directive, ignore for now
                     pass
 
             elif token.type == "COMMENT_START":
@@ -427,6 +431,14 @@ class Parser:
                     body.append(self._parse_break(directive_args_str))
                 elif directive_name == "continue":
                     body.append(self._parse_continue(directive_args_str))
+                elif directive_name == "autoescape":
+                    body.append(self._parse_autoescape(directive_args_str))
+                elif directive_name == "debug":
+                    body.append(DebugNode())
+                elif directive_name == "lorem":
+                    body.append(self._parse_lorem(directive_args_str))
+                elif directive_name == "spaceless":
+                    body.append(self._parse_spaceless(directive_args_str))
 
             elif token.type == "TEXT":
                 body.append(TextNode(token.value))
@@ -621,6 +633,37 @@ class Parser:
         # @regroup(target, by, as_name)
         # We pass the whole args string
         return RegroupNode(args_str, None, None)
+
+    def _parse_autoescape(self, args_str):
+        """Parses an @autoescape(True/False)...@endautoescape block.
+
+        The argument is expected to be a boolean expression inside
+        parentheses, e.g. "(True)" or "(False)".
+        """
+        enabled_expr = self._extract_expression_from_args(args_str, "@autoescape")
+        # We store the expression string; AutoescapeNode will evaluate it.
+        body = self._parse_until_directives(["@endautoescape"])
+        self.expect("DIRECTIVE", value_prefix="@endautoescape")
+        # Let the node evaluate enabled_expr via SafeEvaluator at render time.
+        return AutoescapeNode(enabled_expr, body)
+
+    def _parse_lorem(self, args_str):
+        """Parses a @lorem(...) directive."""
+        # We pass the raw args (without surrounding parentheses stripping here).
+        # LoremNode will handle evaluation.
+        inner = ""
+        if args_str:
+            match = re.match(r"^\s*\((.*)\)\s*$", args_str)
+            if match:
+                inner = match.group(1).strip()
+        return LoremNode(inner)
+
+    def _parse_spaceless(self, args_str):
+        """Parses a @spaceless...@endspaceless block."""
+        # Arguments are not expected; ignore if present.
+        body = self._parse_until_directives(["@endspaceless"])
+        self.expect("DIRECTIVE", value_prefix="@endspaceless")
+        return SpacelessNode(body)
 
     def _parse_selected(self, args_str):
         return SelectedNode(args_str)

@@ -1,3 +1,4 @@
+import re
 from html import escape as html_escape
 
 from .sandbox import SafeEvaluator
@@ -396,6 +397,53 @@ class YieldNode(Node):
                 return self.eval(self.default, context)
             return ""
         return content
+
+
+class AutoescapeNode(Node):
+    """Represents an @autoescape(True/False)...@endautoescape block.
+
+    This node is a structural hint that within its body, auto-escaping
+    should be turned on or off. Because VarNode already controls escaping
+    via its 'escaped' flag, and the current parser does not propagate a
+    per-block escape state, the implementation here keeps behavior
+    straightforward:
+
+    - When enabled (True): simply render the body as-is; VarNode instances
+      will escape according to how they were created by the parser.
+    - When disabled (False): render the body but, for VarNode children,
+      temporarily force 'escaped = False'.
+    """
+
+    def __init__(self, enabled, body):
+        self.enabled = enabled
+        self.body = body
+
+    def __repr__(self):
+        return f"AutoescapeNode(enabled={self.enabled}, body={self.body})"
+
+    def render(self, context):
+        # If autoescape is enabled, render body normally.
+        if self.enabled:
+            return "".join(node.render(context) for node in self.body)
+
+        # If disabled, temporarily force VarNode instances to render unescaped.
+        from .nodes import (
+            VarNode as _VarNode,  # local import to avoid cycles in type hints
+        )
+
+        output = []
+        for node in self.body:
+            if isinstance(node, _VarNode):
+                old_escaped = node.escaped
+                try:
+                    node.escaped = False
+                    output.append(node.render(context))
+                finally:
+                    node.escaped = old_escaped
+            else:
+                output.append(node.render(context))
+
+        return "".join(output)
 
 
 class ComponentNode(Node):
@@ -928,6 +976,96 @@ class RegroupNode(Node):
         result = [Group(k, v) for k, v in groups.items()]
         context[self.as_name] = result
         return ""
+
+
+class DebugNode(Node):
+    """Represents a @debug directive that dumps the current context."""
+
+    def __repr__(self):
+        return "DebugNode()"
+
+    def render(self, context):
+        # Render a pretty representation of the context dictionary.
+        # We avoid including private/special keys.
+        public_items = {k: v for k, v in context.items() if not str(k).startswith("__")}
+        return html_escape(repr(public_items))
+
+
+class LoremNode(Node):
+    """Represents a @lorem directive that outputs placeholder text.
+
+    This is a lightweight approximation of Django's lorem tag.
+    Usage examples (arguments are evaluated via SafeEvaluator):
+
+        @lorem(1)              -> 1 paragraph
+        @lorem(3, 'w')         -> 3 words
+        @lorem(2, 'p', True)   -> 2 paragraphs with HTML <p> wrappers
+    """
+
+    _LOREM_WORDS = "lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore \
+         et dolore magna aliqua".split()
+
+    def __init__(self, args_expr):
+        self.args_expr = args_expr
+
+    def __repr__(self):
+        return f"LoremNode(args_expr='{self.args_expr}')"
+
+    def render(self, context):
+        # Default behavior: 1 paragraph, words ("w"), no HTML
+        count = 1
+        method = "p"  # 'w' words, 'p' paragraphs, 's' sentences (we treat s like p)
+        html = False
+
+        if self.args_expr:
+            args = self.eval(f"({self.args_expr})", context)
+            if not isinstance(args, tuple):
+                args = (args,)
+
+            if len(args) > 0 and args[0] is not None:
+                try:
+                    count = int(args[0])
+                except (TypeError, ValueError):
+                    pass
+            if len(args) > 1 and args[1] is not None:
+                method = str(args[1]).lower()
+            if len(args) > 2 and args[2] is not None:
+                html = bool(args[2])
+
+        words = list(self._LOREM_WORDS)
+        if method == "w":
+            # Generate count words
+            out_words = (words * ((count // len(words)) + 1))[:count]
+            return " ".join(out_words)
+
+        # Paragraphs / sentences: reuse full lorem sentence per block
+        paragraph_text = " ".join(words)
+        blocks = [paragraph_text for _ in range(max(count, 1))]
+
+        if html:
+            return "".join(f"<p>{html_escape(b)}</p>" for b in blocks)
+        return "\n\n".join(blocks)
+
+
+class SpacelessNode(Node):
+    """Represents a @spaceless...@endspaceless block.
+
+    Collapses whitespace between HTML tags.
+    """
+
+    _between_tags_re = re.compile(r">\s+<")
+
+    def __init__(self, body):
+        self.body = body
+
+    def __repr__(self):
+        return f"SpacelessNode(body={self.body})"
+
+    def render(self, context):
+        content = "".join(node.render(context) for node in self.body)
+        # Strip leading/trailing whitespace and collapse between tags
+        content = content.strip()
+        return self._between_tags_re.sub("><", content)
 
 
 class SelectedNode(Node):
