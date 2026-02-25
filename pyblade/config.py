@@ -9,6 +9,7 @@ from pyblade.utils import get_project_root
 class Config:
 
     DEFAULTS = {
+        "DEBUG": True,  # TODO: Find a better way to determine if the app is in DEBUG MODE or no
         "templates_dir": "templates",
         "components_dir": "components",
         "commands_dir": "management/commands",
@@ -64,7 +65,7 @@ class Config:
 
         value = self._data.get(key, self._defaults.get(key))
 
-        if key.endswith(('_dir', '_path')):
+        if key.endswith(("_dir", "_path")):
             return Path(value)
 
         if isinstance(value, dict):
@@ -75,7 +76,7 @@ class Config:
                 key=key,
                 defaults=self._defaults.get(key, {}),
             )
-            
+
         return value
 
     def __setattr__(self, key, value):

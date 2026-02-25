@@ -19,12 +19,16 @@ class TString:
             return TString(self._value)
         return TString(self._value[:length].rsplit(" ", 1)[0] + suffix)
 
+    def truncate(self, length=100, suffix="..."):
+        """Alias to excerpt"""
+        return self.excerpt(length, suffix)
+
     def title(self):
-        """Convert to title case."""
+        """Convert to Title Case."""
         return TString(self._value.title())
 
     def upper(self):
-        """Convert to uppercase."""
+        """Convert to UPPERCASE."""
         return TString(self._value.upper())
 
     def lower(self):
@@ -32,7 +36,7 @@ class TString:
         return TString(self._value.lower())
 
     def capitalize(self):
-        """Capitalize first letter."""
+        """Capitalize First letter."""
         return TString(self._value.capitalize())
 
     def strip(self):

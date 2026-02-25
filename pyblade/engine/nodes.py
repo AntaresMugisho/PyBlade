@@ -1,5 +1,12 @@
+import random
 import re
 from html import escape as html_escape
+from pprint import pformat
+
+from pyblade.config import settings
+from pyblade.engine.exceptions import (  # TemplateNotFoundError,; UndefinedVariableError,
+    DirectiveParsingError,
+)
 
 from .sandbox import SafeEvaluator
 
@@ -985,21 +992,24 @@ class DebugNode(Node):
         return "DebugNode()"
 
     def render(self, context):
-        # Render a pretty representation of the context dictionary.
-        # We avoid including private/special keys.
-        public_items = {k: v for k, v in context.items() if not str(k).startswith("__")}
-        return html_escape(repr(public_items))
+        """Render a pretty representation of the context dictionary if the app is in DEBUG Mode.
+        We avoid including private/special keys
+        """
+
+        if not settings.DEBUG:
+            return ""
+
+        public_items = {k: v for k, v in sorted(context.items()) if not str(k).startswith("__")}
+        pretty_repr = pformat(public_items, indent=4, width=120, depth=4)
+        return f"<pre>{html_escape(pretty_repr)}</pre>"
 
 
 class LoremNode(Node):
     """Represents a @lorem directive that outputs placeholder text.
 
-    This is a lightweight approximation of Django's lorem tag.
-    Usage examples (arguments are evaluated via SafeEvaluator):
-
-        @lorem(1)              -> 1 paragraph
-        @lorem(3, 'w')         -> 3 words
-        @lorem(2, 'p', True)   -> 2 paragraphs with HTML <p> wrappers
+    @lorem(1)              -> 1 paragraph
+    @lorem(3, 'w')         -> 3 words
+    @lorem(2, 'p', True)   -> 2 paragraphs with HTML <p> wrappers
     """
 
     _LOREM_WORDS = "lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore \
@@ -1014,13 +1024,29 @@ class LoremNode(Node):
     def render(self, context):
         # Default behavior: 1 paragraph, words ("w"), no HTML
         count = 1
-        method = "p"  # 'w' words, 'p' paragraphs, 's' sentences (we treat s like p)
-        html = False
+        method = "b"  # Can be 'w' words, 'p' HTML paragraphs, 'b' plain-text paragraphs without any HTML Tag
+        random_order = False
+
+        def generate_words(count: int, random_order: bool = False) -> str:
+            words = list(self._LOREM_WORDS)
+            if random_order:
+                random.shuffle(words)
+            out_words = (words * ((count // len(words)) + 1))[:count]
+            return " ".join(out_words)
+
+        def generate_paragraphs(count: int, random_order: bool = False) -> str:
+            paragraphs = []
+            for _ in range(count):
+                words = generate_words(random.randint(20, 100), random_order)
+                paragraphs.append(words.capitalize() + ".")
+            return paragraphs
 
         if self.args_expr:
             args = self.eval(f"({self.args_expr})", context)
             if not isinstance(args, tuple):
                 args = (args,)
+
+            print("ARGS: ", args)
 
             if len(args) > 0 and args[0] is not None:
                 try:
@@ -1030,21 +1056,16 @@ class LoremNode(Node):
             if len(args) > 1 and args[1] is not None:
                 method = str(args[1]).lower()
             if len(args) > 2 and args[2] is not None:
-                html = bool(args[2])
+                random_order = bool(args[2])
 
-        words = list(self._LOREM_WORDS)
         if method == "w":
-            # Generate count words
-            out_words = (words * ((count // len(words)) + 1))[:count]
-            return " ".join(out_words)
-
-        # Paragraphs / sentences: reuse full lorem sentence per block
-        paragraph_text = " ".join(words)
-        blocks = [paragraph_text for _ in range(max(count, 1))]
-
-        if html:
-            return "".join(f"<p>{html_escape(b)}</p>" for b in blocks)
-        return "\n\n".join(blocks)
+            return generate_words(count, random_order)
+        elif method == "b":
+            return "\n\n".join(generate_paragraphs(count, random_order))
+        elif method == "p":
+            return "".join([f"<p>{p}</p>" for p in generate_paragraphs(count, random_order)])
+        else:
+            raise DirectiveParsingError(f"Invalid lorem method: {method}")
 
 
 class SpacelessNode(Node):
