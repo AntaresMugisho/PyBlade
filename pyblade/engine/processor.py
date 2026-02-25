@@ -40,10 +40,8 @@ class TemplateProcessor:
         Raises:
             TemplateRenderError: If there's an error during rendering
         """
-        # Wrap context values once so templates see rich, chainable variables
-        from .wrappers import wrap_value
 
-        self.context = {k: wrap_value(v) for k, v in (context or {}).items()}
+        self.context = context
 
         # Check cache first
         cached_result = self.cache.get(template, context)

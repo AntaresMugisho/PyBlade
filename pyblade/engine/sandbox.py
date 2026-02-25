@@ -1,19 +1,13 @@
 import ast
 import operator
 
+from .filters import filters
+
 
 class SafeEvaluator:
-    """AST-based safe expression evaluator for templates.
+    """AST-based safe expression evaluator for templates with filter fallback."""
 
-    - Only allows a restricted set of Python expression constructs.
-    - Whitelists math, comparison and boolean operators.
-    - Whitelists a small set of builtin functions.
-    - Blocks attribute access that starts with an underscore.
-    """
-
-    # Whitelist of safe operators
     _operators = {
-        # Arithmetic
         ast.Add: operator.add,
         ast.Sub: operator.sub,
         ast.Mult: operator.mul,
@@ -22,11 +16,9 @@ class SafeEvaluator:
         ast.Mod: operator.mod,
         ast.Pow: operator.pow,
         ast.USub: operator.neg,
-        # Boolean
         ast.And: lambda a, b: a and b,
         ast.Or: lambda a, b: a or b,
         ast.Not: operator.not_,
-        # Comparisons
         ast.Eq: operator.eq,
         ast.NotEq: operator.ne,
         ast.Lt: operator.lt,
@@ -35,7 +27,6 @@ class SafeEvaluator:
         ast.GtE: operator.ge,
     }
 
-    # Whitelist of safe built-ins
     _builtins = {
         "len": len,
         "range": range,
@@ -48,8 +39,29 @@ class SafeEvaluator:
         "abs": abs,
     }
 
+    _safe_methods = {
+        str: {
+            "upper",
+            "lower",
+            "strip",
+            "lstrip",
+            "rstrip",
+            "title",
+            "capitalize",
+            "casefold",
+            "swapcase",
+            "startswith",
+            "endswith",
+            "replace",
+        },
+        list: {"count", "index"},
+        tuple: {"count", "index"},
+        dict: {"get", "keys", "values", "items"},
+    }
+
+    _filters = filters
+
     def evaluate(self, expression, context):
-        """Evaluate an expression string safely within the given context."""
         if not expression:
             return None
 
@@ -63,18 +75,25 @@ class SafeEvaluator:
 
         return self._eval_node(tree.body, context or {})
 
+    def _is_safe_method(self, owner, method_name):
+        for typ, allowed in self._safe_methods.items():
+            if isinstance(owner, typ):
+                return method_name in allowed
+        return False
+
     def _eval_node(self, node, context):
-        # Constants: 5, "hello"
+
         if isinstance(node, ast.Constant):
             return node.value
 
-        # Names: variables or whitelisted builtins
         if isinstance(node, ast.Name):
             if node.id in self._builtins:
                 return self._builtins[node.id]
             return context.get(node.id)
 
-        # Attribute lookups: obj.attr or mapping-style access for numeric keys
+        # ----------------------------
+        # ATTRIBUTE RESOLUTION
+        # ----------------------------
         if isinstance(node, ast.Attribute):
             if node.attr.startswith("_"):
                 raise AttributeError("Access to private attribute is not allowed in templates")
@@ -83,34 +102,84 @@ class SafeEvaluator:
             if owner is None:
                 return None
 
-            # Support items.0 syntax for sequences / mappings using string index/key
-            if node.attr.isdigit():
+            attr_name = node.attr
+
+            # Dict key lookup
+            if isinstance(owner, dict) and attr_name in owner:
+                return owner[attr_name]
+
+            # List/Tuple numeric index (my_list.0)
+            if attr_name.lstrip("-").isdigit() and isinstance(owner, (list, tuple)):
                 try:
-                    idx = int(node.attr)
-                    return owner[idx]
+                    return owner[int(attr_name)]
                 except Exception:
-                    # Fall back to normal attribute access if indexing fails
-                    pass
+                    return None
 
-            # Delegate to wrapper objects when present (e.g. TemplateVariable/T* wrappers)
+            # Normal attribute lookup
             try:
-                value = getattr(owner, node.attr)
-            except AttributeError as exc:
-                # For mapping-like wrappers that expose their own access API, just re-raise
-                raise exc
+                value = getattr(owner, attr_name)
+            except AttributeError:
+                # 4️⃣ Fallback to filter (no-arg filter)
+                if self._filters and self._filters.has(attr_name):
+                    filter_func = self._filters.get(attr_name)
+                    return filter_func(owner)
+                return None
 
-            # Allow zero-arg method chaining without parentheses: if the
-            # attribute is a bound method, call it with no arguments.
+            # Auto-call zero-arg bound methods
             if callable(value) and hasattr(value, "__self__"):
-                try:
-                    return value()
-                except TypeError:
-                    # Method requires arguments; return the callable itself so it can be called explicitly.
-                    return value
+                if self._is_safe_method(owner, attr_name):
+                    try:
+                        return value()
+                    except TypeError:
+                        return value
+                else:
+                    return value  # do NOT auto-call unsafe methods
 
-            return value
+        # ----------------------------
+        # CALL SUPPORT (method OR filter with args)
+        # ----------------------------
+        if isinstance(node, ast.Call):
 
-        # Binary operations: a + b, a * b, etc.
+            # If this is something like value.truncate(20)
+            if isinstance(node.func, ast.Attribute):
+                attr_node = node.func
+                owner = self._eval_node(attr_node.value, context)
+
+                if owner is None:
+                    return None
+
+                attr_name = attr_node.attr
+
+                args = [self._eval_node(arg, context) for arg in node.args]
+                kwargs = {kw.arg: self._eval_node(kw.value, context) for kw in node.keywords}
+
+                # Try normal attribute method first
+                if hasattr(owner, attr_name):
+                    method = getattr(owner, attr_name)
+                    if callable(method):
+                        if self._is_safe_method(owner, attr_name):
+                            return method(*args, **kwargs)
+                        raise PermissionError(f"Calling method '{attr_name}' is not allowed in templates")
+
+                # Fallback to filter
+                if self._filters and self._filters.has(attr_name):
+                    filter_func = self._filters.get(attr_name)
+                    return filter_func(owner, *args, **kwargs)
+
+                return None
+
+            # Normal function call
+            func = self._eval_node(node.func, context)
+            if func is None:
+                raise TypeError("Attempted to call a non-existent function")
+
+            args = [self._eval_node(arg, context) for arg in node.args]
+            kwargs = {kw.arg: self._eval_node(kw.value, context) for kw in node.keywords}
+            return func(*args, **kwargs)
+
+        # ----------------------------
+        # OPERATORS (unchanged)
+        # ----------------------------
         if isinstance(node, ast.BinOp):
             op_type = type(node.op)
             if op_type not in self._operators:
@@ -119,7 +188,6 @@ class SafeEvaluator:
             right = self._eval_node(node.right, context)
             return self._operators[op_type](left, right)
 
-        # Unary operations: -a, not a
         if isinstance(node, ast.UnaryOp):
             op_type = type(node.op)
             if op_type not in self._operators:
@@ -127,19 +195,16 @@ class SafeEvaluator:
             operand = self._eval_node(node.operand, context)
             return self._operators[op_type](operand)
 
-        # Boolean operations: a and b, a or b
         if isinstance(node, ast.BoolOp):
             op_type = type(node.op)
             if op_type not in self._operators:
                 raise TypeError(f"Unsupported boolean operator: {op_type.__name__}")
-
             values = [self._eval_node(v, context) for v in node.values]
             result = values[0]
             for v in values[1:]:
                 result = self._operators[op_type](result, v)
             return result
 
-        # Comparisons: a < b, a == b, a < b < c
         if isinstance(node, ast.Compare):
             left = self._eval_node(node.left, context)
             for op, right_expr in zip(node.ops, node.comparators):
@@ -152,23 +217,11 @@ class SafeEvaluator:
                 left = right
             return True
 
-        # Function / method calls: func(arg1, arg2, ...)
-        if isinstance(node, ast.Call):
-            func = self._eval_node(node.func, context)
-            if func is None:
-                raise TypeError("Attempted to call a non-existent function")
-
-            args = [self._eval_node(arg, context) for arg in node.args]
-            kwargs = {kw.arg: self._eval_node(kw.value, context) for kw in node.keywords}
-            return func(*args, **kwargs)
-
-        # Indexing / slicing: obj[key]
         if isinstance(node, ast.Subscript):
             target = self._eval_node(node.value, context)
             if target is None:
                 return None
 
-            # Only allow simple index keys (no slices or complex expressions)
             index_node = node.slice
             if isinstance(index_node, ast.Constant):
                 key = index_node.value
@@ -177,10 +230,9 @@ class SafeEvaluator:
 
             try:
                 return target[key]
-            except Exception as exc:
-                raise TypeError(f"Invalid index/key access on object of type {type(target).__name__}") from exc
+            except Exception:
+                raise TypeError(f"Invalid index/key access on object of type {type(target).__name__}")
 
-        # Allow simple literal containers if needed (lists, tuples, dicts)
         if isinstance(node, ast.List):
             return [self._eval_node(elt, context) for elt in node.elts]
 
