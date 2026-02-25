@@ -8,33 +8,6 @@ filters = FilterRegistry()
 
 # STRING FILTERS
 # --------------------------------------------
-
-
-@filters.register()
-def upper(value):
-    return str(value).upper()
-
-
-@filters.register()
-def lower(value):
-    return str(value).lower()
-
-
-@filters.register()
-def title(value):
-    return str(value).title()
-
-
-@filters.register()
-def capitalize(value):
-    return str(value).capitalize()
-
-
-@filters.register()
-def strip(value):
-    return str(value).strip()
-
-
 @filters.register()
 def truncate(value, length):
     return str(value)[: int(length)]
@@ -62,8 +35,6 @@ def slugify(value):
 
 # NUMERIC FILTERS
 # --------------------------------------------
-
-
 @filters.register()
 def add(value, amount):
     return value + amount
@@ -104,11 +75,6 @@ def length(value):
 
 
 @filters.register()
-def count(value):
-    return length(value)
-
-
-@filters.register()
 def first(value):
     return value[0] if value else None
 
@@ -125,8 +91,6 @@ def join(value, sep=","):
 
 # DATE AND TIME FILTERS
 # --------------------------------------------
-
-
 @filters.register()
 def format(value, format="%Y-%m-%d"):
     """Format date with specified format string."""
