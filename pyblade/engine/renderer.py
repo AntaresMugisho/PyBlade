@@ -7,11 +7,11 @@ from typing import Dict, List, Optional
 
 from pyblade.config import settings
 from pyblade.engine.exceptions import (
-    PyBladeException,
-    UndefinedVariableError,
     DirectiveParsingError,
+    PyBladeException,
     TemplateNotFoundError,
-    TemplateRenderError
+    TemplateRenderError,
+    UndefinedVariableError,
 )
 
 from . import loader
@@ -59,6 +59,7 @@ class PyBlade:
         elif self.framework == "fastapi":
             # FastAPI doesn't have built-in DEBUG, so we check environment
             import os
+
             return os.getenv("DEBUG", "False").lower() == "true"
 
         return False
@@ -71,7 +72,7 @@ class PyBlade:
         if self.debug:
             # Extract error details
             error_type = type(error).__name__
-            error_message = str(error)
+            error_message = error.message
             line_number = getattr(error, "line_number", None)
 
             # Get code context if we have line number and source
@@ -83,7 +84,11 @@ class PyBlade:
 
                 for i in range(start, end):
                     code_lines.append(
-                        {"number": i + 1, "content": lines[i] if i < len(lines) else "", "is_error": (i + 1) == line_number}
+                        {
+                            "number": i + 1,
+                            "content": lines[i] if i < len(lines) else "",
+                            "is_error": (i + 1) == line_number,
+                        }
                     )
 
             # Get quick fix tip based on error type
@@ -106,8 +111,7 @@ class PyBlade:
         """Get helpful suggestions based on error type."""
         if isinstance(error, TemplateNotFoundError):
             return (
-                "Ensure the template file exists, the path is correct, "
-                "and that it is accessible by the application."
+                "Ensure the template file exists, the path is correct, " "and that it is accessible by the application."
             )
 
         elif isinstance(error, TemplateRenderError):
@@ -117,10 +121,7 @@ class PyBlade:
             )
 
         elif isinstance(error, DirectiveParsingError):
-            return (
-                "Check the syntax of the directive and ensure it is supported "
-                "by the current version of PyBlade."
-            )
+            return "Check the syntax of the directive and ensure it is supported " "by the current version of PyBlade."
 
         elif isinstance(error, UndefinedVariableError):
             return (

@@ -6,6 +6,7 @@ from pprint import pformat
 from pyblade.config import settings
 from pyblade.engine.exceptions import (  # TemplateNotFoundError,; UndefinedVariableError,
     DirectiveParsingError,
+    TemplateRenderError,
 )
 
 from .sandbox import SafeEvaluator
@@ -15,6 +16,10 @@ class Node:
     """Base class for all Abstract Syntax Tree nodes."""
 
     _evaluator = SafeEvaluator()
+
+    def __init__(self, line=None, column=None):
+        self.line = line
+        self.column = column
 
     def eval(self, expression, context):
         """Evaluate a Python-like expression string within the given context."""
@@ -29,7 +34,8 @@ class Node:
 class TextNode(Node):
     """Represents plain text content in the template."""
 
-    def __init__(self, content):
+    def __init__(self, content, line=None, column=None):
+        super().__init__(line, column)
         self.content = content
 
     def __repr__(self):
@@ -43,7 +49,8 @@ class TextNode(Node):
 class VarNode(Node):
     """Represents a variable display block (e.g., {{ user.name }})."""
 
-    def __init__(self, expression, escaped=True):
+    def __init__(self, expression, escaped=True, line=None, column=None):
+        super().__init__(line, column)
         self.expression = expression  # The Python expression string
         self.escaped = escaped  # Whether to HTML-escape the output
 
@@ -52,7 +59,13 @@ class VarNode(Node):
         return f"VarNode(expression='{self.expression}', {escape_str})"
 
     def render(self, context):
-        value = self.eval(self.expression, context)
+        try:
+            value = self.eval(self.expression, context)
+        except Exception as exc:
+            raise TemplateRenderError(
+                f"{exc.__class__.__name__}: {exc}",
+                line=self.line,
+            )
         if value is None:
             rendered = ""
         else:
@@ -64,7 +77,8 @@ class VarNode(Node):
 class IfNode(Node):
     """Represents an @if...@elif...@else...@endif conditional block."""
 
-    def __init__(self, condition, body, elif_blocks=None, else_body=None):
+    def __init__(self, condition, body, elif_blocks=None, else_body=None, line=None, column=None):
+        super().__init__(line, column)
         self.condition = condition  # The Python expression for the if condition
         self.body = body  # List of nodes in the main @if block
         self.elif_blocks = elif_blocks if elif_blocks is not None else []  # List of (condition_expr, body_nodes) tuples
@@ -98,7 +112,8 @@ class IfNode(Node):
 class ForNode(Node):
     """Represents an @for...@empty...@endfor loop block."""
 
-    def __init__(self, item_var, collection_expr, body, empty_body=None):
+    def __init__(self, item_var, collection_expr, body, empty_body=None, line=None, column=None):
+        super().__init__(line, column)
         self.item_var = item_var  # The variable name for each item (e.g., 'fruit' in 'for fruit in fruits')
         self.collection_expr = collection_expr  # The Python expression for the iterable collection
         self.body = body  # List of nodes in the main @for loop block
@@ -137,7 +152,8 @@ class ForNode(Node):
 class UnlessNode(Node):
     """Represents an @unless...@endunless block."""
 
-    def __init__(self, condition, body):
+    def __init__(self, condition, body, line=None, column=None):
+        super().__init__(line, column)
         self.condition = condition
         self.body = body
 
@@ -154,7 +170,8 @@ class UnlessNode(Node):
 class SwitchNode(Node):
     """Represents an @switch...@endswitch block"""
 
-    def __init__(self, expression, cases, default_body=None):
+    def __init__(self, expression, cases, default_body=None, line=None, column=None):
+        super().__init__(line, column)
         self.expression = expression
         self.cases = cases  # List of (value_expr, body_nodes) tuples
         self.default_body = default_body
@@ -185,7 +202,8 @@ class SwitchNode(Node):
 class AuthNode(Node):
     """Represents an @auth...@endauth block."""
 
-    def __init__(self, body, else_body=None, guard=None):
+    def __init__(self, body, else_body=None, guard=None, line=None, column=None):
+        super().__init__(line, column)
         self.body = body
         self.else_body = else_body
         self.guard = guard
@@ -255,7 +273,8 @@ class GuestNode(Node):
 class IncludeNode(Node):
     """Represents an @include('path', data) directive."""
 
-    def __init__(self, path, data_expr=None):
+    def __init__(self, path, data_expr=None, line=None, column=None):
+        super().__init__(line, column)
         self.path = path
         self.data_expr = data_expr
 
@@ -296,7 +315,8 @@ class IncludeNode(Node):
 class ExtendsNode(Node):
     """Represents an @extends('layout') directive."""
 
-    def __init__(self, layout):
+    def __init__(self, layout, line=None, column=None):
+        super().__init__(line, column)
         self.layout = layout
 
     def __repr__(self):
@@ -317,7 +337,8 @@ class ExtendsNode(Node):
 class SectionNode(Node):
     """Represents an @section('name')...@endsection block (Laravel Blade style)."""
 
-    def __init__(self, name, body):
+    def __init__(self, name, body, line=None, column=None):
+        super().__init__(line, column)
         self.name = name
         self.body = body
 
@@ -381,7 +402,8 @@ class BlockNode(Node):
 class YieldNode(Node):
     """Represents an @yield('name', default) directive."""
 
-    def __init__(self, name, default=None):
+    def __init__(self, name, default=None, line=None, column=None):
+        super().__init__(line, column)
         self.name = name
         self.default = default
 
@@ -421,7 +443,8 @@ class AutoescapeNode(Node):
       temporarily force 'escaped = False'.
     """
 
-    def __init__(self, enabled, body):
+    def __init__(self, enabled, body, line=None, column=None):
+        super().__init__(line, column)
         self.enabled = enabled
         self.body = body
 
@@ -456,7 +479,8 @@ class AutoescapeNode(Node):
 class ComponentNode(Node):
     """Represents an @component('name', data)...@endcomponent block."""
 
-    def __init__(self, name, data_expr=None, body=None):
+    def __init__(self, name, data_expr=None, body=None, line=None, column=None):
+        super().__init__(line, column)
         self.name = name
         self.data_expr = data_expr
         self.body = body  # The default slot content
@@ -526,7 +550,8 @@ class SlotNode(Node):
 class VerbatimNode(Node):
     """Represents an @verbatim...@endverbatim block."""
 
-    def __init__(self, content):
+    def __init__(self, content, line=None, column=None):
+        super().__init__(line, column)
         self.content = content
 
     def __repr__(self):
@@ -553,7 +578,8 @@ class CommentNode(Node):
 class CycleNode(Node):
     """Represents an @cycle(values) directive."""
 
-    def __init__(self, values, as_name=None):
+    def __init__(self, values, as_name=None, line=None, column=None):
+        super().__init__(line, column)
         self.values = values  # List of expressions
         self.as_name = as_name
 
@@ -581,7 +607,8 @@ class CycleNode(Node):
 class FirstOfNode(Node):
     """Represents an @firstof(values, default) directive."""
 
-    def __init__(self, values, default=None):
+    def __init__(self, values, default=None, line=None, column=None):
+        super().__init__(line, column)
         self.values = values  # List of expressions
         self.default = default
 
@@ -608,7 +635,8 @@ class FirstOfNode(Node):
 class UrlNode(Node):
     """Represents an @url('name', params) directive."""
 
-    def __init__(self, name, params_expr=None, as_name=None):
+    def __init__(self, name, params_expr=None, as_name=None, line=None, column=None):
+        super().__init__(line, column)
         self.name = name
         self.params_expr = params_expr
         self.as_name = as_name
@@ -681,7 +709,8 @@ class UrlNode(Node):
 class StaticNode(Node):
     """Represents an @static('path') directive."""
 
-    def __init__(self, path):
+    def __init__(self, path, line=None, column=None):
+        super().__init__(line, column)
         self.path = path
 
     def __repr__(self):
@@ -706,7 +735,8 @@ class CsrfNode(Node):
 class MethodNode(Node):
     """Represents an @method('POST') directive."""
 
-    def __init__(self, method):
+    def __init__(self, method, line=None, column=None):
+        super().__init__(line, column)
         self.method = method
 
     def __repr__(self):
@@ -720,7 +750,8 @@ class MethodNode(Node):
 class StyleNode(Node):
     """Represents an @style(dict) directive."""
 
-    def __init__(self, expression):
+    def __init__(self, expression, line=None, column=None):
+        super().__init__(line, column)
         self.expression = expression
 
     def __repr__(self):
@@ -758,7 +789,8 @@ class ClassNode(Node):
 class BreakNode(Node):
     """Represents an @break(condition) directive."""
 
-    def __init__(self, condition=None):
+    def __init__(self, condition=None, line=None, column=None):
+        super().__init__(line, column)
         self.condition = condition
 
     def __repr__(self):
@@ -797,7 +829,8 @@ class ContinueNode(Node):
 class TranslateNode(Node):
     """Represents a @trans('message') directive."""
 
-    def __init__(self, message, context=None, noop=False):
+    def __init__(self, message, context=None, noop=False, line=None, column=None):
+        super().__init__(line, column)
         self.message = message
         self.context = context
         self.noop = noop
@@ -878,7 +911,8 @@ class TranslateNode(Node):
 class BlockTranslateNode(Node):
     """Represents an @blocktranslate...@plural...@endblocktranslate block."""
 
-    def __init__(self, body, plural_body=None, count=None, context=None, trimmed=False):
+    def __init__(self, body, plural_body=None, count=None, context=None, trimmed=False, line=None, column=None):
+        super().__init__(line, column)
         self.body = body
         self.plural_body = plural_body
         self.count = count
@@ -896,7 +930,8 @@ class BlockTranslateNode(Node):
 class WithNode(Node):
     """Represents a @with(vars)...@endwith block."""
 
-    def __init__(self, variables, body):
+    def __init__(self, variables, body, line=None, column=None):
+        super().__init__(line, column)
         self.variables = variables  # Dictionary or list of assignments
         self.body = body
 
@@ -930,7 +965,8 @@ class WithNode(Node):
 class NowNode(Node):
     """Represents a @now('format') directive."""
 
-    def __init__(self, format_string):
+    def __init__(self, format_string, line=None, column=None):
+        super().__init__(line, column)
         self.format_string = format_string
 
     def __repr__(self):
@@ -946,7 +982,8 @@ class NowNode(Node):
 class RegroupNode(Node):
     """Represents a @regroup(target, by, as_name) directive."""
 
-    def __init__(self, target, by, as_name):
+    def __init__(self, target, by, as_name, line=None, column=None):
+        super().__init__(line, column)
         self.target = target
         self.by = by
         self.as_name = as_name
@@ -1015,7 +1052,8 @@ class LoremNode(Node):
     _LOREM_WORDS = "lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore \
          et dolore magna aliqua".split()
 
-    def __init__(self, args_expr):
+    def __init__(self, args_expr, line=None, column=None):
+        super().__init__(line, column)
         self.args_expr = args_expr
 
     def __repr__(self):
@@ -1063,7 +1101,12 @@ class LoremNode(Node):
         elif method == "p":
             return "".join([f"<p>{p}</p>" for p in generate_paragraphs(count, random_order)])
         else:
-            raise DirectiveParsingError(f"Invalid lorem method: {method}")
+            raise DirectiveParsingError(
+                f"Invalid method name passed to @lorem directive: '{method}'."
+                "\nSupported methods are 'w', 'b' and 'p'.",
+                line=self.line,
+                column=self.column,
+            )
 
 
 class SpacelessNode(Node):
@@ -1090,7 +1133,8 @@ class SpacelessNode(Node):
 class SelectedNode(Node):
     """Represents a @selected(condition) directive."""
 
-    def __init__(self, condition):
+    def __init__(self, condition, line=None, column=None):
+        super().__init__(line, column)
         self.condition = condition
 
     def __repr__(self):

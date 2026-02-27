@@ -98,7 +98,7 @@ class Parser:
         while self.current_token():
             token = self.current_token()
             if token.type == "TEXT":
-                ast.append(TextNode(token.value))
+                ast.append(TextNode(token.value, line=token.line, column=token.column))
                 self.advance()
             elif token.type == "VAR_START":
                 ast.append(self._parse_variable(escaped=True))
@@ -120,59 +120,59 @@ class Parser:
                 self.advance()  # Consume the DIRECTIVE token
 
                 if directive_name == "if":
-                    ast.append(self._parse_if(directive_args_str))
+                    ast.append(self._parse_if(directive_args_str, token))
                 elif directive_name == "unless":
-                    ast.append(self._parse_unless(directive_args_str))
+                    ast.append(self._parse_unless(directive_args_str, token))
                 elif directive_name == "for":
-                    ast.append(self._parse_for(directive_args_str))
+                    ast.append(self._parse_for(directive_args_str, token))
                 elif directive_name == "switch":
-                    ast.append(self._parse_switch(directive_args_str))
+                    ast.append(self._parse_switch(directive_args_str, token))
                 elif directive_name == "auth":
-                    ast.append(self._parse_auth(directive_args_str))
+                    ast.append(self._parse_auth(directive_args_str, token))
                 elif directive_name == "guest":
-                    ast.append(self._parse_guest(directive_args_str))
+                    ast.append(self._parse_guest(directive_args_str, token))
                 elif directive_name == "include":
-                    ast.append(self._parse_include(directive_args_str))
+                    ast.append(self._parse_include(directive_args_str, token))
                 elif directive_name == "extends":
-                    ast.append(self._parse_extends(directive_args_str))
+                    ast.append(self._parse_extends(directive_args_str, token))
                 elif directive_name == "section":
-                    ast.append(self._parse_section(directive_args_str))
+                    ast.append(self._parse_section(directive_args_str, token))
                 elif directive_name == "yield":
-                    ast.append(self._parse_yield(directive_args_str))
+                    ast.append(self._parse_yield(directive_args_str, token))
                 elif directive_name == "component":
-                    ast.append(self._parse_component(directive_args_str))
+                    ast.append(self._parse_component(directive_args_str, token))
                 elif directive_name == "slot":
-                    ast.append(self._parse_slot(directive_args_str))
+                    ast.append(self._parse_slot(directive_args_str, token))
                 elif directive_name == "verbatim":
-                    ast.append(self._parse_verbatim(directive_args_str))
+                    ast.append(self._parse_verbatim(directive_args_str, token))
                 elif directive_name == "comment":
-                    ast.append(self._parse_comment(directive_args_str))
+                    ast.append(self._parse_comment(directive_args_str, token))
                 elif directive_name == "cycle":
-                    ast.append(self._parse_cycle(directive_args_str))
+                    ast.append(self._parse_cycle(directive_args_str, token))
                 elif directive_name == "firstof":
-                    ast.append(self._parse_firstof(directive_args_str))
+                    ast.append(self._parse_firstof(directive_args_str, token))
                 elif directive_name == "url":
-                    ast.append(self._parse_url(directive_args_str))
+                    ast.append(self._parse_url(directive_args_str, token))
                 elif directive_name == "static":
-                    ast.append(self._parse_static(directive_args_str))
+                    ast.append(self._parse_static(directive_args_str, token))
                 elif directive_name == "csrf":
-                    ast.append(CsrfNode())
+                    ast.append(CsrfNode(line=token.line, column=token.column))
                 elif directive_name == "method":
-                    ast.append(self._parse_method(directive_args_str))
+                    ast.append(self._parse_method(directive_args_str, token))
                 elif directive_name == "style":
-                    ast.append(self._parse_style(directive_args_str))
+                    ast.append(self._parse_style(directive_args_str, token))
                 elif directive_name == "class":
-                    ast.append(self._parse_class(directive_args_str))
+                    ast.append(self._parse_class(directive_args_str, token))
                 elif directive_name == "break":
-                    ast.append(self._parse_break(directive_args_str))
+                    ast.append(self._parse_break(directive_args_str, token))
                 elif directive_name == "continue":
-                    ast.append(self._parse_continue(directive_args_str))
+                    ast.append(self._parse_continue(directive_args_str, token))
                 elif directive_name == "debug":
-                    ast.append(DebugNode())
+                    ast.append(DebugNode(line=token.line, column=token.column))
                 elif directive_name == "lorem":
                     ast.append(self._parse_lorem(directive_args_str))
                 elif directive_name == "spaceless":
-                    ast.append(self._parse_spaceless(directive_args_str))
+                    ast.append(self._parse_spaceless(directive_args_str, token))
                 elif directive_name == "trans" or directive_name == "translate":
                     ast.append(self._parse_trans(directive_args_str))
                 elif directive_name == "blocktranslate":
@@ -237,8 +237,8 @@ class Parser:
                         column=token.column,
                     )
                 else:
-                    # Unknown directive, ignore for now
-                    pass
+                    # Unknown directive, render as plain text
+                    ast.append(TextNode(token.value, line=token.line, column=token.column))
 
             elif token.type == "COMMENT_START":
                 # Handle inline comments {# ... #}
@@ -257,10 +257,10 @@ class Parser:
     def _parse_variable(self, escaped=True):
         """Parses a {{ expression }} or {!! expression !!} block."""
         if escaped:
-            self.expect("VAR_START")
+            start_token = self.expect("VAR_START")
             end_token_type = "VAR_END"
         else:
-            self.expect("UNESCAPED_VAR_START")
+            start_token = self.expect("UNESCAPED_VAR_START")
             end_token_type = "UNESCAPED_VAR_END"
 
         expr_parts = []
@@ -275,9 +275,14 @@ class Parser:
         else:
             self.expect("UNESCAPED_VAR_END")
 
-        return VarNode(expression, escaped=escaped)
+        return VarNode(
+            expression,
+            escaped=escaped,
+            line=start_token.line,
+            column=start_token.column,
+        )
 
-    def _parse_if(self, condition_str):
+    def _parse_if(self, condition_str, token):
         """Parses an @if...[@elif...]@else...@endif block."""
         # condition_str should be like "(user.is_admin)"
         condition = self._extract_expression_from_args(condition_str, "@if")
@@ -321,9 +326,16 @@ class Parser:
 
         self.expect("DIRECTIVE", value_prefix="@endif")  # Expect and consume the closing @endif
 
-        return IfNode(condition, body_nodes, elif_blocks, else_body_nodes)
+        return IfNode(
+            condition,
+            body_nodes,
+            elif_blocks,
+            else_body_nodes,
+            line=token.line,
+            column=token.column,
+        )
 
-    def _parse_for(self, loop_expression_str):
+    def _parse_for(self, loop_expression_str, token):
         """Parses an @for...[@empty...]@endfor block."""
         # loop_expression_str should be like "(item in collection)"
         match = re.match(r"^\s*\(\s*([a-zA-Z_][a-zA-Z0-9_]*)\s+in\s+(.+?)\s*\)\s*$", loop_expression_str)
@@ -359,7 +371,14 @@ class Parser:
 
         self.expect("DIRECTIVE", value_prefix="@endfor")  # Expect and consume the closing @endfor
 
-        return ForNode(item_var, collection_expr, body_nodes, empty_body_nodes)
+        return ForNode(
+            item_var,
+            collection_expr,
+            body_nodes,
+            empty_body_nodes,
+            line=token.line,
+            column=token.column,
+        )
 
     def _parse_until_directives(self, directives_to_stop_at):
         """
@@ -386,47 +405,47 @@ class Parser:
                 self.advance()  # Consume the DIRECTIVE token
 
                 if directive_name == "if":
-                    body.append(self._parse_if(directive_args_str))
+                    body.append(self._parse_if(directive_args_str, token))
                 elif directive_name == "unless":
-                    body.append(self._parse_unless(directive_args_str))
+                    body.append(self._parse_unless(directive_args_str, token))
                 elif directive_name == "for":
-                    body.append(self._parse_for(directive_args_str))
+                    body.append(self._parse_for(directive_args_str, token))
                 elif directive_name == "switch":
-                    body.append(self._parse_switch(directive_args_str))
+                    body.append(self._parse_switch(directive_args_str, token))
                 elif directive_name == "auth":
-                    body.append(self._parse_auth(directive_args_str))
+                    body.append(self._parse_auth(directive_args_str, token))
                 elif directive_name == "guest":
-                    body.append(self._parse_guest(directive_args_str))
+                    body.append(self._parse_guest(directive_args_str, token))
                 elif directive_name == "component":
-                    body.append(self._parse_component(directive_args_str))
+                    body.append(self._parse_component(directive_args_str, token))
                 elif directive_name == "slot":
-                    body.append(self._parse_slot(directive_args_str))
+                    body.append(self._parse_slot(directive_args_str, token))
                 elif directive_name == "verbatim":
-                    body.append(self._parse_verbatim(directive_args_str))
+                    body.append(self._parse_verbatim(directive_args_str, token))
                 elif directive_name == "comment":
-                    body.append(self._parse_comment(directive_args_str))
+                    body.append(self._parse_comment(directive_args_str, token))
                 elif directive_name == "include":
-                    body.append(self._parse_include(directive_args_str))
+                    body.append(self._parse_include(directive_args_str, token))
                 elif directive_name == "cycle":
-                    body.append(self._parse_cycle(directive_args_str))
+                    body.append(self._parse_cycle(directive_args_str, token))
                 elif directive_name == "firstof":
-                    body.append(self._parse_firstof(directive_args_str))
+                    body.append(self._parse_firstof(directive_args_str, token))
                 elif directive_name == "url":
-                    body.append(self._parse_url(directive_args_str))
+                    body.append(self._parse_url(directive_args_str, token))
                 elif directive_name == "static":
-                    body.append(self._parse_static(directive_args_str))
+                    body.append(self._parse_static(directive_args_str, token))
                 elif directive_name == "csrf":
-                    body.append(CsrfNode())
+                    body.append(CsrfNode(line=token.line, column=token.column))
                 elif directive_name == "method":
-                    body.append(self._parse_method(directive_args_str))
+                    body.append(self._parse_method(directive_args_str, token))
                 elif directive_name == "style":
-                    body.append(self._parse_style(directive_args_str))
+                    body.append(self._parse_style(directive_args_str, token))
                 elif directive_name == "class":
-                    body.append(self._parse_class(directive_args_str))
+                    body.append(self._parse_class(directive_args_str, token))
                 elif directive_name == "break":
-                    body.append(self._parse_break(directive_args_str))
+                    body.append(self._parse_break(directive_args_str, token))
                 elif directive_name == "continue":
-                    body.append(self._parse_continue(directive_args_str))
+                    body.append(self._parse_continue(directive_args_str, token))
                 elif directive_name == "autoescape":
                     body.append(self._parse_autoescape(directive_args_str))
                 elif directive_name == "debug":
@@ -437,7 +456,7 @@ class Parser:
                     body.append(self._parse_spaceless(directive_args_str))
 
             elif token.type == "TEXT":
-                body.append(TextNode(token.value))
+                body.append(TextNode(token.value, line=token.line, column=token.column))
                 self.advance()
             elif token.type == "VAR_START":
                 body.append(self._parse_variable(escaped=True))
@@ -562,7 +581,7 @@ class Parser:
         self.expect("DIRECTIVE", value_prefix="@endslot")
         return SlotNode(name, body)
 
-    def _parse_verbatim(self, args_str):
+    def _parse_verbatim(self, args_str, token=None):
         """Parses an @verbatim...@endverbatim block."""
         # Verbatim content should be treated as raw text, not parsed.
         # But the lexer has already tokenized it.
@@ -581,7 +600,7 @@ class Parser:
         self.expect("DIRECTIVE", value_prefix="@endverbatim")
         return VerbatimNode("".join(content_parts))
 
-    def _parse_comment(self, args_str):
+    def _parse_comment(self, args_str, token=None):
         """Parses an @comment...@endcomment block."""
         # Just consume until endcomment
         content_parts = []
@@ -652,9 +671,9 @@ class Parser:
             match = re.match(r"^\s*\((.*)\)\s*$", args_str)
             if match:
                 inner = match.group(1).strip()
-        return LoremNode(inner)
+        return LoremNode(inner, line=self.current_token().line, column=self.current_token().column)
 
-    def _parse_spaceless(self, args_str):
+    def _parse_spaceless(self, args_str, token=None):
         """Parses a @spaceless...@endspaceless block."""
         # Arguments are not expected; ignore if present.
         body = self._parse_until_directives(["@endspaceless"])

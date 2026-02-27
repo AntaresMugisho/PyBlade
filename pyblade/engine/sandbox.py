@@ -30,6 +30,9 @@ class SafeEvaluator:
 
     _builtins = {
         "len": len,
+        "int": int,
+        "str": str,
+        "float": float,
         "range": range,
         "type": type,
         "sum": sum,
@@ -69,16 +72,21 @@ class SafeEvaluator:
         if not isinstance(expression, str):
             return expression
 
-        # Handle Numeric attributes (for lists or tuples, e.g.: items.0)
+        # Transfom numeric attributes into Subscripts for lists or tuples, e.g.: items.0 -> items[0])
         expr = expression.strip()
-        m = re.fullmatch(r"([a-zA-Z_][a-zA-Z0-9_]*)\.(-?\d+)", expr)
-        if m:
-            expr = f"{m.group(1)}[{m.group(2)}]"
+        try:
+            float(expr)  # Tot avoid transforming .0 or 2.5
+        except ValueError:
+            expr = re.sub(
+                r"\.(-?\d+)(?=\.|$)",
+                lambda m: f"[{m.group(1)}]",
+                expr,
+            )
 
         try:
             tree = ast.parse(expr, mode="eval")
         except SyntaxError as exc:
-            raise TypeError(f"Invalid expression syntax: {expression!r}") from exc
+            raise SyntaxError(f"Invalid expression syntax: {expression!r}") from exc
 
         return self._eval_node(tree.body, context or {})
 
@@ -103,7 +111,7 @@ class SafeEvaluator:
         # ----------------------------
         if isinstance(node, ast.Attribute):
             if node.attr.startswith("_"):
-                raise AttributeError("Access to private attribute is not allowed in templates")
+                raise PermissionError("Access to private attribute is not allowed in templates")
 
             owner = self._eval_node(node.value, context)
             if owner is None:
@@ -112,25 +120,21 @@ class SafeEvaluator:
             attr_name = node.attr
 
             # Dict key lookup
-            if isinstance(owner, dict) and attr_name in owner:
-                return owner[attr_name]
-
-            # List/Tuple numeric index (my_list.0)
-            # if attr_name.lstrip("-").isdigit() and isinstance(owner, (list, tuple)):
-            #     try:
-            #         return owner[int(attr_name)]
-            #     except Exception:
-            #         return None
+            if isinstance(owner, dict):
+                if attr_name in owner:
+                    return owner[attr_name]
+                raise KeyError(attr_name)
 
             # Normal attribute lookup
             try:
                 value = getattr(owner, attr_name)
-            except AttributeError:
+            except AttributeError as exc:
                 # Fallback to filter (no-arg filter)
-                if self._filters and self._filters.has(attr_name):
+                if self._filters.has(attr_name):
                     filter_func = self._filters.get(attr_name)
                     return filter_func(owner)
-                return None
+
+                raise AttributeError(f"Object has no attribute '{attr_name}': {exc}")
 
             # Auto-call zero-arg bound methods
             if callable(value) and hasattr(value, "__self__"):
@@ -169,11 +173,11 @@ class SafeEvaluator:
                         raise PermissionError(f"Calling method '{attr_name}' is not allowed in templates")
 
                 # Fallback to filter
-                if self._filters and self._filters.has(attr_name):
+                if self._filters.has(attr_name):
                     filter_func = self._filters.get(attr_name)
                     return filter_func(owner, *args, **kwargs)
 
-                return None
+                raise AttributeError(f"Object has no attribute '{attr_name}'")
 
             # Normal function call
             func = self._eval_node(node.func, context)
@@ -237,8 +241,8 @@ class SafeEvaluator:
 
             try:
                 return target[key]
-            except Exception:
-                raise TypeError(f"Invalid index/key access on object of type {type(target).__name__}")
+            except Exception as e:
+                raise e
 
         if isinstance(node, ast.List):
             return [self._eval_node(elt, context) for elt in node.elts]
@@ -249,4 +253,4 @@ class SafeEvaluator:
         if isinstance(node, ast.Dict):
             return {self._eval_node(k, context): self._eval_node(v, context) for k, v in zip(node.keys, node.values)}
 
-        raise TypeError(f"Unsupported syntax in template expression: {type(node).__name__}")
+        raise SyntaxError(f"Unsupported syntax in template expression: {type(node).__name__}")
