@@ -28,6 +28,11 @@ line_length = 120
 [tool.isort]
 profile = "black"
 
+[tool.flake8]
+max-line-length = 120
+exclude = "**/__init__.py"
+extend-ignore = "E203"
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
