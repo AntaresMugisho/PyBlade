@@ -1,5 +1,6 @@
 import ast
 import operator
+import re
 
 from .filters import filters
 
@@ -68,8 +69,14 @@ class SafeEvaluator:
         if not isinstance(expression, str):
             return expression
 
+        # Handle Numeric attributes (for lists or tuples, e.g.: items.0)
+        expr = expression.strip()
+        m = re.fullmatch(r"([a-zA-Z_][a-zA-Z0-9_]*)\.(-?\d+)", expr)
+        if m:
+            expr = f"{m.group(1)}[{m.group(2)}]"
+
         try:
-            tree = ast.parse(expression.strip(), mode="eval")
+            tree = ast.parse(expr, mode="eval")
         except SyntaxError as exc:
             raise TypeError(f"Invalid expression syntax: {expression!r}") from exc
 
@@ -109,11 +116,11 @@ class SafeEvaluator:
                 return owner[attr_name]
 
             # List/Tuple numeric index (my_list.0)
-            if attr_name.lstrip("-").isdigit() and isinstance(owner, (list, tuple)):
-                try:
-                    return owner[int(attr_name)]
-                except Exception:
-                    return None
+            # if attr_name.lstrip("-").isdigit() and isinstance(owner, (list, tuple)):
+            #     try:
+            #         return owner[int(attr_name)]
+            #     except Exception:
+            #         return None
 
             # Normal attribute lookup
             try:
@@ -178,7 +185,7 @@ class SafeEvaluator:
             return func(*args, **kwargs)
 
         # ----------------------------
-        # OPERATORS (unchanged)
+        # OPERATORS
         # ----------------------------
         if isinstance(node, ast.BinOp):
             op_type = type(node.op)
