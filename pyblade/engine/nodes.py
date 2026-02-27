@@ -1046,8 +1046,6 @@ class LoremNode(Node):
             if not isinstance(args, tuple):
                 args = (args,)
 
-            print("ARGS: ", args)
-
             if len(args) > 0 and args[0] is not None:
                 try:
                     count = int(args[0])

@@ -65,6 +65,31 @@ class Lexer:
         while self.pos < len(self.template_string):
             # Prioritized matching for special blocks (order matters)
 
+            # Escaped variable display: @{{ ... }} should render as literal {{ ... }}
+            # We treat the entire sequence from '@{{' up to the next '}}' as plain text.
+            if self._peek(3) == "@{{":
+                start_line = self.line
+                start_column = self.column
+
+                # Find the closing '}}' after the '@{{'
+                end_index = self.template_string.find("}}", self.pos + 3)
+                if end_index == -1:
+                    # No closing '}}'; treat the '@' as normal TEXT and continue.
+                    self._add_token("TEXT", "@")
+                    continue
+
+                # Extract inner content (everything between @{{ and }})
+                inner = self.template_string[self.pos + 3 : end_index]
+                literal = "{{" + inner + "}}"
+
+                # Emit a single TEXT token containing the literal {{ ... }}
+                self.tokens.append(Token("TEXT", literal, start_line, start_column))
+
+                # Advance position past the entire '@{{ ... }}' sequence
+                consumed_len = (end_index + 2) - self.pos  # include the closing '}}'
+                self._update_pos(consumed_len)
+                continue
+
             # Unescaped variable display: {!! expression !!}
             if self._peek(3) == "{!!":
                 self._add_token("UNESCAPED_VAR_START", "{!!")

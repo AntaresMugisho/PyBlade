@@ -79,18 +79,15 @@ class Parser:
         """
         token = self.current_token()
         if not token or token.type != token_type:
-            line = token.line if token else "EOF"
-            column = token.column if token else "EOF"
+            line = token.line if token else None
             raise TemplateRenderError(
                 f"Expected token of type '{token_type}' but got {token}.",
                 line=line,
-                column=column,
             )
         if value_prefix and not token.value.startswith(value_prefix):
             raise TemplateRenderError(
                 f"Expected token value starting with '{value_prefix}' but got '{token.value}'",
                 line=token.line,
-                column=token.column,
             )
         self.advance()
         return token
@@ -254,7 +251,6 @@ class Parser:
                 raise TemplateRenderError(
                     f"Unexpected token type: {token.type} with value '{token.value}'",
                     line=token.line,
-                    column=token.column,
                 )
         return ast
 

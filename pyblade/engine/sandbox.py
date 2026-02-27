@@ -119,7 +119,7 @@ class SafeEvaluator:
             try:
                 value = getattr(owner, attr_name)
             except AttributeError:
-                # 4️⃣ Fallback to filter (no-arg filter)
+                # Fallback to filter (no-arg filter)
                 if self._filters and self._filters.has(attr_name):
                     filter_func = self._filters.get(attr_name)
                     return filter_func(owner)
@@ -132,8 +132,8 @@ class SafeEvaluator:
                         return value()
                     except TypeError:
                         return value
-                else:
-                    return value  # do NOT auto-call unsafe methods
+
+            return value
 
         # ----------------------------
         # CALL SUPPORT (method OR filter with args)
