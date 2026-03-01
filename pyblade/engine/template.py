@@ -76,9 +76,9 @@ class Template:
 
         if not self.engine:
             self._processor = TemplateProcessor()
-            return self._processor.render(self.content, context, template_name=self.name, template_path=self.path)
+            return self._processor.render(self.content, context, template_path=self.path)
 
-        return self.engine.render(self.content, context, template_name=self.name, template_path=self.path)
+        return self.engine.render(self.content, context, template_path=self.path)
 
     def get_relative_path(self, base_dir: Optional[Union[str, Path]] = None) -> str:
         """

@@ -1,18 +1,8 @@
-"""
-PyBlade template rendering engine.
-"""
-
 from pathlib import Path
 from typing import Dict, List, Optional
 
 from pyblade.config import settings
-from pyblade.engine.exceptions import (
-    DirectiveParsingError,
-    PyBladeException,
-    TemplateNotFoundError,
-    TemplateRenderError,
-    UndefinedVariableError,
-)
+from pyblade.engine.exceptions import PyBladeException
 
 from . import loader
 from .processor import TemplateProcessor
@@ -32,113 +22,47 @@ class PyBlade:
         """
         self._template_dirs = dirs or []
         self._processor = TemplateProcessor(cache_size=cache_size, cache_ttl=cache_ttl)
-        self._debug = None
         self.framework = settings.framework
 
-    @property
-    def debug(self) -> bool:
-        """Auto-detect DEBUG mode from framework if not explicitly set."""
-        if self._debug is not None:
-            return self._debug
-
-        # Auto-detect from framework
-        if self.framework == "django":
-            try:
-                from django.conf import settings
-
-                return settings.DEBUG
-            except Exception:
-                return False
-        elif self.framework == "flask":
-            try:
-                from flask import current_app
-
-                return current_app.debug
-            except Exception:
-                return False
-        elif self.framework == "fastapi":
-            # FastAPI doesn't have built-in DEBUG, so we check environment
-            import os
-
-            return os.getenv("DEBUG", "False").lower() == "true"
-
-        return False
-
-    def _handle_error(
-        self, error: Exception, template_path: Path = None, template_source: str = None, context: dict = None
-    ) -> str:
+    def _handle_error(self, error: PyBladeException, template_path: Path = None, template_source: str = None) -> str:
         """Handle rendering errors and return error page."""
 
-        if self.debug:
-            # Extract error details
-            error_type = type(error).__name__
-            error_message = error.message
-            line_number = getattr(error, "line_number", None)
+        line = error.line
 
-            # Get code context if we have line number and source
-            code_lines = []
-            if template_source and line_number:
-                lines = template_source.split("\n")
-                start = max(0, line_number - 4)
-                end = min(len(lines), line_number + 3)
+        code_lines = []
+        if template_source and line:
+            lines = template_source.split("\n")
+            start = max(0, line - 4)
+            end = min(len(lines), line + 3)
 
-                for i in range(start, end):
-                    code_lines.append(
-                        {
-                            "number": i + 1,
-                            "content": lines[i] if i < len(lines) else "",
-                            "is_error": (i + 1) == line_number,
-                        }
-                    )
+            for i in range(start, end):
+                code_lines.append(
+                    {
+                        "number": i + 1,
+                        "content": lines[i] if i < len(lines) else "",
+                        "is_error": (i + 1) == line,
+                    }
+                )
 
-            # Get quick fix tip based on error type
-            quick_fix = self._get_quick_fix(error)
+        context = {
+            "error_type": type(error).__name__,
+            "error_message": error.message,
+            "template_path": template_path,
+            "line": line,
+            "code_lines": code_lines,
+            "help": error.help
+            or "An unexpected error occurred during template rendering. "
+            "Check the full stack trace to identify the origin.",
+        }
 
-            # Render error template
-            context = {
-                "error_type": error_type,
-                "error_message": error_message,
-                "template_path": template_path,
-                "line_number": line_number,
-                "code_lines": code_lines,
-                "quick_fix": quick_fix,
-            }
+        template = loader.load_template("error", [Path(__file__).parent / "templates"])
 
-            template = loader.load_template("error", [Path(__file__).parent / "templates"])
-            return template.render(context)
-
-    def _get_quick_fix(self, error: Exception) -> str:
-        """Get helpful suggestions based on error type."""
-        if isinstance(error, TemplateNotFoundError):
-            return (
-                "Ensure the template file exists, the path is correct, " "and that it is accessible by the application."
-            )
-
-        elif isinstance(error, TemplateRenderError):
-            return (
-                "Verify that the template syntax is valid and that all required "
-                "variables and directives are correctly defined."
-            )
-
-        elif isinstance(error, DirectiveParsingError):
-            return "Check the syntax of the directive and ensure it is supported " "by the current version of PyBlade."
-
-        elif isinstance(error, UndefinedVariableError):
-            return (
-                "Confirm that the variable is defined in the template context "
-                "and that its name is spelled correctly."
-            )
-
-        return (
-            "No automatic fix is available. Please consult the PyBlade "
-            "documentation or enable debug mode for more details."
-        )
+        return template.render(context)
 
     def render(
         self,
         template: str,
         context: Optional[Dict] = None,
-        template_name: Optional[str] = None,
         template_path: Optional[Path] = None,
     ) -> str:
         """
@@ -157,8 +81,13 @@ class PyBlade:
 
         try:
             template = self._processor.render(template, context)
-        except PyBladeException as e:
-            return self._handle_error(error=e, template_source=template, template_path=template_path, context=context)
+        except PyBladeException as exc:
+            if settings.DEBUG:
+                return self._handle_error(error=exc, template_source=template, template_path=template_path)
+            else:
+                raise exc
+        except Exception as exc:
+            raise exc
 
         return template
 

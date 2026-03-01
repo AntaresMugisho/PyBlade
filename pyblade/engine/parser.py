@@ -314,6 +314,7 @@ class Parser:
                         line=directive_token.line,
                         column=directive_token.column,
                     )
+
                 else_body_nodes = self._parse_until_directives(["@endif"])
             elif current_directive_name == "endif":
                 break  # Found @endif, exit loop to consume it
@@ -331,8 +332,8 @@ class Parser:
             body_nodes,
             elif_blocks,
             else_body_nodes,
-            line=token.line,
-            column=token.column,
+            line=directive_token.line,
+            column=directive_token.column,
         )
 
     def _parse_for(self, loop_expression_str, token):
@@ -464,12 +465,16 @@ class Parser:
                 body.append(self._parse_variable(escaped=False))
             else:
                 raise TemplateRenderError(
-                    "Unexpected token type in _parse_until_directives: "
-                    f"{token.type} with value '{token.value}' at line {token.line}, col {token.column}"
+                    "Unexpected token type in _parse_until_directives: ",
                 )
 
         # If we reach here, we hit end of file without finding a closing directive.
-        raise SyntaxError(f"Expected one of {directives_to_stop_at} but reached end of template without closure.")
+        raise TemplateRenderError(
+            f"Expected one of {directives_to_stop_at} but reached end of template without closure.",
+            line=token.line,
+            column=token.column,
+            help="You opened a directive but did not close it. Add the corresponding closing directive.",
+        )
 
     def _parse_unless(self, condition_str):
         """Parses an @unless...@endunless block."""

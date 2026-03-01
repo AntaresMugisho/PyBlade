@@ -17,6 +17,20 @@ class Node:
 
     _evaluator = SafeEvaluator()
 
+    _quick_fix_messages = {
+        "AttributeError": "The object does not have the attribute "
+        "you are trying to access. Make sure it is spelled correctly.",
+        "SyntaxError": "There is a syntax error in your expression. "
+        "Check your template syntax near the reported line.",
+        "NameError": "The variable is not defined in the current template context. "
+        "Check the name you wrote is spelled correctly.",
+        "TypeError": "An operation is being applied to an incompatible type.",
+        "KeyError": "The key you are trying to access does not exist in the dictionary. "
+        "Make sure it is spelled correctly.",
+        "PermissionError": "The operation you are trying to perform is not allowed in templates."
+        " Review our security rules before retrying.",
+    }
+
     def __init__(self, line=None, column=None):
         self.line = line
         self.column = column
@@ -62,10 +76,9 @@ class VarNode(Node):
         try:
             value = self.eval(self.expression, context)
         except Exception as exc:
-            raise TemplateRenderError(
-                f"{exc.__class__.__name__}: {exc}",
-                line=self.line,
-            )
+            exc_name = exc.__class__.__name__
+            help_message = self._quick_fix_messages.get(exc_name, "")
+            raise TemplateRenderError(f"{exc_name}: {exc}", line=self.line, help=help_message)
         if value is None:
             rendered = ""
         else:
@@ -74,6 +87,9 @@ class VarNode(Node):
 
 
 # DIRECTIVES
+# ------------------------------------------------------------------------------------------------------------------------
+
+
 class IfNode(Node):
     """Represents an @if...@elif...@else...@endif conditional block."""
 
@@ -96,17 +112,22 @@ class IfNode(Node):
         )
 
     def render(self, context):
-        if self.eval(self.condition, context):
-            return "".join(node.render(context) for node in self.body)
+        try:
+            if self.eval(self.condition, context):
+                return "".join(node.render(context) for node in self.body)
 
-        for cond_expr, body_nodes in self.elif_blocks:
-            if self.eval(cond_expr, context):
-                return "".join(node.render(context) for node in body_nodes)
+            for cond_expr, body_nodes in self.elif_blocks:
+                if self.eval(cond_expr, context):
+                    return "".join(node.render(context) for node in body_nodes)
 
-        if self.else_body is not None:
-            return "".join(node.render(context) for node in self.else_body)
+            if self.else_body is not None:
+                return "".join(node.render(context) for node in self.else_body)
 
-        return ""
+            return ""
+        except Exception as exc:
+            exc_name = type(exc).__name__
+            help_message = self._quick_fix_messages.get(exc_name)
+            raise TemplateRenderError(f"{exc_name}: {exc}", line=self.line, help=help_message)
 
 
 class ForNode(Node):

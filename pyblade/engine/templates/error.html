@@ -4,6 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="{{ error_message }}">
     <title>{{ error_type }}</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -95,7 +96,7 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
                         </svg>
-                        <span class="text-yellow-300 font-mono font-bold" id="error-line">{{ line_number }}</span>
+                        <span class="text-yellow-300 font-mono font-bold" id="error-line">{{ line }}</span>
                     </div>
                 </div>
             </div>
@@ -165,7 +166,7 @@
                     </svg>
                     Quick Fix
                 </h3>
-                <p class="text-sm text-slate-300">{{ quick_fix }}</p>
+                <p class="text-sm text-slate-300">{{ help }}</p>
             </div>
             <a href="https://docs.pyblade.dev" target="_blank"
                 class="bg-slate-800/30 backdrop-blur-sm rounded-lg border border-slate-700/50 p-4">

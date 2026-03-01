@@ -1,60 +1,38 @@
-"""
-Custom exceptions for the PyBlade template engine.
-"""
-
-
 class PyBladeException(Exception):
     """Base exception for all PyBlade errors."""
 
-    def __init__(self, message: str, template_name: str = None, line: int = None, column: int = None):
+    def __init__(self, message: str, line: int = None, column: int = None, help: str = None):
+        """
+        Initialize a PyBlade exception.
+
+        Args:
+            message: The error message
+            line: The line number where the error occurred
+            column: The column number where the error occurred
+            help: Additional help text for quick fix
+        """
         self.message = message
-        self.template_name = template_name
-        self.line_number = line
+        self.line = line
         self.column = column
-        super().__init__(self.format_message())
-
-    def format_message(self) -> str:
-        """Format error message with location info."""
-        parts = [self.message]
-        if self.template_name:
-            parts.append(f"in '{self.template_name}'")
-        if self.line_number:
-            parts.append(f"Line {self.line_number}")
-        if self.column:
-            parts.append(f"column {self.column}")
-        return " ".join(parts)
-
-
-class UndefinedVariableError(PyBladeException):
-    """Raised when a template references an undefined variable."""
-
-    def __init__(self, variable_name: str, template_name: str = None, line: int = None, available_vars: list = None):
-        self.variable_name = variable_name
-        self.available_vars = available_vars or []
-        message = f"Undefined variable: '{variable_name}'"
-        super().__init__(message, template_name, line)
+        self.help = help
 
 
 class TemplateNotFoundError(PyBladeException):
     """Raised when a template file cannot be found."""
 
-    def __init__(self, template_name: str, search_paths: list = None):
-        self.search_paths = search_paths or []
-        message = f"Template not found: {template_name}"
-        super().__init__(message, template_name)
+    def __init__(self, message: str, line: int = None, column: int = None, help: str = None):
+        super().__init__(message, line, column, help)
 
 
 class DirectiveParsingError(PyBladeException):
     """Raised when there's an error parsing a template directive."""
 
-    def __init__(self, message: str, line: int = None, column: int = None):
-        super().__init__(message, line=line, column=column)
-        print(line, column)
+    def __init__(self, message: str, line: int = None, column: int = None, help: str = None):
+        super().__init__(message, line=line, column=column, help=help)
 
 
 class TemplateRenderError(PyBladeException):
     """Raised when there's an error during template rendering."""
 
-    def __init__(self, message: str, template_name: str = None, line: int = None, context: dict = None):
-        self.context = context or {}
-        super().__init__(message, template_name, line)
+    def __init__(self, message: str, line: int = None, column: int = None, help: str = None):
+        super().__init__(message, line, column, help)

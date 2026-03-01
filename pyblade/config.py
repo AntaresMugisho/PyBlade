@@ -9,7 +9,6 @@ from pyblade.utils import get_project_root
 class Config:
 
     DEFAULTS = {
-        "DEBUG": True,  # TODO: Find a better way to determine if the app is in DEBUG MODE or no
         "templates_dir": "templates",
         "components_dir": "components",
         "commands_dir": "management/commands",
@@ -60,7 +59,7 @@ class Config:
 
     def __getattribute__(self, key):
 
-        if key.startswith("_") or key in {"load", "save"}:
+        if key.startswith("_") or key in {"load", "save", "DEBUG"}:
             return super().__getattribute__(key)
 
         value = self._data.get(key, self._defaults.get(key))
@@ -86,6 +85,34 @@ class Config:
         self._data[key] = value
         if self._parent and self._key:
             self._parent._data[self._key] = self._data
+
+    @property
+    def DEBUG(self) -> bool:
+        """Auto-detect debug mode from framework if not explicitly set."""
+
+        if self.framework == "django":
+            try:
+                from django.conf import settings
+
+                return settings.DEBUG
+            except Exception:
+                return False
+
+        elif self.framework == "flask":
+            try:
+                from flask import current_app
+
+                return current_app.debug
+            except Exception:
+                return False
+
+        elif self.framework == "fastapi":
+            # FastAPI doesn't have built-in DEBUG, so we check environment
+            import os
+
+            return os.getenv("DEBUG", "False").lower() == "true"
+
+        return False
 
 
 settings = Config()
