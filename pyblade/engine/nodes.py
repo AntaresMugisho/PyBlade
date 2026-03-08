@@ -233,7 +233,7 @@ class AuthNode(Node):
         return f"AuthNode(body={self.body}, else_body={self.else_body}, guard='{self.guard}')"
 
     def render(self, context):
-        """Render content for authenticated users, mirroring TemplateProcessor.render_auth."""
+        """Render content for authenticated users."""
         user = context.get("user")
         request = context.get("request")
 
@@ -259,7 +259,8 @@ class AuthNode(Node):
 class GuestNode(Node):
     """Represents an @guest...@endguest block."""
 
-    def __init__(self, body, else_body=None, guard=None):
+    def __init__(self, body, else_body=None, guard=None, line=None, column=None):
+        super().__init__(line, column)
         self.body = body
         self.else_body = else_body
         self.guard = guard

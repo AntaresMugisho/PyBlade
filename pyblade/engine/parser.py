@@ -125,7 +125,7 @@ class Parser:
                     ast.append(self._parse_unless(directive_args_str, token))
                 elif directive_name == "for":
                     ast.append(self._parse_for(directive_args_str, token))
-                elif directive_name == "switch":
+                elif directive_name == "match":
                     ast.append(self._parse_switch(directive_args_str, token))
                 elif directive_name == "auth":
                     ast.append(self._parse_auth(directive_args_str, token))
@@ -185,8 +185,6 @@ class Parser:
                     ast.append(self._parse_regroup(directive_args_str))
                 elif directive_name == "autoescape":
                     ast.append(self._parse_autoescape(directive_args_str))
-                elif directive_name == "match":
-                    ast.append(self._parse_switch(directive_args_str))  # Alias to switch
                 elif directive_name == "selected":
                     ast.append(self._parse_selected(directive_args_str))
                 elif directive_name == "required":
@@ -476,15 +474,15 @@ class Parser:
             help="You opened a directive but did not close it. Add the corresponding closing directive.",
         )
 
-    def _parse_unless(self, condition_str):
+    def _parse_unless(self, condition_str, token):
         """Parses an @unless...@endunless block."""
         condition = self._extract_expression_from_args(condition_str, "@unless")
         body_nodes = self._parse_until_directives(["@endunless"])
         self.expect("DIRECTIVE", value_prefix="@endunless")
-        return UnlessNode(condition, body_nodes)
+        return UnlessNode(condition, body_nodes, line=token.line, column=token.column)
 
-    def _parse_switch(self, expression_str):
-        """Parses an @switch...@endswitch block."""
+    def _parse_switch(self, expression_str, token):
+        """Parses an @match...@endmatch block."""
         expression = self._extract_expression_from_args(expression_str, "@switch")
         cases = []
         default_body = None
@@ -499,12 +497,12 @@ class Parser:
                 if directive_name == "case":
                     self.advance()
                     case_value = self._extract_expression_from_args(args_str, "@case")
-                    case_body = self._parse_until_directives(["@case", "@default", "@endswitch"])
+                    case_body = self._parse_until_directives(["@case", "@default", "@endmatch"])
                     cases.append((case_value, case_body))
                 elif directive_name == "default":
                     self.advance()
-                    default_body = self._parse_until_directives(["@endswitch"])
-                elif directive_name == "endswitch":
+                    default_body = self._parse_until_directives(["@endmatch"])
+                elif directive_name == "endmatch":
                     break
                 else:
                     # Ignore other directives or text between cases (usually whitespace)
@@ -514,10 +512,10 @@ class Parser:
                 # Ignore text/variables between cases (whitespace)
                 self.advance()
 
-        self.expect("DIRECTIVE", value_prefix="@endswitch")
-        return SwitchNode(expression, cases, default_body)
+        self.expect("DIRECTIVE", value_prefix="@endmatch")
+        return SwitchNode(expression, cases, default_body, line=token.line, column=token.column)
 
-    def _parse_auth(self, args_str):
+    def _parse_auth(self, args_str, token):
         """Parses an @auth...@endauth block."""
         guard = None
         if args_str:
@@ -531,9 +529,9 @@ class Parser:
             else_body = self._parse_until_directives(["@endauth"])
 
         self.expect("DIRECTIVE", value_prefix="@endauth")
-        return AuthNode(body, else_body, guard)
+        return AuthNode(body, else_body, guard, line=token.line, column=token.column)
 
-    def _parse_guest(self, args_str):
+    def _parse_guest(self, args_str, token):
         """Parses an @guest...@endguest block."""
         guard = None
         if args_str:
@@ -547,7 +545,7 @@ class Parser:
             else_body = self._parse_until_directives(["@endguest"])
 
         self.expect("DIRECTIVE", value_prefix="@endguest")
-        return GuestNode(body, else_body, guard)
+        return GuestNode(body, else_body, guard, line=token.line, column=token.column)
 
     def _parse_include(self, args_str):
         """Parses an @include('path', data) directive."""
