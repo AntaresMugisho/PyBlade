@@ -735,17 +735,17 @@ class Parser:
         expression = self._extract_expression_from_args(args_str, "@class")
         return ClassNode(expression)
 
-    def _parse_break(self, args_str):
+    def _parse_break(self, args_str, token):
         condition = None
         if args_str:
             condition = self._extract_expression_from_args(args_str, "@break")
-        return BreakNode(condition)
+        return BreakNode(condition, line=token.line, column=token.column)
 
-    def _parse_continue(self, args_str):
+    def _parse_continue(self, args_str, token):
         condition = None
         if args_str:
             condition = self._extract_expression_from_args(args_str, "@continue")
-        return ContinueNode(condition)
+        return ContinueNode(condition, line=token.line, column=token.column)
 
     def _extract_expression_from_args(self, args_str, directive_name=""):
         """Extracts the Python expression string from directive arguments like '(expression)'."""

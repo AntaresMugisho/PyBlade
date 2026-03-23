@@ -9,10 +9,12 @@ class LoopContext:
     def __init__(self, items, parent=None):
         self._total_items = len(items)
         self._current_index = 0
+        self._current_iteration = self._current_index + 1
         self._parent = parent
 
     @property
     def index(self):
+        """The index of the current loop iteration (starts at 0)"""
         return self._current_index
 
     @index.setter
@@ -21,31 +23,38 @@ class LoopContext:
 
     @property
     def iteration(self):
-        return self._current_index + 1
+        """The current iteration of the loop (starts at 1)"""
+        return self._current_iteration
 
     @property
     def remaining(self):
-        return self._total_items - self.iteration
+        """The number of iterations remaining in the loop"""
+        return self._total_items - self._current_iteration
 
     @property
     def count(self):
+        """The total number of iterations in the loop"""
         return self._total_items
 
     @property
     def first(self):
-        return self.index == 0
+        """True if this is the first iteration of the loop"""
+        return self._current_index == 0
 
     @property
     def last(self):
-        return self.iteration == self.count
+        """True if this is the last iteration of the loop"""
+        return self._current_iteration == self._total_items
 
     @property
     def even(self):
-        return self.iteration % 2 == 0
+        """True if this is an even iteration of the loop"""
+        return self._current_iteration % 2 == 0
 
     @property
     def odd(self):
-        return self.iteration % 2 != 0
+        """True if this is an even iteration of the loop"""
+        return self._current_iteration % 2 != 0
 
     @property
     def parent(self):
@@ -55,7 +64,7 @@ class LoopContext:
     @property
     def depth(self):
         """The nesting level of the current loop."""
-        return self.parent.depth + 1 if self.parent else 0
+        return self._parent.depth + 1 if self._parent else 0
 
 
 class AttributesContext:

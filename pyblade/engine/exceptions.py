@@ -36,3 +36,17 @@ class TemplateRenderError(PyBladeException):
 
     def __init__(self, message: str, line: int = None, column: int = None, help: str = None):
         super().__init__(message, line, column, help)
+
+
+class ContinueLoopError(PyBladeException):
+    """Raised to continue a loop"""
+
+    def __init__(self, message: str, line: int = None, column: int = None, help: str = None):
+        super().__init__(message, line, column, help)
+
+
+class BreakLoopError(PyBladeException):
+    """Raised to break a loop"""
+
+    def __init__(self, message: str, line: int = None, column: int = None, help: str = None):
+        super().__init__(message, line, column, help)

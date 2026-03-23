@@ -5,10 +5,13 @@ from pprint import pformat
 
 from pyblade.config import settings
 from pyblade.engine.exceptions import (  # TemplateNotFoundError,; UndefinedVariableError,
+    BreakLoopError,
+    ContinueLoopError,
     DirectiveParsingError,
     TemplateRenderError,
 )
 
+from .contexts import LoopContext
 from .sandbox import SafeEvaluator
 
 
@@ -16,6 +19,10 @@ class Node:
     """Base class for all Abstract Syntax Tree nodes."""
 
     _evaluator = SafeEvaluator()
+
+    _loop_control_help_message = "@break or @continue must be inside a @for loop. \
+        Ensure this directive is not placed outside \
+        or in a block that isn’t executed within a loop."
 
     _quick_fix_messages = {
         "AttributeError": "The object does not have the attribute "
@@ -28,8 +35,12 @@ class Node:
         "KeyError": "The key you are trying to access does not exist in the dictionary. "
         "Make sure it is spelled correctly.",
         "PermissionError": "The operation you are trying to perform is not allowed in templates."
-        " Review our security rules before retrying.",
+        "Review our security rules before retrying.",
+        "ContinueLoopError": _loop_control_help_message,
+        "BreakLoopError": _loop_control_help_message,
     }
+
+    _loop_control_error_message = "Loop control statement used outside of a loop"
 
     def __init__(self, line=None, column=None):
         self.line = line
@@ -75,14 +86,17 @@ class VarNode(Node):
     def render(self, context):
         try:
             value = self.eval(self.expression, context)
+
         except Exception as exc:
             exc_name = exc.__class__.__name__
             help_message = self._quick_fix_messages.get(exc_name, "")
             raise TemplateRenderError(f"{exc_name}: {exc}", line=self.line, help=help_message)
+
         if value is None:
             rendered = ""
         else:
             rendered = str(value)
+
         return html_escape(rendered) if self.escaped else rendered
 
 
@@ -124,50 +138,14 @@ class IfNode(Node):
                 return "".join(node.render(context) for node in self.else_body)
 
             return ""
+
+        except (BreakLoopError, ContinueLoopError) as exc:
+            raise exc
+
         except Exception as exc:
             exc_name = type(exc).__name__
             help_message = self._quick_fix_messages.get(exc_name)
             raise TemplateRenderError(f"{exc_name}: {exc}", line=self.line, help=help_message)
-
-
-class ForNode(Node):
-    """Represents an @for...@empty...@endfor loop block."""
-
-    def __init__(self, item_var, collection_expr, body, empty_body=None, line=None, column=None):
-        super().__init__(line, column)
-        self.item_var = item_var  # The variable name for each item (e.g., 'fruit' in 'for fruit in fruits')
-        self.collection_expr = collection_expr  # The Python expression for the iterable collection
-        self.body = body  # List of nodes in the main @for loop block
-        self.empty_body = empty_body  # List of nodes in the @empty block
-
-    def __repr__(self):
-        return (
-            f"ForNode(\n"
-            f"  item_var='{self.item_var}',\n"
-            f"  collection_expr='{self.collection_expr}',\n"
-            f"  body={self.body},\n"
-            f"  empty_body={self.empty_body}\n"
-            f")"
-        )
-
-    def render(self, context):
-        iterable = self.eval(self.collection_expr, context)
-
-        if not iterable:
-            if self.empty_body is not None:
-                return "".join(node.render(context) for node in self.empty_body)
-            return ""
-
-        # Make a shallow copy of context for loop modifications
-        local_context = dict(context)
-        output_parts = []
-
-        for item in iterable:
-            local_context[self.item_var] = item
-            for node in self.body:
-                output_parts.append(node.render(local_context))
-
-        return "".join(output_parts)
 
 
 class UnlessNode(Node):
@@ -289,6 +267,120 @@ class GuestNode(Node):
             return "".join(node.render(context) for node in self.body)
         if self.else_body:
             return "".join(node.render(context) for node in self.else_body)
+        return ""
+
+
+class ForNode(Node):
+    """Represents an @for...@empty...@endfor loop block."""
+
+    def __init__(self, item_var, collection_expr, body, empty_body=None, line=None, column=None):
+        super().__init__(line, column)
+        self.item_var = item_var  # The variable name for each item (e.g., 'fruit' in 'for fruit in fruits')
+        self.collection_expr = collection_expr  # The Python expression for the iterable collection
+        self.body = body  # List of nodes in the main @for loop block
+        self.empty_body = empty_body  # List of nodes in the @empty block
+
+    def __repr__(self):
+        return (
+            f"ForNode(\n"
+            f"  item_var='{self.item_var}',\n"
+            f"  collection_expr='{self.collection_expr}',\n"
+            f"  body={self.body},\n"
+            f"  empty_body={self.empty_body}\n"
+            f")"
+        )
+
+    def render(self, context):
+        iterable = self.eval(self.collection_expr, context)
+
+        if not iterable:
+            if self.empty_body is not None:
+                return "".join(node.render(context) for node in self.empty_body)
+            return ""
+
+        # Make a shallow copy of context for loop modifications
+        local_context = dict(context)
+        output_parts = []
+
+        current_loop = local_context.get("loop")
+        loop = LoopContext(iterable, parent=current_loop)
+
+        for index, item in enumerate(iterable):
+            local_context[self.item_var] = item
+            loop.index = index
+            local_context["loop"] = loop
+
+            try:
+                for node in self.body:
+                    output_parts.append(node.render(local_context))
+            except BreakLoopError:
+                break
+
+            except ContinueLoopError:
+                continue
+
+        return "".join(output_parts)
+
+
+class BreakNode(Node):
+    """Represents an @break(condition) directive."""
+
+    def __init__(self, condition=None, line=None, column=None):
+        super().__init__(line, column)
+        self.condition = condition
+
+    def __repr__(self):
+        return f"BreakNode(condition='{self.condition}')"
+
+    def render(self, context):
+        """Signal a loop break when the optional condition is met."""
+        if self.condition:
+            if self.eval(self.condition, context):
+                raise BreakLoopError(
+                    self._loop_control_error_message,
+                    line=self.line,
+                    column=self.column,
+                    help=self._quick_fix_messages["BreakLoopError"],
+                )
+        else:
+            raise BreakLoopError(
+                self._loop_control_error_message,
+                line=self.line,
+                column=self.column,
+                help=self._quick_fix_messages["BreakLoopError"],
+            )
+        return ""
+
+
+class ContinueNode(Node):
+    """Represents an @continue(condition) directive."""
+
+    def __init__(self, condition=None, line=None, column=None):
+        super().__init__(line, column)
+        self.condition = condition
+
+    def __repr__(self):
+        return f"ContinueNode(condition='{self.condition}')"
+
+    def render(self, context):
+        """Signal a loop continue when the optional condition is met."""
+
+        if self.condition:
+            if self.eval(self.condition, context):
+                raise ContinueLoopError(
+                    self._loop_control_error_message,
+                    line=self.line,
+                    column=self.column,
+                    help=self._quick_fix_messages["ContinueLoopError"],
+                )
+        else:
+            raise ContinueLoopError(
+                self._loop_control_error_message,
+                line=self.line,
+                column=self.column,
+                help=self._quick_fix_messages["ContinueLoopError"],
+            )
+
         return ""
 
 
@@ -805,46 +897,6 @@ class ClassNode(Node):
             class_list = [k for k, v in classes.items() if v]
             if class_list:
                 return f' class="{" ".join(class_list)}"'
-        return ""
-
-
-class BreakNode(Node):
-    """Represents an @break(condition) directive."""
-
-    def __init__(self, condition=None, line=None, column=None):
-        super().__init__(line, column)
-        self.condition = condition
-
-    def __repr__(self):
-        return f"BreakNode(condition='{self.condition}')"
-
-    def render(self, context):
-        """Signal a loop break when the optional condition is met."""
-        from .exceptions import BreakLoop
-
-        if self.condition:
-            if self.eval(self.condition, context):
-                raise BreakLoop()
-        else:
-            raise BreakLoop()
-        return ""
-
-
-class ContinueNode(Node):
-    """Represents an @continue(condition) directive."""
-
-    def __init__(self, condition=None):
-        self.condition = condition
-
-    def render(self, context):
-        """Signal a loop continue when the optional condition is met."""
-        from .exceptions import ContinueLoop
-
-        if self.condition:
-            if self.eval(self.condition, context):
-                raise ContinueLoop()
-        else:
-            raise ContinueLoop()
         return ""
 
 

@@ -32,6 +32,7 @@ class PyBlade:
         code_lines = []
         if template_source and line:
             lines = template_source.split("\n")
+
             start = max(0, line - 4)
             end = min(len(lines), line + 3)
 
@@ -86,6 +87,7 @@ class PyBlade:
                 return self._handle_error(error=exc, template_source=template, template_path=template_path)
             else:
                 raise exc
+
         except Exception as exc:
             raise exc
 
