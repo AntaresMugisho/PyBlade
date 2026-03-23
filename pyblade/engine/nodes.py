@@ -862,41 +862,79 @@ class MethodNode(Node):
 
 
 class StyleNode(Node):
-    """Represents an @style(dict) directive."""
+    """Represents an @style directive with parsed positional and conditional values."""
 
-    def __init__(self, expression, line=None, column=None):
+    def __init__(self, positional_styles=None, conditional_expressions=None, line=None, column=None):
         super().__init__(line, column)
-        self.expression = expression
+        self.positional_styles = positional_styles or []
+        self.conditional_expressions = conditional_expressions or {}
 
     def __repr__(self):
-        return f"StyleNode(expression='{self.expression}')"
+        return f"StyleNode(positional={self.positional_styles}, conditional={self.conditional_expressions})"
 
     def render(self, context):
-        styles = self.eval(self.expression, context)
-        if not isinstance(styles, dict):
-            return ""
+        # Start with positional styles
+        style_list = list(self.positional_styles)
 
-        parts = [key for key, value in styles.items() if value]
-        if not parts:
-            return ""
-        return f' style="{"; ".join(parts)}"'
+        # Evaluate conditional expressions and include truthy ones
+        for style_name, expression in self.conditional_expressions.items():
+            try:
+                value = self.eval(expression, context)
+                if value:
+                    style_list.append(style_name)
+            except Exception:
+                pass
+
+        # Remove duplicates while preserving order
+        seen = set()
+        unique_styles = []
+        for style in style_list:
+            if style not in seen:
+                seen.add(style)
+                unique_styles.append(style)
+
+        if unique_styles:
+            return f' style="{"; ".join(unique_styles)}"'
+
+        return ""
 
 
 class ClassNode(Node):
-    """Represents an @class(dict) directive."""
+    """Represents an @class directive with parsed positional and conditional values."""
 
-    def __init__(self, expression):
-        self.expression = expression
+    def __init__(self, positional_classes=None, conditional_expressions=None, line=None, column=None):
+        super().__init__(line, column)
+        self.positional_classes = positional_classes or []
+        self.conditional_expressions = conditional_expressions or {}
 
     def __repr__(self):
-        return f"ClassNode(expression='{self.expression}')"
+        return f"ClassNode(positional={self.positional_classes}, conditional={self.conditional_expressions})"
 
     def render(self, context):
-        classes = self.eval(self.expression, context)
-        if isinstance(classes, dict):
-            class_list = [k for k, v in classes.items() if v]
-            if class_list:
-                return f' class="{" ".join(class_list)}"'
+        # Start with positional classes
+        class_list = list(self.positional_classes)
+
+        # Evaluate conditional expressions and include truthy ones
+        for class_name, expression in self.conditional_expressions.items():
+
+            try:
+                value = self.eval(expression, context)
+                if value:
+                    class_list.append(class_name)
+            except Exception:
+                pass
+
+        # Remove duplicates while preserving order
+        seen = set()
+        unique_classes = []
+        for cls in class_list:
+            if cls not in seen:
+                seen.add(cls)
+                unique_classes.append(cls)
+
+        if unique_classes:
+            return f' class="{" ".join(unique_classes)}"'
+
         return ""
 
 

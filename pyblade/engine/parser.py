@@ -727,13 +727,27 @@ class Parser:
         method = self._extract_expression_from_args(args_str, "@method")
         return MethodNode(method)
 
-    def _parse_style(self, args_str):
-        expression = self._extract_expression_from_args(args_str, "@style")
-        return StyleNode(expression)
+    def _parse_style(self, args_str, token):
+        # Remove parentheses and parse the function-like arguments
+        match = re.match(r"^\s*\((.*)\)\s*$", args_str)
+        if match:
+            inner_args = match.group(1).strip()
+            positional, conditional = self._parse_args(inner_args)
+        else:
+            positional, conditional = self._parse_args(args_str.strip())
 
-    def _parse_class(self, args_str):
-        expression = self._extract_expression_from_args(args_str, "@class")
-        return ClassNode(expression)
+        return StyleNode(positional, conditional, line=token.line, column=token.column)
+
+    def _parse_class(self, args_str, token):
+        # Remove parentheses and parse the function-like arguments
+        match = re.match(r"^\s*\((.*)\)\s*$", args_str)
+        if match:
+            inner_args = match.group(1).strip()
+            positional, conditional = self._parse_args(inner_args)
+        else:
+            positional, conditional = self._parse_args(args_str.strip())
+
+        return ClassNode(positional, conditional, line=token.line, column=token.column)
 
     def _parse_break(self, args_str, token):
         condition = None
@@ -756,3 +770,43 @@ class Parser:
                 f"Expected parentheses, e.g., '({directive_name}(condition))'.",
             )
         return match.group(1).strip()
+
+    def _parse_args(self, args_str, context=None):
+        """Parse function-like arguments and return positional and conditional values.
+
+        Args:
+            args_str: String like '"list-item", "active", "favorite"=fruit.is_favorite'
+            context: Template context for evaluating expressions (not used during parsing)
+
+        Returns:
+            tuple: (positional_list, conditional_dict)
+        """
+
+        positional = []
+        conditional = {}
+
+        # Split by commas and process each part
+        parts = [part.strip() for part in args_str.split(",") if part.strip()]
+
+        for part in parts:
+            # Check if it's a conditional argument (has =)
+            if "=" in part:
+                # Split on the first = only
+                key_part, value_expr = part.split("=", 1)
+                key_part = key_part.strip()
+                value_expr = value_expr.strip()
+
+                # Key should be quoted - remove quotes
+                if (key_part.startswith('"') and key_part.endswith('"')) or (
+                    key_part.startswith("'") and key_part.endswith("'")
+                ):
+                    key = key_part[1:-1]
+                    conditional[key] = value_expr
+
+            else:
+                # Positional argument - should be quoted
+                if (part.startswith('"') and part.endswith('"')) or (part.startswith("'") and part.endswith("'")):
+                    value = part[1:-1]
+                    positional.append(value)
+
+        return positional, conditional
