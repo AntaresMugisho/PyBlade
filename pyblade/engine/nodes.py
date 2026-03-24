@@ -11,6 +11,7 @@ from pyblade.engine.exceptions import (  # TemplateNotFoundError,; UndefinedVari
     TemplateRenderError,
 )
 
+from . import loader
 from .contexts import LoopContext
 from .sandbox import SafeEvaluator
 
@@ -385,39 +386,38 @@ class ContinueNode(Node):
 
 
 class IncludeNode(Node):
-    """Represents an @include('path', data) directive."""
+    """Represents an @include('path') or @include('path', {'data': value}) directive."""
 
-    def __init__(self, path, data_expr=None, line=None, column=None):
+    def __init__(self, path_expr, data_expr=None, line=None, column=None):
         super().__init__(line, column)
-        self.path = path
+        self.path_expr = path_expr
         self.data_expr = data_expr
 
     def __repr__(self):
-        return f"IncludeNode(path='{self.path}', data_expr='{self.data_expr}')"
+        return f"IncludeNode(path_expr='{self.path_expr}', data_expr='{self.data_expr}')"
 
     def render(self, context):
         """Render an included template.
 
-        Evaluates the include arguments to get (path, data) and delegates to
+        Evaluates the path and optional data expression, then delegates to
         the loader to render the included template with a merged context.
-        Mirrors TemplateProcessor.render_include.
         """
         try:
-            # path/data are passed as a raw args string, e.g. "'partials.header', {'a': 1}"
-            args_tuple = self.eval(f"({self.path})", context)
-            if not isinstance(args_tuple, tuple):
-                args_tuple = (args_tuple,)
+            # Evaluate the path expression
+            path = self.eval(self.path_expr, context)
 
-            path = args_tuple[0]
-            data = args_tuple[1] if len(args_tuple) > 1 else {}
-
-            from . import loader
+            # Evaluate data expression if provided
+            data = {}
+            if self.data_expr:
+                data = self.eval(self.data_expr, context)
+                if not isinstance(data, dict):
+                    data = {}
 
             template = loader.load_template(path)
 
+            # Create new context with additional data
             new_context = dict(context)
-            if isinstance(data, dict):
-                new_context.update(data)
+            new_context.update(data)
 
             return template.render(new_context)
 
@@ -612,8 +612,6 @@ class ComponentNode(Node):
             name = args_tuple[0]
             data = args_tuple[1] if len(args_tuple) > 1 else {}
 
-            from . import loader
-
             # Render body as default slot
             output = []
             if self.body:
@@ -628,7 +626,7 @@ class ComponentNode(Node):
                 new_context.update(data)
             new_context["slot"] = slot_content
 
-            path = f"components/{name}.html"
+            path = f"{settings.components_dir}.{name}"
             template = loader.load_template(path)
 
             return template.render(new_context)

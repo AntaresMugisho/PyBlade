@@ -547,11 +547,72 @@ class Parser:
         self.expect("DIRECTIVE", value_prefix="@endguest")
         return GuestNode(body, else_body, guard, line=token.line, column=token.column)
 
-    def _parse_include(self, args_str):
-        """Parses an @include('path', data) directive."""
-        # args_str is like "('path', data)"
-        # We need to parse this. It's a python expression tuple or call args.
-        return IncludeNode(args_str)
+    def _parse_include(self, args_str, token):
+        """Parses an @include('path') or @include('path', {'data': value}) directive."""
+        # Remove parentheses and parse the function-like arguments
+        match = re.match(r"^\s*\((.*)\)\s*$", args_str)
+        if match:
+            inner_args = match.group(1).strip()
+
+            # Use a more sophisticated approach to handle nested structures
+            # Find the first argument (path) and the rest (data)
+            path_expr = None
+            data_expr = None
+
+            # Track bracket/brace nesting to properly split arguments
+            bracket_count = 0
+            brace_count = 0
+            quote_char = None
+            current_arg = ""
+
+            for char in inner_args:
+                if quote_char:
+                    current_arg += char
+                    if char == quote_char:
+                        quote_char = None
+                elif char in ('"', "'"):
+                    quote_char = char
+                    current_arg += char
+                elif char in ("[", "("):
+                    bracket_count += 1
+                    current_arg += char
+                elif char in ("]", ")"):
+                    bracket_count -= 1
+                    current_arg += char
+                elif char == "{":
+                    brace_count += 1
+                    current_arg += char
+                elif char == "}":
+                    brace_count -= 1
+                    current_arg += char
+                elif char == "," and bracket_count == 0 and brace_count == 0:
+                    # Found an argument boundary
+                    if path_expr is None:
+                        path_expr = current_arg.strip()
+                    else:
+                        data_expr = current_arg.strip()
+                    current_arg = ""
+                else:
+                    current_arg += char
+
+            # Add the last argument
+            if current_arg.strip():
+                if path_expr is None:
+                    path_expr = current_arg.strip()
+                else:
+                    data_expr = current_arg.strip()
+
+            if not path_expr:
+                raise DirectiveParsingError(
+                    "@include requires at least a path argument",
+                    line=token.line,
+                    column=token.column,
+                )
+
+            return IncludeNode(path_expr, data_expr, line=token.line, column=token.column)
+        else:
+            # No parentheses - treat as single path argument
+            return IncludeNode(args_str.strip(), None, line=token.line, column=token.column)
 
     def _parse_extends(self, args_str):
         """Parses an @extends('layout') directive."""
