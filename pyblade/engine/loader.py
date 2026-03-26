@@ -69,7 +69,9 @@ class TemplateLoader:
 
         raise TemplateNotFoundError(
             f"No template named '{template_path}{self._extension}'\n"
-            "Searched in the following directories:\n- " + "\n- ".join([str(p) for p in self._template_dirs])
+            "Searched in the following directories:\n- " + "\n- ".join([str(p) for p in self._template_dirs]),
+            help="The template you are trying to include does not exist. "
+            "Make sure the path is correct and the template exists.",
         )
 
     def _read_template(self, path: Path) -> str:

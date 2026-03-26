@@ -22,33 +22,33 @@ class PyBladeException(Exception):
 class TemplateNotFoundError(PyBladeException):
     """Raised when a template file cannot be found."""
 
-    def __init__(self, message: str, source: str = None, line: int = None, column: int = None, help: str = None):
+    def __init__(self, message: str, line: int = None, column: int = None, help: str = None, template=None):
         super().__init__(message, line, column, help)
 
 
 class DirectiveParsingError(PyBladeException):
     """Raised when there's an error parsing a template directive."""
 
-    def __init__(self, message: str, source: str = None, line: int = None, column: int = None, help: str = None):
+    def __init__(self, message: str, line: int = None, column: int = None, help: str = None, template=None):
         super().__init__(message, line=line, column=column, help=help)
 
 
 class TemplateRenderError(PyBladeException):
     """Raised when there's an error during template rendering."""
 
-    def __init__(self, message: str, source: str = None, line: int = None, column: int = None, help: str = None):
+    def __init__(self, message: str, line: int = None, column: int = None, help: str = None, template=None):
         super().__init__(message, line, column, help)
 
 
 class ContinueLoopError(PyBladeException):
     """Raised to continue a loop"""
 
-    def __init__(self, message: str, source: str = None, line: int = None, column: int = None, help: str = None):
+    def __init__(self, message: str, line: int = None, column: int = None, help: str = None, template=None):
         super().__init__(message, line, column, help)
 
 
 class BreakLoopError(PyBladeException):
     """Raised to break a loop"""
 
-    def __init__(self, message: str, source: str = None, line: int = None, column: int = None, help: str = None):
+    def __init__(self, message: str, line: int = None, column: int = None, help: str = None, template=None):
         super().__init__(message, line, column, help)

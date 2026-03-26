@@ -9,6 +9,7 @@ from pyblade.engine.exceptions import (  # TemplateNotFoundError,; UndefinedVari
     ContinueLoopError,
     DirectiveParsingError,
     PyBladeException,
+    TemplateNotFoundError,
     TemplateRenderError,
 )
 
@@ -403,28 +404,38 @@ class IncludeNode(Node):
         Evaluates the path and optional data expression, then delegates to
         the loader to render the included template with a merged context.
         """
-        # Evaluate the path expression
-        path = self.eval(self.path_expr, context)
-
-        # Evaluate data expression if provided
-        data = {}
-        if self.data_expr:
-            data = self.eval(self.data_expr, context)
-            if not isinstance(data, dict):
-                data = {}
-
-        template = loader.load_template(path)
-
-        # Create new context with additional data
-        new_context = dict(context)
-        new_context.update(data)
-
         try:
+            # Evaluate the path expression
+            path = self.eval(self.path_expr, context)
+
+            # Evaluate data expression if provided
+            data = {}
+            if self.data_expr:
+                data = self.eval(self.data_expr, context)
+                if not isinstance(data, dict):
+                    data = {}
+
+            template = loader.load_template(path)
+
+            # Create new context with additional data
+            new_context = dict(context)
+            new_context.update(data)
+
             return template.render(new_context)
+
+        except TemplateNotFoundError as exc:
+            setattr(exc, "line", self.line)
+            setattr(exc, "column", self.column)
+            raise
 
         except PyBladeException as exc:
             setattr(exc, "template", template)
             raise
+
+        except Exception as exc:
+            exc_name = exc.__class__.__name__
+            help_message = self._quick_fix_messages.get(exc_name, "")
+            raise TemplateRenderError(f"{exc_name}: {exc}", line=self.line, column=self.column, help=help_message)
 
 
 class ExtendsNode(Node):
