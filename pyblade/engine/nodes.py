@@ -93,7 +93,7 @@ class VarNode(Node):
         except Exception as exc:
             exc_name = exc.__class__.__name__
             help_message = self._quick_fix_messages.get(exc_name, "")
-            raise TemplateRenderError(f"{exc_name}: {exc}", line=self.line, help=help_message)
+            raise TemplateRenderError(f"{exc_name}: {exc}", line=self.line, column=self.column, help=help_message)
 
         if value is None:
             rendered = ""
@@ -1054,7 +1054,7 @@ class WithNode(Node):
 
     def __init__(self, variables, body, line=None, column=None):
         super().__init__(line, column)
-        self.variables = variables  # Dictionary or list of assignments
+        self.variables = variables  # Dictionary of {var_name: expression}
         self.body = body
 
     def __repr__(self):
@@ -1063,16 +1063,18 @@ class WithNode(Node):
     def render(self, context):
         """Render body with a temporary extended context.
 
-        Expects variables to be an argument string such as "a=1, b=2" or
-        "(a=1, b=2)" as produced by the parser, similar to the old
-        TemplateProcessor.render_with implementation.
+        Expects variables to be a dictionary of {var_name: expression} as
+        produced by the parser for better performance.
         """
-        vars_str = self.variables.strip()
-        if vars_str.startswith("(") and vars_str.endswith(")"):
-            vars_str = vars_str[1:-1]
-
-        # Evaluate using SafeEvaluator in the current context
-        vars_dict = self.eval(f"dict({vars_str})", context)
+        # Evaluate each variable expression and build the context
+        vars_dict = {}
+        for var_name, var_expr in self.variables.items():
+            try:
+                vars_dict[var_name] = self.eval(var_expr, context)
+            except Exception as exc:
+                exc_name = exc.__class__.__name__
+                help_message = self._quick_fix_messages.get(exc_name, "")
+                raise TemplateRenderError(f"{exc_name}: {exc}", line=self.line, column=self.column, help=help_message)
 
         new_context = dict(context)
         new_context.update(vars_dict)

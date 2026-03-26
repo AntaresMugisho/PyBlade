@@ -119,7 +119,10 @@ class Parser:
 
                 self.advance()  # Consume the DIRECTIVE token
 
-                if directive_name == "if":
+                # Start parsing: order matters
+                if directive_name == "comment":
+                    ast.append(self._parse_comment(directive_args_str, token))
+                elif directive_name == "if":
                     ast.append(self._parse_if(directive_args_str, token))
                 elif directive_name == "unless":
                     ast.append(self._parse_unless(directive_args_str, token))
@@ -143,10 +146,10 @@ class Parser:
                     ast.append(self._parse_component(directive_args_str, token))
                 elif directive_name == "slot":
                     ast.append(self._parse_slot(directive_args_str, token))
+                elif directive_name == "with":
+                    ast.append(self._parse_with(directive_args_str, token))
                 elif directive_name == "verbatim":
                     ast.append(self._parse_verbatim(directive_args_str, token))
-                elif directive_name == "comment":
-                    ast.append(self._parse_comment(directive_args_str, token))
                 elif directive_name == "cycle":
                     ast.append(self._parse_cycle(directive_args_str, token))
                 elif directive_name == "firstof":
@@ -419,6 +422,8 @@ class Parser:
                     body.append(self._parse_component(directive_args_str, token))
                 elif directive_name == "slot":
                     body.append(self._parse_slot(directive_args_str, token))
+                elif directive_name == "with":
+                    body.append(self._parse_with(directive_args_str, token))
                 elif directive_name == "verbatim":
                     body.append(self._parse_verbatim(directive_args_str, token))
                 elif directive_name == "comment":
@@ -698,14 +703,34 @@ class Parser:
 
         return BlockTranslateNode(body, plural_body=plural_body, count=args_str)
 
-    def _parse_with(self, args_str):
-        """Parses an @with(vars)...@endwith block."""
-        body = self._parse_until_directives(["@endwith"])
-        self.expect("DIRECTIVE", value_prefix="@endwith")
-        return WithNode(args_str, body)
-
     def _parse_now(self, args_str):
         return NowNode(args_str)
+
+    def _parse_with(self, args_str, token):
+        """Parses an @with(variable=expression)...@endwith block."""
+        # Extract the variable assignment expression
+        variables_str = self._extract_expression_from_args(args_str, "@with")
+
+        # Parse variables into a dictionary for better performance
+        variables_dict = {}
+        if variables_str.strip():
+            # Remove parentheses if present
+            vars_str = variables_str.strip()
+            if vars_str.startswith("(") and vars_str.endswith(")"):
+                vars_str = vars_str[1:-1]
+
+            # Parse variable assignments
+            parts = [part.strip() for part in vars_str.split(",") if part.strip()]
+            for part in parts:
+                if "=" in part:
+                    var_name, var_expr = part.split("=", 1)
+                    var_name = var_name.strip()
+                    var_expr = var_expr.strip()
+                    variables_dict[var_name] = var_expr
+
+        body = self._parse_until_directives(["@endwith"])
+        self.expect("DIRECTIVE", value_prefix="@endwith")
+        return WithNode(variables_dict, body, line=token.line, column=token.column)
 
     def _parse_regroup(self, args_str):
         # @regroup(target, by, as_name)
@@ -849,7 +874,7 @@ class Parser:
         parts = [part.strip() for part in args_str.split(",") if part.strip()]
 
         for part in parts:
-            # Check if it's a conditional argument (has =)
+            # Check if it's a keyword argument (has =)
             if "=" in part:
                 # Split on the first = only
                 key_part, value_expr = part.split("=", 1)

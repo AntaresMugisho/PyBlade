@@ -4,8 +4,6 @@ Core template processing functionality.
 
 from typing import Any, Dict
 
-from pyblade.config import settings
-
 from .cache import TemplateCache
 from .lexer import Lexer
 from .parser import Parser
@@ -19,8 +17,6 @@ class TemplateProcessor:
 
     def __init__(self, cache_size: int = 1000, cache_ttl: int = 3600, debug: bool = None, framework: str = None):
         self.cache = TemplateCache(max_size=cache_size, ttl=cache_ttl)
-        self.framework = settings.framework  # 'django', 'fastapi', 'flask', or None
-        self._debug = debug
         self.context = {}
 
     def render(
