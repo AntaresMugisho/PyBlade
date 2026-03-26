@@ -8,6 +8,7 @@ from pyblade.engine.exceptions import (  # TemplateNotFoundError,; UndefinedVari
     BreakLoopError,
     ContinueLoopError,
     DirectiveParsingError,
+    PyBladeException,
     TemplateRenderError,
 )
 
@@ -338,14 +339,14 @@ class BreakNode(Node):
         if self.condition:
             if self.eval(self.condition, context):
                 raise BreakLoopError(
-                    self._loop_control_error_message,
+                    message=self._loop_control_error_message,
                     line=self.line,
                     column=self.column,
                     help=self._quick_fix_messages["BreakLoopError"],
                 )
         else:
             raise BreakLoopError(
-                self._loop_control_error_message,
+                message=self._loop_control_error_message,
                 line=self.line,
                 column=self.column,
                 help=self._quick_fix_messages["BreakLoopError"],
@@ -369,14 +370,14 @@ class ContinueNode(Node):
         if self.condition:
             if self.eval(self.condition, context):
                 raise ContinueLoopError(
-                    self._loop_control_error_message,
+                    message=self._loop_control_error_message,
                     line=self.line,
                     column=self.column,
                     help=self._quick_fix_messages["ContinueLoopError"],
                 )
         else:
             raise ContinueLoopError(
-                self._loop_control_error_message,
+                message=self._loop_control_error_message,
                 line=self.line,
                 column=self.column,
                 help=self._quick_fix_messages["ContinueLoopError"],
@@ -402,27 +403,27 @@ class IncludeNode(Node):
         Evaluates the path and optional data expression, then delegates to
         the loader to render the included template with a merged context.
         """
+        # Evaluate the path expression
+        path = self.eval(self.path_expr, context)
+
+        # Evaluate data expression if provided
+        data = {}
+        if self.data_expr:
+            data = self.eval(self.data_expr, context)
+            if not isinstance(data, dict):
+                data = {}
+
+        template = loader.load_template(path)
+
+        # Create new context with additional data
+        new_context = dict(context)
+        new_context.update(data)
+
         try:
-            # Evaluate the path expression
-            path = self.eval(self.path_expr, context)
-
-            # Evaluate data expression if provided
-            data = {}
-            if self.data_expr:
-                data = self.eval(self.data_expr, context)
-                if not isinstance(data, dict):
-                    data = {}
-
-            template = loader.load_template(path)
-
-            # Create new context with additional data
-            new_context = dict(context)
-            new_context.update(data)
-
             return template.render(new_context)
 
-        except Exception:
-            # Propagate or log in higher layers; for now fail loudly to match prior behavior
+        except PyBladeException as exc:
+            setattr(exc, "template", template)
             raise
 
 

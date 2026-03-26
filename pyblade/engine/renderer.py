@@ -22,9 +22,13 @@ class PyBlade:
         """
         self._template_dirs = dirs or []
         self._processor = TemplateProcessor(cache_size=cache_size, cache_ttl=cache_ttl)
-        self.framework = settings.framework
 
-    def _handle_error(self, error: PyBladeException, template_path: Path = None, template_source: str = None) -> str:
+    def _handle_error(
+        self,
+        error: PyBladeException,
+        template_source: str = None,
+        template_path: Path = None,
+    ) -> str:
         """Handle rendering errors and return error page."""
 
         line = error.line
@@ -72,6 +76,7 @@ class PyBlade:
         Args:
             template: The template string to render
             context: The context dictionary
+            template_path: The full path to teh template file
 
         Returns:
             The rendered template string
@@ -84,9 +89,13 @@ class PyBlade:
             template = self._processor.render(template, context)
         except PyBladeException as exc:
             if settings.DEBUG:
+
+                if exc.template:
+                    template = exc.template.content
+                    template_path = exc.template.path
                 return self._handle_error(error=exc, template_source=template, template_path=template_path)
-            else:
-                raise exc
+
+            raise exc
 
         except Exception as exc:
             raise exc

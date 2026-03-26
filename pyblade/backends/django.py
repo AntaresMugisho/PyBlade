@@ -4,6 +4,7 @@ from django.utils.functional import cached_property
 from django.utils.module_loading import import_string
 
 from pyblade import PyBlade
+from pyblade.engine.template import Template as PyBladeTemplate
 
 
 class PyBladeEngine(BaseEngine):
@@ -35,7 +36,7 @@ class PyBladeEngine(BaseEngine):
 
 
 class Template:
-    def __init__(self, pyblade_template, backend):
+    def __init__(self, pyblade_template: PyBladeTemplate, backend: PyBladeEngine):
         self.pyblade_template = pyblade_template
         self.pyblade_template.set_backend(backend)
         self.pyblade_template.set_engine(backend.engine)

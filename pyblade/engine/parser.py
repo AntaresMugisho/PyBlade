@@ -608,7 +608,6 @@ class Parser:
                     line=token.line,
                     column=token.column,
                 )
-
             return IncludeNode(path_expr, data_expr, line=token.line, column=token.column)
         else:
             # No parentheses - treat as single path argument
