@@ -75,7 +75,7 @@ class SafeEvaluator:
         # Transfom numeric attributes into Subscripts for lists or tuples, e.g.: items.0 -> items[0])
         expr = expression.strip()
         try:
-            float(expr)  # Tot avoid transforming .0 or 2.5
+            float(expr)  # To avoid interpreting this like .0 or 2.5 as list index access
         except ValueError:
             expr = re.sub(
                 r"\.(-?\d+)(?=\.|$)",
@@ -104,6 +104,9 @@ class SafeEvaluator:
         if isinstance(node, ast.Name):
             if node.id in self._builtins:
                 return self._builtins[node.id]
+
+            if node.id not in context.keys():
+                raise NameError(f"Undefined variable '{node.id}'")
             return context.get(node.id)
 
         # ----------------------------

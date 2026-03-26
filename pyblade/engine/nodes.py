@@ -32,8 +32,8 @@ class Node:
         "you are trying to access. Make sure it is spelled correctly.",
         "SyntaxError": "There is a syntax error in your expression. "
         "Check your template syntax near the reported line.",
-        "NameError": "The variable is not defined in the current template context. "
-        "Check the name you wrote is spelled correctly.",
+        "NameError": "The variable is not available in the current template context. "
+        "Verify its spelling or use the @debug directive to inspect the context.",
         "TypeError": "An operation is being applied to an incompatible type.",
         "KeyError": "The key you are trying to access does not exist in the dictionary. "
         "Make sure it is spelled correctly.",
@@ -1319,7 +1319,8 @@ class AutocompleteNode(Node):
 class RatioNode(Node):
     """Represents a @ratio(w, h) directive."""
 
-    def __init__(self, args_expr):
+    def __init__(self, args_expr, line=None, column=None):
+        super().__init__(line=line, column=column)
         self.args_expr = args_expr
 
     def __repr__(self):
@@ -1334,9 +1335,12 @@ class RatioNode(Node):
         # We evaluate each part individually for clarity.
         parts = [p.strip() for p in expr.split(",") if p.strip()]
         if len(parts) != 3:
-            # Fallback: try to evaluate as a single expression
-            value = self.eval(expr, context)
-            return str(int(value)) if value is not None else "0"
+            raise DirectiveParsingError(
+                f"The @ratio directive expects 3 parametters but only {len(parts)} were provided",
+                line=self.line,
+                column=self.column,
+                help="Check the official PyBlade documentation for the right syntax of @ratio directive.",
+            )
 
         val_expr, max_expr, width_expr = parts
         val = self.eval(val_expr, context) or 0

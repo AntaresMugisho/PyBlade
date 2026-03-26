@@ -197,7 +197,7 @@ class Parser:
                 elif directive_name == "autocomplete":
                     ast.append(self._parse_autocomplete(directive_args_str))
                 elif directive_name == "ratio":
-                    ast.append(self._parse_ratio(directive_args_str))
+                    ast.append(self._parse_ratio(directive_args_str, token))
                 elif directive_name == "get_static_prefix":
                     ast.append(GetStaticPrefixNode())
                 elif directive_name == "get_media_prefix":
@@ -780,10 +780,10 @@ class Parser:
     def _parse_autocomplete(self, args_str):
         return AutocompleteNode(args_str)
 
-    def _parse_ratio(self, args_str):
-        # @ratio(value, max_value, max_width)
-
-        return RatioNode(args_str)
+    def _parse_ratio(self, args_str, token):
+        """Parse @ratio(value, max_value, max_width)"""
+        args = self._extract_expression_from_args(args_str)
+        return RatioNode(args, line=token.line, column=token.column)
 
     def _parse_querystring(self, args_str):
         return QuerystringNode(args_str)
