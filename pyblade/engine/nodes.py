@@ -36,7 +36,7 @@ class Node:
         "Verify its spelling or use the @debug directive to inspect the context.",
         "TypeError": "An operation is being applied to an incompatible type.",
         "KeyError": "The key you are trying to access does not exist in the dictionary. "
-        "Make sure it is spelled correctly.",
+        "Make sure it is spelled correctly. ",
         "PermissionError": "The operation you are trying to perform is not allowed in templates."
         "Review our security rules before retrying.",
         "ContinueLoopError": _loop_control_help_message,
@@ -700,32 +700,47 @@ class CommentNode(Node):
 
 
 class CycleNode(Node):
-    """Represents an @cycle(values) directive."""
+    """Represents an @cycle(values) directive like Django's cycle tag."""
 
     def __init__(self, values, as_name=None, line=None, column=None):
         super().__init__(line, column)
-        self.values = values  # List of expressions
-        self.as_name = as_name
+        self.values = values  # String of comma-separated values
+        self.as_name = as_name  # Variable name to store the current value
 
     def __repr__(self):
-        return f"CycleNode(values={self.values}, as_name='{self.as_name}')"
+        return f"CycleNode(values='{self.values}', as_name='{self.as_name}')"
 
     def render(self, context):
-        """Cycle through values based on the current loop index.
+        """Cycle through values like Django's cycle tag.
 
-        Mirrors TemplateProcessor.render_cycle behavior: evaluate the values
-        tuple once, then select based on loop.index when available.
+        If 'as variable_name' is specified, stores the current value in context
+        and returns empty string. Otherwise, returns the current value.
         """
-        # values is an args string like "'odd', 'even'"
+        # Parse and evaluate the values
         values = self.eval(f"({self.values})", context)
         if not isinstance(values, (list, tuple)):
             values = [values]
 
-        loop = context.get("loop")
-        if loop is not None:
-            index = getattr(loop, "index", 0)
-            return str(values[index % len(values)])
-        return str(values[0]) if values else ""
+        if not values:
+            result = ""
+        else:
+            # Get cycle counter from context, create if doesn't exist
+            cycle_counter_key = f"_cycle_counter_{id(self)}"
+            if cycle_counter_key not in context:
+                context[cycle_counter_key] = 0
+
+            # Get current index and increment for next time
+            current_index = context[cycle_counter_key]
+            context[cycle_counter_key] = (current_index + 1) % len(values)
+
+            result = str(values[current_index])
+
+        # If 'as variable_name' was specified, store the result in context
+        if self.as_name:
+            context[self.as_name] = result
+            return ""  # Don't output anything when storing to variable
+        else:
+            return result
 
 
 class FirstOfNode(Node):
@@ -1319,41 +1334,50 @@ class AutocompleteNode(Node):
 class RatioNode(Node):
     """Represents a @ratio(w, h) directive."""
 
-    def __init__(self, args_expr, line=None, column=None):
+    def __init__(self, args_expr, as_name=None, line=None, column=None):
         super().__init__(line=line, column=column)
         self.args_expr = args_expr
+        self.as_name = as_name
 
     def __repr__(self):
-        return f"RatioNode(args_expr='{self.args_expr}')"
+        return f"RatioNode(args_expr='{self.args_expr}', as_name='{self.as_name}')"
 
     def render(self, context):
         expr = self.args_expr.strip()
         if not expr:
-            return "0"
+            result = "0"
+        else:
+            # Expect three comma-separated expressions: value, max_value, max_width
+            # We evaluate each part individually for clarity.
+            parts = [p.strip() for p in expr.split(",") if p.strip()]
+            if len(parts) != 3:
+                raise DirectiveParsingError(
+                    f"The @ratio directive expects 3 parametters but only {len(parts)} were provided",
+                    line=self.line,
+                    column=self.column,
+                    help="Check the official PyBlade documentation for the right syntax of @ratio directive.",
+                )
 
-        # Expect three comma-separated expressions: value, max_value, max_width
-        # We evaluate each part individually for clarity.
-        parts = [p.strip() for p in expr.split(",") if p.strip()]
-        if len(parts) != 3:
-            raise DirectiveParsingError(
-                f"The @ratio directive expects 3 parametters but only {len(parts)} were provided",
-                line=self.line,
-                column=self.column,
-                help="Check the official PyBlade documentation for the right syntax of @ratio directive.",
-            )
+            val_expr, max_expr, width_expr = parts
+            val = self.eval(val_expr, context) or 0
+            max_val = self.eval(max_expr, context) or 0
+            width = self.eval(width_expr, context) or 0
 
-        val_expr, max_expr, width_expr = parts
-        val = self.eval(val_expr, context) or 0
-        max_val = self.eval(max_expr, context) or 0
-        width = self.eval(width_expr, context) or 0
+            try:
+                if not max_val:
+                    result = "0"
+                else:
+                    ratio = (float(val) / float(max_val)) * float(width)
+                    result = str(int(round(ratio, 0)))
+            except Exception:
+                result = "0"
 
-        try:
-            if not max_val:
-                return "0"
-            ratio = (float(val) / float(max_val)) * float(width)
-            return str(int(ratio))
-        except Exception:
-            return "0"
+        # If 'as variable_name' was specified, store the result in context
+        if self.as_name:
+            context[self.as_name] = result
+            return ""  # Don't output anything when storing to variable
+
+        return result
 
 
 class GetStaticPrefixNode(Node):

@@ -781,9 +781,18 @@ class Parser:
         return AutocompleteNode(args_str)
 
     def _parse_ratio(self, args_str, token):
-        """Parse @ratio(value, max_value, max_width)"""
+        """Parse @ratio(value, max_value, max_width) or @ratio(value, max_value, max_width as variable_name)"""
         args = self._extract_expression_from_args(args_str)
-        return RatioNode(args, line=token.line, column=token.column)
+
+        # Check if there's an 'as' clause
+        if " as " in args:
+            # Split on ' as ' to separate the ratio arguments from the variable name
+            ratio_args, var_name = args.split(" as ", 1)
+            ratio_args = ratio_args.strip()
+            var_name = var_name.strip()
+            return RatioNode(ratio_args, var_name, line=token.line, column=token.column)
+        else:
+            return RatioNode(args, None, line=token.line, column=token.column)
 
     def _parse_querystring(self, args_str):
         return QuerystringNode(args_str)
@@ -795,8 +804,24 @@ class Parser:
         self.expect("DIRECTIVE", value_prefix="@endblock")
         return BlockNode(name, body)
 
-    def _parse_cycle(self, args_str):
-        return CycleNode(args_str)
+    def _parse_cycle(self, args_str, token):
+        """Parse @cycle('value1', 'value2', ...) or @cycle('value1', 'value2' as variable_name)"""
+        # Remove parentheses and parse arguments
+        match = re.match(r"^\s*\((.*)\)\s*$", args_str)
+        if match:
+            inner_args = match.group(1).strip()
+        else:
+            inner_args = args_str.strip()
+
+        # Check if there's an 'as' clause
+        if " as " in inner_args:
+            # Split on ' as ' to separate the cycle values from the variable name
+            values_str, var_name = inner_args.split(" as ", 1)
+            values_str = values_str.strip()
+            var_name = var_name.strip()
+            return CycleNode(values_str, var_name, line=token.line, column=token.column)
+        else:
+            return CycleNode(inner_args, None, line=token.line, column=token.column)
 
     def _parse_firstof(self, args_str):
         return FirstOfNode(args_str)
