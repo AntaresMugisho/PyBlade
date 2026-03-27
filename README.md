@@ -28,12 +28,7 @@
 
 ## Documentation
 
-Comprehensive documentation is available at [pyblade.vercel.app](https://pyblade.vercel.app), covering:
-- Getting started guide
-- Template syntax
-- Component system
-- Best practices
-- API reference
+Comprehensive documentation is available at [docs.pyblade.dev](https://docs.pyblade.dev).
 
 
 ## Installation
@@ -70,7 +65,7 @@ PyBlade uses the standard `.html` file extension for templates, making it compat
 
 @section('content')
     <h1>Welcome, {{ user.name }}!</h1>
-    
+
     @if(posts)
         @for(post in posts)
             <article>
@@ -81,7 +76,7 @@ PyBlade uses the standard `.html` file extension for templates, making it compat
     @else
         <p>No posts found.</p>
     @endif
-    
+
     <!-- Interactive Component Example -->
     @component('like-button', post_id=post.id)
         <span>Like this post</span>
