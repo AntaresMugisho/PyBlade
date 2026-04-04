@@ -1,5 +1,6 @@
 import re
 from datetime import datetime, timedelta
+from html import unescape as html_unescape
 
 from .registry import FilterRegistry
 
@@ -31,6 +32,11 @@ def slugify(value):
     value = re.sub(r"[^\w\s-]", "", value)
     value = re.sub(r"[-\s]+", "-", value)
     return value.strip("-")
+
+
+@filters.register()
+def safe(value):
+    return html_unescape(value)
 
 
 # NUMERIC FILTERS

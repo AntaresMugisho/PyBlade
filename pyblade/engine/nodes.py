@@ -806,7 +806,7 @@ class FirstOfNode(Node):
         if self.as_name:
             context[self.as_name] = result
             return ""
-        return result
+        return html_escape(result)
 
 
 class UrlNode(Node):
