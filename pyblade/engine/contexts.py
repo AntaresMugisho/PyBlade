@@ -1,6 +1,5 @@
-from ast import List
+from html import escape as html_escape
 from typing import Iterable
-from uuid import uuid4
 
 
 class LoopContext:
@@ -9,7 +8,7 @@ class LoopContext:
     def __init__(self, items, parent=None):
         self._total_items = len(items)
         self._current_index = 0
-        self._current_iteration = self._current_index + 1
+        self._current_iteration = 1
         self._parent = parent
 
     @property
@@ -20,6 +19,7 @@ class LoopContext:
     @index.setter
     def index(self, value):
         self._current_index = value
+        self._current_iteration = value + 1
 
     @property
     def iteration(self):
@@ -161,10 +161,10 @@ class AttributesContext:
             self._attributes[key] = f"{value} {self._attributes.get(key, '')}"
         return self
 
+    # TODO: Complete all these functions
     def prepends(self, attrs: dict):
         pass
 
-    # TODO: Complete all these functions
     def where_starts_with(self, needle: str) -> str:
         """
         Return all the attributes starting with the given string
@@ -199,48 +199,27 @@ class SlotContext:
         return not self.content
 
 
-class ClassContext:
-    def __init__(self, attrs: dict, context: dict):
-        self._class = ""
-        for key, value in attrs.items():
-            if eval(str(value), {}, context):
-                self._class += f"{key} "
+class CycleContext:
+    def __init__(self, values):
+        self.values = list(values) if isinstance(values, (list, tuple)) else [values]
+        self.index = 0
 
     def __str__(self):
-        return f'class="{self._class.strip()}"'
+        if not self.values:
+            return ""
+        val = str(self.values[self.index])
+        # str() is very important here to handle the case where the variable is a CycleContext instance
 
+        self.index = (self.index + 1) % len(self.values)
+        return html_escape(val)
 
-class CycleContext:
-    def __init__(self, values: List, alias: str | None = None) -> None:
-        self.alias = alias or uuid4().hex
-        self.values = values
-        self._current_index = 0
-
-    # def __eq__(self, other: object) -> bool:
-    #     return self._id == other._id
-
-    def __str__(self) -> str:
-        return self.current
-
-    @property
-    def index(self):
-        return self._current_index % len(self.values)
-
-    @index.setter
-    def index(self, value):
-        self._current_index = value
-
-    @property
     def current(self):
-        return self.values[self.index]
+        if not self.values:
+            return ""
+        return str(self.values[self.index])
 
-    @property
-    def next(self):
-        return self.values[(self.index + 1) % len(self.values)]
-
-    @property
-    def previous(self):
-        return self.values[(self.index - 1) % len(self.values)]
+    def reset(self):
+        self.index = 0
 
 
 class ErrorMessageContext:

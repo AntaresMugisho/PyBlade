@@ -4,7 +4,7 @@ from html import escape as html_escape
 from pprint import pformat
 
 from pyblade.config import settings
-from pyblade.engine.exceptions import (  # TemplateNotFoundError,; UndefinedVariableError,
+from pyblade.engine.exceptions import (
     BreakLoopError,
     ContinueLoopError,
     DirectiveParsingError,
@@ -14,7 +14,7 @@ from pyblade.engine.exceptions import (  # TemplateNotFoundError,; UndefinedVari
 )
 
 from . import loader
-from .contexts import LoopContext
+from .contexts import CycleContext, LoopContext
 from .sandbox import SafeEvaluator
 
 
@@ -702,57 +702,89 @@ class CommentNode(Node):
 class CycleNode(Node):
     """Represents an @cycle(values) directive like Django's cycle tag."""
 
-    def __init__(self, values, as_name=None, line=None, column=None):
+    def __init__(self, values, as_name=None, silent=False, line=None, column=None):
         super().__init__(line, column)
-        self.values = values  # String of comma-separated values
-        self.as_name = as_name  # Variable name to store the current value
+        self.values = values
+        self.as_name = as_name
+        self.silent = silent
 
     def __repr__(self):
-        return f"CycleNode(values='{self.values}', as_name='{self.as_name}')"
+        return f"CycleNode(values='{self.values}', as_name='{self.as_name}', silent={self.silent})"
 
     def render(self, context):
-        """Cycle through values like Django's cycle tag.
+        cycles = context.setdefault("_cycles", {})
 
-        If 'as variable_name' is specified, stores the current value in context
-        and returns empty string. Otherwise, returns the current value.
-        """
-        # Parse and evaluate the values
-        values = self.eval(f"({self.values})", context)
-        if not isinstance(values, (list, tuple)):
-            values = [values]
+        # Check if it's a reference to a previously created cycle: @cycle(rowcolors)
+        if self.values and not self.as_name and "," not in self.values:
+            var_name = self.values.strip()
+            # It could be an existing cycle renderer in the context or in _cycles
+            if var_name in context and isinstance(context[var_name], CycleContext):
+                if self.silent:
+                    return ""
+                return str(context[var_name])
+            elif var_name in cycles:
+                if self.silent:
+                    return ""
+                return str(cycles[var_name])
 
-        if not values:
-            result = ""
-        else:
-            # Get cycle counter from context, create if doesn't exist
-            cycle_counter_key = f"_cycle_counter_{id(self)}"
-            if cycle_counter_key not in context:
-                context[cycle_counter_key] = 0
+        # Evaluate the values
+        values_evaluated = self.eval(f"({self.values})", context)
+        if not isinstance(values_evaluated, (list, tuple)):
+            values_evaluated = [values_evaluated]
 
-            # Get current index and increment for next time
-            current_index = context[cycle_counter_key]
-            context[cycle_counter_key] = (current_index + 1) % len(values)
+        renderer = CycleContext(values_evaluated)
 
-            result = str(values[current_index])
-
-        # If 'as variable_name' was specified, store the result in context
         if self.as_name:
-            context[self.as_name] = result
-            return ""  # Don't output anything when storing to variable
+            if self.as_name not in cycles:
+                cycles[self.as_name] = renderer
+                context[self.as_name] = renderer
+            else:
+                renderer = cycles[self.as_name]
+                context[self.as_name] = renderer
         else:
-            return result
+            # Nameless cycle, tie its state to the node id
+            cycle_id = f"cycle_node_{id(self)}"
+            if cycle_id not in cycles:
+                cycles[cycle_id] = renderer
+            else:
+                renderer = cycles[cycle_id]
+
+        if self.silent:
+            return ""
+        return str(renderer)
+
+
+class ResetCycleNode(Node):
+    """Represents an @resetcycle(name) directive."""
+
+    def __init__(self, name, line=None, column=None):
+        super().__init__(line, column)
+        self.name = name
+
+    def __repr__(self):
+        return f"ResetCycleNode(name='{self.name}')"
+
+    def render(self, context):
+        cycles = context.get("_cycles", {})
+        name = self.name.strip()
+        if name in cycles:
+            cycles[name].reset()
+        elif name in context and isinstance(context[name], CycleContext):
+            context[name].reset()
+        return ""
 
 
 class FirstOfNode(Node):
     """Represents an @firstof(values, default) directive."""
 
-    def __init__(self, values, default=None, line=None, column=None):
+    def __init__(self, values, default=None, as_name=None, line=None, column=None):
         super().__init__(line, column)
         self.values = values  # List of expressions
         self.default = default
+        self.as_name = as_name
 
     def __repr__(self):
-        return f"FirstOfNode(values={self.values}, default='{self.default}')"
+        return f"FirstOfNode(values={self.values}, default='{self.default}', as_name='{self.as_name}')"
 
     def render(self, context):
         """Return the first truthy value from the argument list, or default."""
@@ -760,15 +792,21 @@ class FirstOfNode(Node):
         if not isinstance(args, tuple):
             args = (args,)
 
+        result = ""
         for arg in args:
             if arg:
-                return str(arg)
+                result = str(arg)
+                break
+        else:
+            if self.default is not None:
+                default_val = self.eval(self.default, context)
+                if default_val is not None:
+                    result = str(default_val)
 
-        if self.default is not None:
-            default_val = self.eval(self.default, context)
-            if default_val is not None:
-                return str(default_val)
-        return ""
+        if self.as_name:
+            context[self.as_name] = result
+            return ""
+        return result
 
 
 class UrlNode(Node):
@@ -1104,18 +1142,23 @@ class WithNode(Node):
 class NowNode(Node):
     """Represents a @now('format') directive."""
 
-    def __init__(self, format_string, line=None, column=None):
+    def __init__(self, format_string, as_name=None, line=None, column=None):
         super().__init__(line, column)
         self.format_string = format_string
+        self.as_name = as_name
 
     def __repr__(self):
-        return f"NowNode(format_string='{self.format_string}')"
+        return f"NowNode(format_string='{self.format_string}', as_name='{self.as_name}')"
 
     def render(self, context):
         from datetime import datetime
 
         fmt = self.eval(self.format_string, context)
-        return datetime.now().strftime(fmt)
+        result = datetime.now().strftime(fmt)
+        if self.as_name:
+            context[self.as_name] = result
+            return ""
+        return result
 
 
 class RegroupNode(Node):
@@ -1136,9 +1179,13 @@ class RegroupNode(Node):
         Populates context[as_name] with a list of objects that have
         `.grouper` and `.list` attributes, similar to Django's regroup.
         """
-        # Evaluate target and by expressions
+        # Evaluate target
         target = self.eval(self.target, context)
-        by = self.eval(self.by, context)
+
+        # by is treated as a literal attribute name, e.g. "country"
+        by = self.by.strip()
+        if by.startswith(("'", '"')) and by.endswith(("'", '"')):
+            by = by[1:-1]
 
         if not target:
             context[self.as_name] = []
@@ -1434,9 +1481,16 @@ class QuerystringNode(Node):
         # kwargs_expr is like "page=2"; wrap it in dict(...) for evaluation
         expr = self.kwargs_expr.strip()
         if expr:
-            overrides = self.eval(f"dict({expr})", context)
-            if isinstance(overrides, dict):
+            try:
+                # Basic parsing for "page=2, sort=asc"
+                overrides = {}
+                for part in expr.split(","):
+                    if "=" in part:
+                        k, v = part.split("=", 1)
+                        overrides[k.strip()] = self.eval(v.strip(), context)
                 query_dict.update(overrides)
+            except Exception:
+                pass
 
         from urllib.parse import urlencode
 
@@ -1453,3 +1507,45 @@ class LiveBladeNode(Node):
         # Placeholder for future live-reload / interactive behavior.
         # Currently behaves as a no-op marker.
         return ""
+
+
+class IfChangedNode(Node):
+    """Represents an @ifchanged(args)...@else...@endifchanged block."""
+
+    def __init__(self, check_expr, body, else_body=None, line=None, column=None):
+        super().__init__(line, column)
+        self.check_expr = check_expr
+        self.body = body
+        self.else_body = else_body
+
+    def __repr__(self):
+        return f"IfChangedNode(check_expr='{self.check_expr}', body={self.body}, else_body={self.else_body})"
+
+    def render(self, context):
+        if not hasattr(self, "_last_state"):
+            self._last_state = None
+
+        # If no arguments are provided, compare the rendered output of the body
+        if not self.check_expr:
+            rendered_body = "".join(node.render(context) for node in self.body)
+            if self._last_state != rendered_body:
+                self._last_state = rendered_body
+                return rendered_body
+            else:
+                if self.else_body:
+                    return "".join(node.render(context) for node in self.else_body)
+                return ""
+        else:
+            current_values = self.eval(f"({self.check_expr})", context)
+            if not isinstance(current_values, tuple):
+                current_values = (current_values,)
+
+            has_changed = self._last_state != current_values
+
+            if has_changed:
+                self._last_state = current_values
+                return "".join(node.render(context) for node in self.body)
+            else:
+                if self.else_body:
+                    return "".join(node.render(context) for node in self.else_body)
+                return ""
