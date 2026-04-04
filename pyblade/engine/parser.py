@@ -200,7 +200,7 @@ class Parser:
                 elif directive_name == "now":
                     ast.append(self._parse_now(directive_args_str, token))
                 elif directive_name == "regroup":
-                    ast.append(self._parse_regroup(directive_args_str))
+                    ast.append(self._parse_regroup(directive_args_str, token))
                 elif directive_name == "autoescape":
                     ast.append(self._parse_autoescape(directive_args_str))
                 elif directive_name == "selected":
@@ -762,13 +762,15 @@ class Parser:
         self.expect("DIRECTIVE", value_prefix="@endwith")
         return WithNode(variables_dict, body, line=token.line, column=token.column)
 
-    def _parse_regroup(self, args_str):
+    def _parse_regroup(self, args_str, token):
         match = re.match(r"^\s*\((.*)\)\s*$", args_str)
         inner = match.group(1).strip() if match else args_str.strip()
         m = re.match(r"(.*?)\s+by\s+(.*?)\s+as\s+(.*)", inner)
         if m:
-            return RegroupNode(m.group(1).strip(), m.group(2).strip(), m.group(3).strip())
-        return RegroupNode(inner, None, None)
+            return RegroupNode(
+                m.group(1).strip(), m.group(2).strip(), m.group(3).strip(), line=token.line, column=token.column
+            )
+        return RegroupNode(inner, None, None, line=token.line, column=token.column)
 
     def _parse_autoescape(self, args_str):
         """Parses an @autoescape(True/False)...@endautoescape block.

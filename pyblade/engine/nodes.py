@@ -1180,7 +1180,12 @@ class RegroupNode(Node):
         `.grouper` and `.list` attributes, similar to Django's regroup.
         """
         # Evaluate target
-        target = self.eval(self.target, context)
+        try:
+            target = self.eval(self.target, context)
+        except Exception as exc:
+            exc_name = exc.__class__.__name__
+            help_message = self._quick_fix_messages.get(exc_name, "")
+            raise TemplateRenderError(f"{exc_name}: {exc}", line=self.line, column=self.column, help=help_message)
 
         # by is treated as a literal attribute name, e.g. "country"
         by = self.by.strip()
@@ -1497,18 +1502,6 @@ class QuerystringNode(Node):
         return "?" + urlencode(query_dict)
 
 
-class LiveBladeNode(Node):
-    """Represents a @liveblade directive."""
-
-    def __repr__(self):
-        return "LiveBladeNode()"
-
-    def render(self, context):
-        # Placeholder for future live-reload / interactive behavior.
-        # Currently behaves as a no-op marker.
-        return ""
-
-
 class IfChangedNode(Node):
     """Represents an @ifchanged(args)...@else...@endifchanged block."""
 
@@ -1536,7 +1529,13 @@ class IfChangedNode(Node):
                     return "".join(node.render(context) for node in self.else_body)
                 return ""
         else:
-            current_values = self.eval(f"({self.check_expr})", context)
+            try:
+                current_values = self.eval(f"({self.check_expr})", context)
+            except Exception as exc:
+                exc_name = exc.__class__.__name__
+                help_message = self._quick_fix_messages.get(exc_name, "")
+                raise TemplateRenderError(f"{exc_name}: {exc}", line=self.line, column=self.column, help=help_message)
+
             if not isinstance(current_values, tuple):
                 current_values = (current_values,)
 
@@ -1549,3 +1548,15 @@ class IfChangedNode(Node):
                 if self.else_body:
                     return "".join(node.render(context) for node in self.else_body)
                 return ""
+
+
+class LiveBladeNode(Node):
+    """Represents a @liveblade directive."""
+
+    def __repr__(self):
+        return "LiveBladeNode()"
+
+    def render(self, context):
+        # Placeholder for future live-reload / interactive behavior.
+        # Currently behaves as a no-op marker.
+        return ""
