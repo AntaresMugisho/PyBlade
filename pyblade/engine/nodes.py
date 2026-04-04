@@ -1153,7 +1153,7 @@ class NowNode(Node):
     def render(self, context):
         from datetime import datetime
 
-        fmt = self.eval(self.format_string, context)
+        fmt = self.eval(self.format_string, context) or "%Y-%m-%d %H:%M:%S"
         result = datetime.now().strftime(fmt)
         if self.as_name:
             context[self.as_name] = result

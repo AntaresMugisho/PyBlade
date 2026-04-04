@@ -481,9 +481,12 @@ class Parser:
                 body.append(self._parse_variable(escaped=True))
             elif token.type == "UNESCAPED_VAR_START":
                 body.append(self._parse_variable(escaped=False))
+            # TODO: Properly handle this case for inline comments
+            # elif token.type == "COMMENT_START" or token.type == "COMMENT_END":
+            #     self.advance()
             else:
                 raise TemplateRenderError(
-                    "Unexpected token type in _parse_until_directives: ",
+                    "Unexpected token type in _parse_until_directives: ", line=token.line, column=token.column
                 )
 
         # If we reach here, we hit end of file without finding a closing directive.
@@ -719,7 +722,7 @@ class Parser:
 
         return BlockTranslateNode(body, plural_body=plural_body, count=args_str)
 
-    def _parse_now(self, args_str, token=None):
+    def _parse_now(self, args_str, token):
         match = re.match(r"^\s*\((.*)\)\s*$", args_str)
         if match:
             inner_args = match.group(1).strip()
@@ -730,11 +733,9 @@ class Parser:
             fmt_str, var_name = inner_args.split(" as ", 1)
             fmt_str = fmt_str.strip()
             var_name = var_name.strip()
-            return NowNode(
-                fmt_str, as_name=var_name, line=token.line if token else None, column=token.column if token else None
-            )
+            return NowNode(fmt_str, as_name=var_name, line=token.line, column=token.column)
         else:
-            return NowNode(inner_args, line=token.line if token else None, column=token.column if token else None)
+            return NowNode(inner_args, line=token.line, column=token.column)
 
     def _parse_with(self, args_str, token=None):
         """Parses an @with(variable=expression)...@endwith block."""
