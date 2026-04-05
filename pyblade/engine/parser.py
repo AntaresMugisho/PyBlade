@@ -1008,9 +1008,20 @@ class Parser:
 
         return UrlNode(pattern_expr, positional_args, keyword_args, as_name, line=token.line, column=token.column)
 
-    def _parse_static(self, args_str):
+    def _parse_static(self, args_str, token):
+        """Parse @static(path) or @static(path as variable_name)"""
         path = self._extract_expression_from_args(args_str, "@static")
-        return StaticNode(path)
+
+        # Check if there's an 'as' clause in the original args_str
+        if " as " in args_str:
+            # Split on ' as ' to separate the path from the variable name
+            path_part, as_name = args_str.split(" as ", 1)
+            path = self._extract_expression_from_args(path_part.strip(), "@static")
+            as_name = as_name.strip()
+        else:
+            as_name = None
+
+        return StaticNode(path, as_name, line=token.line, column=token.column)
 
     def _parse_method(self, args_str):
         method = self._extract_expression_from_args(args_str, "@method")

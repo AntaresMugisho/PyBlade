@@ -878,23 +878,43 @@ class UrlNode(Node):
 
         if self.as_name:
             context[self.as_name] = url
-            # return "" # Should not output anything ??? No for now.
+            return ""
         return url
 
 
 class StaticNode(Node):
     """Represents an @static('path') directive."""
 
-    def __init__(self, path, line=None, column=None):
+    def __init__(self, path, as_name=None, line=None, column=None):
         super().__init__(line, column)
         self.path = path
+        self.as_name = as_name
 
     def __repr__(self):
-        return f"StaticNode(path='{self.path}')"
+        return f"StaticNode(path='{self.path}', as_name='{self.as_name}')"
 
     def render(self, context):
-        path = self.eval(self.path, context)
-        return f"/static/{path}"
+        try:
+            path = self.eval(self.path, context)
+        except Exception as exc:
+            self._raise(exc)
+
+        if settings.framework == "django":
+            try:
+                from django.conf import settings as dj_settings
+
+                result = f"{dj_settings.STATIC_URL}{path}"
+            except Exception as exc:
+                self._raise(exc)
+        else:
+            result = f"/static/{path}"
+
+        # If 'as variable_name' was specified, store the result in context
+        if self.as_name:
+            context[self.as_name] = result
+            return ""  # Don't output anything when storing to variable
+        else:
+            return result
 
 
 class CsrfNode(Node):
