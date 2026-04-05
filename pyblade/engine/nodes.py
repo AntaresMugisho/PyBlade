@@ -153,9 +153,7 @@ class IfNode(Node):
             raise exc
 
         except Exception as exc:
-            exc_name = type(exc).__name__
-            help_message = self._quick_fix_messages.get(exc_name)
-            raise TemplateRenderError(f"{exc_name}: {exc}", line=self.line, help=help_message)
+            self._raise(exc)
 
 
 class UnlessNode(Node):
@@ -880,7 +878,7 @@ class UrlNode(Node):
 
         if self.as_name:
             context[self.as_name] = url
-            # return "" # Sould not output anything ???
+            # return "" # Should not output anything ??? No for now.
         return url
 
 
@@ -1120,15 +1118,14 @@ class WithNode(Node):
         Expects variables to be a dictionary of {var_name: expression} as
         produced by the parser for better performance.
         """
+
         # Evaluate each variable expression and build the context
         vars_dict = {}
         for var_name, var_expr in self.variables.items():
             try:
                 vars_dict[var_name] = self.eval(var_expr, context)
             except Exception as exc:
-                exc_name = exc.__class__.__name__
-                help_message = self._quick_fix_messages.get(exc_name, "")
-                raise TemplateRenderError(f"{exc_name}: {exc}", line=self.line, column=self.column, help=help_message)
+                self._raise(exc)
 
         new_context = dict(context)
         new_context.update(vars_dict)
@@ -1465,11 +1462,13 @@ class GetMediaPrefixNode(Node):
 class QuerystringNode(Node):
     """Represents a @querystring(kwargs) directive."""
 
-    def __init__(self, kwargs_expr):
+    def __init__(self, kwargs_expr, as_name=None, line=None, column=None):
+        super().__init__(line=line, column=column)
         self.kwargs_expr = kwargs_expr
+        self.as_name = as_name
 
     def __repr__(self):
-        return f"QuerystringNode(kwargs_expr='{self.kwargs_expr}')"
+        return f"QuerystringNode(kwargs_expr='{self.kwargs_expr}', as_name='{self.as_name}')"
 
     def render(self, context):
         """Build a querystring based on request.GET and overrides.
@@ -1478,27 +1477,39 @@ class QuerystringNode(Node):
         """
         request = context.get("request")
         if request is None or not hasattr(request, "GET"):
-            return ""
+            result = ""
+        else:
+            query_dict = request.GET.copy().dict()
 
-        query_dict = request.GET.copy().dict()
+            # kwargs_expr is like "page=2"; wrap it in dict(...) for evaluation
+            expr = self.kwargs_expr.strip()
+            if expr:
+                try:
+                    # Basic parsing for "page=2, sort=asc"
+                    overrides = {}
+                    for part in expr.split(","):
+                        if "=" in part:
+                            k, v = part.split("=", 1)
+                            value = self.eval(v.strip(), context)
+                            if value is None:
+                                query_dict.pop(k.strip(), None)
+                                continue
 
-        # kwargs_expr is like "page=2"; wrap it in dict(...) for evaluation
-        expr = self.kwargs_expr.strip()
-        if expr:
-            try:
-                # Basic parsing for "page=2, sort=asc"
-                overrides = {}
-                for part in expr.split(","):
-                    if "=" in part:
-                        k, v = part.split("=", 1)
-                        overrides[k.strip()] = self.eval(v.strip(), context)
-                query_dict.update(overrides)
-            except Exception:
-                pass
+                            overrides[k.strip()] = value
+                    query_dict.update(overrides)
+                except Exception as exc:
+                    self._raise(exc)
 
-        from urllib.parse import urlencode
+            from urllib.parse import urlencode
 
-        return "?" + urlencode(query_dict)
+            result = "?" + urlencode(query_dict)
+
+        # If 'as variable_name' was specified, store the result in context
+        if self.as_name:
+            context[self.as_name] = result
+            return ""  # Don't output anything when storing to variable
+        else:
+            return result
 
 
 class IfChangedNode(Node):
@@ -1531,9 +1542,7 @@ class IfChangedNode(Node):
             try:
                 current_values = self.eval(f"({self.check_expr})", context)
             except Exception as exc:
-                exc_name = exc.__class__.__name__
-                help_message = self._quick_fix_messages.get(exc_name, "")
-                raise TemplateRenderError(f"{exc_name}: {exc}", line=self.line, column=self.column, help=help_message)
+                self._raise(exc)
 
             if not isinstance(current_values, tuple):
                 current_values = (current_values,)

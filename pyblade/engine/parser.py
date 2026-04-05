@@ -218,11 +218,11 @@ class Parser:
                 elif directive_name == "get_media_prefix":
                     ast.append(GetMediaPrefixNode())
                 elif directive_name == "querystring":
-                    ast.append(self._parse_querystring(directive_args_str))
-                elif directive_name == "liveblade":
-                    ast.append(LiveBladeNode())
+                    ast.append(self._parse_querystring(directive_args_str, token))
                 elif directive_name == "block":
                     ast.append(self._parse_block(directive_args_str))
+                elif directive_name == "liveblade":
+                    ast.append(LiveBladeNode())
                 elif directive_name in [
                     "elif",
                     "else",
@@ -830,10 +830,22 @@ class Parser:
         else:
             return RatioNode(args, None, line=token.line, column=token.column)
 
-    def _parse_querystring(self, args_str):
+    def _parse_querystring(self, args_str, token):
+        """Parse @querystring(kwargs) or @querystring(kwargs as variable_name)"""
         match = re.match(r"^\s*\((.*)\)\s*$", args_str)
         inner = match.group(1).strip() if match else args_str.strip()
-        return QuerystringNode(inner)
+
+        # Check if there's an 'as' clause
+        if " as " in inner:
+            # Split on ' as ' to separate the querystring arguments from the variable name
+            kwargs_str, as_name = inner.split(" as ", 1)
+            kwargs_str = kwargs_str.strip()
+            as_name = as_name.strip()
+        else:
+            kwargs_str = inner
+            as_name = None
+
+        return QuerystringNode(kwargs_str, as_name, line=token.line, column=token.column)
 
     def _parse_block(self, args_str):
         """Parses an @block('name')...@endblock block."""
@@ -909,10 +921,11 @@ class Parser:
         # Parse the URL arguments (pattern and parameters)
         if not url_args_str:
             raise DirectiveParsingError(
-                "@url requires at least a URL pattern",
+                "The @url directive requires at least one argument.",
                 line=token.line,
                 column=token.column,
-                help="Provide at least the URL name as the first argument of the @url directive.",
+                help="Provide at least the URL name as the first argument of the @url directive. \
+                    This can be either a st",
             )
 
         # Use the same sophisticated parsing as @include to handle nested structures
