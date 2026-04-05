@@ -41,6 +41,9 @@ class Node:
         "Review our security rules before retrying.",
         "ContinueLoopError": _loop_control_help_message,
         "BreakLoopError": _loop_control_help_message,
+        "NoReverseMatch": "The URL could not be reversed. This usually means either the route \
+            name is incorrect or some required parameters are missing. Double-check the URL name \
+            and ensure all expected arguments are provided.",
     }
 
     _loop_control_error_message = "Loop control statement used outside of a loop"
@@ -56,6 +59,12 @@ class Node:
     def render(self, context):
         """Render this node to a string using the provided context."""
         raise NotImplementedError
+
+    def _raise(self, exc):
+        """Raise a customized exception"""
+        exc_name = exc.__class__.__name__
+        help_message = self._quick_fix_messages.get(exc_name, "")
+        raise TemplateRenderError(f"{exc_name}: {exc}", line=self.line, column=self.column, help=help_message)
 
 
 # TEXT
@@ -91,9 +100,7 @@ class VarNode(Node):
             value = self.eval(self.expression, context)
 
         except Exception as exc:
-            exc_name = exc.__class__.__name__
-            help_message = self._quick_fix_messages.get(exc_name, "")
-            raise TemplateRenderError(f"{exc_name}: {exc}", line=self.line, column=self.column, help=help_message)
+            self._raise(exc)
 
         if value is None:
             rendered = ""
@@ -433,9 +440,7 @@ class IncludeNode(Node):
             raise
 
         except Exception as exc:
-            exc_name = exc.__class__.__name__
-            help_message = self._quick_fix_messages.get(exc_name, "")
-            raise TemplateRenderError(f"{exc_name}: {exc}", line=self.line, column=self.column, help=help_message)
+            self._raise(exc)
 
 
 class ExtendsNode(Node):
@@ -810,31 +815,29 @@ class FirstOfNode(Node):
 
 
 class UrlNode(Node):
-    """Represents an @url('name', params) directive."""
+    """Represents an @url('pattern', args, kwargs) directive."""
 
-    def __init__(self, name, params_expr=None, as_name=None, line=None, column=None):
+    def __init__(self, pattern_expr, positional_args=None, keyword_args=None, as_name=None, line=None, column=None):
         super().__init__(line, column)
-        self.name = name
-        self.params_expr = params_expr
+        self.pattern_expr = pattern_expr
+        self.positional_args = positional_args or []
+        self.keyword_args = keyword_args or {}
         self.as_name = as_name
 
     def __repr__(self):
-        return f"UrlNode(name='{self.name}', params_expr='{self.params_expr}', as_name='{self.as_name}')"
+        return f"UrlNode(pattern_expr='{self.pattern_expr}', \
+        positional_args={self.positional_args}, keyword_args={self.keyword_args}, as_name='{self.as_name}')"
 
     def render(self, context):
-        """Resolve a Django URL pattern if possible.
+        """Resolve a Django URL pattern with the new argument structure.
 
-        This is a simplified adaptation of directives._parse_url and
-        TemplateProcessor.render_url. If Django is not available, returns
-        an empty string.
+        Evaluates positional and keyword arguments separately and passes them
+        to Django's reverse() function.
         """
-        pattern_expr = self.name
-        params_expr = self.params_expr
-        as_var = self.as_name
 
+        # Evaluate the URL pattern
         try:
-            # Resolve pattern: may be a literal or a variable name in context
-            url_pattern = self.eval(pattern_expr, context)
+            url_pattern = self.eval(self.pattern_expr, context)
         except Exception:
             url_pattern = None
 
@@ -843,43 +846,41 @@ class UrlNode(Node):
 
         url_pattern = context.get(url_pattern, url_pattern)
 
-        url_params = []
-        if params_expr:
-            params_str = params_expr
-            for param in params_str.split(","):
-                param = param.strip()
-                if not param:
-                    continue
-                if "=" in param:
-                    key, value = param.split("=", 1)
-                    key = key.strip()
-                    value = value.strip()
-                    try:
-                        evaluated = self.eval(value, context)
-                    except Exception:
-                        evaluated = value
-                    url_params.append((key, evaluated))
-                else:
-                    try:
-                        evaluated = self.eval(param, context)
-                    except Exception:
-                        evaluated = param
-                    url_params.append(("", evaluated))
+        # Evaluate positional arguments
+        evaluated_positional = []
+        for arg_expr in self.positional_args:
+            try:
+                evaluated = self.eval(arg_expr, context)
+            except Exception:
+                evaluated = arg_expr
+            evaluated_positional.append(evaluated)
+
+        # Evaluate keyword arguments
+        evaluated_keyword = {}
+        for key, value_expr in self.keyword_args.items():
+            try:
+                evaluated = self.eval(value_expr, context)
+            except Exception:
+                evaluated = value_expr
+            evaluated_keyword[key] = evaluated
 
         try:
             from django.urls import reverse
         except ImportError:
             return ""
 
-        url = reverse(
-            url_pattern,
-            args=[p[1] for p in url_params if not p[0]],
-            kwargs={p[0]: p[1] for p in url_params if p[0]},
-        )
+        try:
+            url = reverse(
+                url_pattern,
+                args=evaluated_positional,
+                kwargs=evaluated_keyword,
+            )
+        except Exception as exc:
+            self._raise(exc)
 
-        if as_var:
-            context[as_var] = url
-            return ""
+        if self.as_name:
+            context[self.as_name] = url
+            # return "" # Sould not output anything ???
         return url
 
 
@@ -1183,9 +1184,7 @@ class RegroupNode(Node):
         try:
             target = self.eval(self.target, context)
         except Exception as exc:
-            exc_name = exc.__class__.__name__
-            help_message = self._quick_fix_messages.get(exc_name, "")
-            raise TemplateRenderError(f"{exc_name}: {exc}", line=self.line, column=self.column, help=help_message)
+            self._raise(exc)
 
         # by is treated as a literal attribute name, e.g. "country"
         by = self.by.strip()

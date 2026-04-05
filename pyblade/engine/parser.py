@@ -887,8 +887,113 @@ class Parser:
         else:
             return FirstOfNode(inner_args, line=token.line if token else None, column=token.column if token else None)
 
-    def _parse_url(self, args_str):
-        return UrlNode(args_str)
+    def _parse_url(self, args_str, token):
+        """Parse @url('pattern', args, kwargs) or @url('pattern', args, kwargs as variable_name)"""
+        # Remove parentheses and parse the function-like arguments
+        match = re.match(r"^\s*\((.*)\)\s*$", args_str)
+        if match:
+            inner_args = match.group(1).strip()
+        else:
+            inner_args = args_str.strip()
+
+        # Check if there's an 'as' clause
+        if " as " in inner_args:
+            # Split on ' as ' to separate the url arguments from the variable name
+            url_args_str, as_name = inner_args.split(" as ", 1)
+            url_args_str = url_args_str.strip()
+            as_name = as_name.strip()
+        else:
+            url_args_str = inner_args
+            as_name = None
+
+        # Parse the URL arguments (pattern and parameters)
+        if not url_args_str:
+            raise DirectiveParsingError(
+                "@url requires at least a URL pattern",
+                line=token.line,
+                column=token.column,
+                help="Provide at least the URL name as the first argument of the @url directive.",
+            )
+
+        # Use the same sophisticated parsing as @include to handle nested structures
+        pattern_expr = None
+        positional_args = []
+        keyword_args = {}
+
+        # Track bracket/brace nesting to properly split arguments
+        bracket_count = 0
+        brace_count = 0
+        quote_char = None
+        current_arg = ""
+
+        for char in url_args_str:
+            if quote_char:
+                current_arg += char
+                if char == quote_char:
+                    quote_char = None
+            elif char in ('"', "'"):
+                quote_char = char
+                current_arg += char
+            elif char in ("[", "("):
+                bracket_count += 1
+                current_arg += char
+            elif char in ("]", ")"):
+                bracket_count -= 1
+                current_arg += char
+            elif char == "{":
+                brace_count += 1
+                current_arg += char
+            elif char == "}":
+                brace_count -= 1
+                current_arg += char
+            elif char == "," and bracket_count == 0 and brace_count == 0:
+                # Found an argument boundary
+                if pattern_expr is None:
+                    pattern_expr = current_arg.strip()
+                elif "=" in current_arg:
+                    # Keyword argument
+                    key_part, value_expr = current_arg.split("=", 1)
+                    key = key_part.strip()
+                    value = value_expr.strip()
+                    keyword_args[key] = value
+                else:
+                    # Positional argument
+                    positional_args.append(current_arg.strip())
+                current_arg = ""
+            else:
+                current_arg += char
+
+        # Add the last argument
+        if current_arg.strip():
+            if pattern_expr is None:
+                pattern_expr = current_arg.strip()
+            elif "=" in current_arg:
+                # Keyword argument
+                key_part, value_expr = current_arg.split("=", 1)
+                key = key_part.strip()
+                value = value_expr.strip()
+                keyword_args[key] = value
+            else:
+                # Positional argument
+                positional_args.append(current_arg.strip())
+
+        if positional_args and keyword_args:
+            raise DirectiveParsingError(
+                "@url does not support mixing positional and kayword arguments.",
+                line=token.line,
+                column=token.column,
+                help="Provide either positional arguments or keyword arguments, not both.",
+            )
+
+        if not pattern_expr:
+            raise DirectiveParsingError(
+                "@url requires at least a URL pattern",
+                line=token.line,
+                column=token.column,
+                help="Provide at least the URL name as the first argument of the @url directive.",
+            )
+
+        return UrlNode(pattern_expr, positional_args, keyword_args, as_name, line=token.line, column=token.column)
 
     def _parse_static(self, args_str):
         path = self._extract_expression_from_args(args_str, "@static")
