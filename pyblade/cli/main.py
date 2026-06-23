@@ -30,7 +30,7 @@ DEFAULT_COMMANDS = {
         # "logout",
         "make:command",
         "make:component",
-        "make:liveblade",
+        "make:live",
         "make:template",
         "tailwind:config",
         "upgrade",

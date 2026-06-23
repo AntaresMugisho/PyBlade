@@ -13,10 +13,10 @@ class Config:
         "components_dir": "components",
         "commands_dir": "management/commands",
         "stubs_dir": str(Path(__file__).parent / "cli/stubs"),
-        "liveblade": {
+        "live": {
             "paginator": None,
-            "components_dir": "liveblade",
-            "templates_dir": "liveblade",
+            "components_dir": "live",
+            "templates_dir": "live",
         },
     }
 

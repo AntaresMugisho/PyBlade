@@ -221,7 +221,7 @@ class Parser:
                     ast.append(self._parse_querystring(directive_args_str, token))
                 elif directive_name == "block":
                     ast.append(self._parse_block(directive_args_str))
-                elif directive_name == "liveblade":
+                elif directive_name == "live":
                     ast.append(LiveBladeNode())
                 elif directive_name in [
                     "elif",

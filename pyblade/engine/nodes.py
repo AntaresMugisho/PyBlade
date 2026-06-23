@@ -1579,7 +1579,7 @@ class IfChangedNode(Node):
 
 
 class LiveBladeNode(Node):
-    """Represents a @liveblade directive."""
+    """Represents a @live directive."""
 
     def __repr__(self):
         return "LiveBladeNode()"

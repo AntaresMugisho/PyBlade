@@ -7,27 +7,27 @@ from pyblade.utils import pascal_to_snake, snakebab_to_pascal, split_dotted_path
 
 class Command(BaseCommand):
     """
-    Create a new Liveblade component.
+    Create a new Live component.
     """
 
-    name = "make:liveblade"
+    name = "make:live"
 
     def config(self):
         """Setup command arguments and options here"""
         self.add_argument("name")
         self.add_flag("-i", "--inline", help="Embed the HTML template in the Python component class file")
-        self.add_flag("-f", "--force", help="Create the Liveblade component even if it already exists")
+        self.add_flag("-f", "--force", help="Create the Live component even if it already exists")
 
     def handle(self, **kwargs):
-        """Create a new Liveblade component."""
+        """Create a new Live component."""
 
         name = pascal_to_snake(kwargs.get("name"))
         path, component_name = split_dotted_path(name)
 
-        components_dir = Path(settings.liveblade.components_dir / path)
-        templates_dir = Path(settings.templates_dir, settings.liveblade.templates_dir / path)
+        components_dir = Path(settings.live.components_dir / path)
+        templates_dir = Path(settings.templates_dir, settings.live.templates_dir / path)
 
-        # Ensure liveblade directories exist
+        # Ensure live directories exist
         components_dir.mkdir(parents=True, exist_ok=True)
         templates_dir.mkdir(parents=True, exist_ok=True)
 
@@ -45,7 +45,7 @@ class Command(BaseCommand):
                 )
                 return
 
-        stubs_dir = settings.stubs_dir / "liveblade"
+        stubs_dir = settings.stubs_dir / "live"
 
         if not kwargs.get("inline"):
             python_stub = stubs_dir / "component.py.stub"
@@ -79,7 +79,7 @@ class Command(BaseCommand):
         with open(python_file, "w") as file:
             file.write(python_template)
 
-        self.success("Liveblade component created successfully:")
+        self.success("Live component created successfully:")
         self.line(f"  - Python: {python_file}")
         if not kwargs.get("inline"):
             self.line(f"  - HTML: {html_file}")

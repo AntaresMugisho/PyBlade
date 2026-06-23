@@ -183,7 +183,7 @@ def cached_blade(timeout=300):
     return decorator
 
 
-def LiveBlade(request):
+def Live(request):
     """
     Handles the POST request to interact with a specific component's method.
     """
@@ -201,7 +201,7 @@ def LiveBlade(request):
             print(f"Component ID: {component_id}, Method: {method_name}")
 
             # Get the component instance
-            component = Component.instances.get(f"liveblade.{component_id}")
+            component = Component.instances.get(f"live.{component_id}")
             print(f"Component instances: {Component.instances}")
             print(f"Component instance: {component}")
 
