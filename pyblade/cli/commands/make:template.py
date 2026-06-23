@@ -39,6 +39,7 @@ class Command(BaseCommand):
                 return
 
         stubs_path = settings.stubs_dir / "templates"
+        print(stubs_path)
         template_stub = stubs_path / "template.html.stub"
 
         if not template_stub.exists():
