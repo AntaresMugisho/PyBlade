@@ -190,9 +190,9 @@ class Parser:
                 elif directive_name == "spaceless":
                     ast.append(self._parse_spaceless(directive_args_str, token))
                 elif directive_name == "trans" or directive_name == "translate":
-                    ast.append(self._parse_trans(directive_args_str))
+                    ast.append(self._parse_trans(directive_args_str, token))
                 elif directive_name == "blocktranslate":
-                    ast.append(self._parse_blocktranslate(directive_args_str))
+                    ast.append(self._parse_blocktranslate(directive_args_str, token))
                 elif directive_name == "with":
                     ast.append(self._parse_with(directive_args_str))
                 elif directive_name == "ifchanged":
@@ -701,14 +701,56 @@ class Parser:
         self.expect("DIRECTIVE", value_prefix="@endcomment")
         return CommentNode("".join(content_parts))
 
-    def _parse_trans(self, args_str):
-        """Parses an @trans('message') directive."""
-        # args_str could be "('message')" or "('message', context='ctx', noop=True)"
-        # We'll store the raw args string and let processor handle evaluation or parsing.
-        return TranslateNode(args_str)
+    def _parse_trans(self, args_str, token=None):
+        """Parses an @trans('message') or @trans('message' as var) directive."""
+        # Remove parentheses and parse arguments
+        match = re.match(r"^\s*\((.*)\)\s*$", args_str)
+        if match:
+            inner_args = match.group(1).strip()
+        else:
+            inner_args = args_str.strip()
 
-    def _parse_blocktranslate(self, args_str):
+        # Check if there's an 'as' clause
+        if " as " in inner_args:
+            # Split on ' as ' to separate the message from the variable name
+            message_part, as_name = inner_args.split(" as ", 1)
+            message = message_part.strip()
+            as_name = as_name.strip()
+        else:
+            message = inner_args
+            as_name = None
+
+        return TranslateNode(message, as_name=as_name, line=token.line if token else None, column=token.column if token else None)
+
+    def _parse_blocktranslate(self, args_str, token=None):
         """Parses an @blocktranslate...@endblocktranslate block."""
+
+        # Parse parameters from args_str
+        count = None
+        context = None
+        trimmed = False
+
+        if args_str.strip():
+            match = re.match(r"^\s*\((.*)\)\s*$", args_str)
+            if match:
+                inner_args = match.group(1).strip()
+            else:
+                inner_args = args_str.strip()
+
+            # Parse keyword arguments
+            # Simple approach: look for count=, context=, and trimmed
+            if "count=" in inner_args:
+                count_match = re.search(r"count\s*=\s*([^,)]+)", inner_args)
+                if count_match:
+                    count = count_match.group(1).strip()
+
+            if "context=" in inner_args:
+                context_match = re.search(r"context\s*=\s*['\"]([^'\"]+)['\"]", inner_args)
+                if context_match:
+                    context = context_match.group(1).strip()
+
+            if "trimmed" in inner_args:
+                trimmed = True
 
         # Parse until @plural or @endblocktranslate
         body = self._parse_until_directives(["@plural", "@endblocktranslate"])
@@ -720,7 +762,15 @@ class Parser:
 
         self.expect("DIRECTIVE", value_prefix="@endblocktranslate")
 
-        return BlockTranslateNode(body, plural_body=plural_body, count=args_str)
+        return BlockTranslateNode(
+            body,
+            plural_body=plural_body,
+            count=count,
+            context=context,
+            trimmed=trimmed,
+            line=token.line if token else None,
+            column=token.column if token else None,
+        )
 
     def _parse_now(self, args_str, token):
         match = re.match(r"^\s*\((.*)\)\s*$", args_str)

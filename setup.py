@@ -35,7 +35,7 @@ setup(
         "Topic :: Text Processing :: Markup :: HTML",
         "Security :: Security",
     ],
-    install_requires=["questionary", "colorama"],
+    install_requires=["questionary", "colorama", "polib"],
     entry_points={
         "console_scripts": [
             "pyblade=pyblade.cli.main:cli",

@@ -32,6 +32,9 @@ DEFAULT_COMMANDS = {
         "make:component",
         "make:live",
         "make:template",
+        "messages:make",
+        "messages:compile",
+
         "tailwind:config",
         "upgrade",
     ],

@@ -1023,44 +1023,28 @@ class ClassNode(Node):
 class TranslateNode(Node):
     """Represents a @trans('message') directive."""
 
-    def __init__(self, message, context=None, noop=False, line=None, column=None):
+    def __init__(self, message, context=None, noop=False, as_name=None, line=None, column=None):
         super().__init__(line, column)
         self.message = message
         self.context = context
         self.noop = noop
+        self.as_name = as_name
 
     def __repr__(self):
-        return f"TranslateNode(message='{self.message}', context='{self.context}', noop={self.noop})"
+        return f"TranslateNode(message='{self.message}', context='{self.context}', noop={self.noop}, as_name='{self.as_name}')"
 
     def render(self, context):
-        """Render a translated string using Django's i18n utilities when available.
+        """Render a translated string using standard gettext.
 
-        Mirrors the behavior of TemplateProcessor.render_trans using the same
-        argument parsing strategy but localized to this node.
+        Framework-agnostic implementation that uses Python's gettext module.
+        Falls back to Django's i18n when available for compatibility.
         """
         import re as _re
+        import gettext
 
         args_str = self.message.strip()
         if args_str.startswith("(") and args_str.endswith(")"):
             args_str = args_str[1:-1]
-
-        as_variable = None
-        as_match = _re.search(
-            r"""
-            ^
-            \s*
-            (?P<msg>['"].+?['"])
-            \s+as\s+
-            (?P<var>[a-zA-Z_][a-zA-Z0-9_]*)
-            \s*$
-            """,
-            args_str,
-            _re.VERBOSE,
-        )
-
-        if as_match:
-            args_str = as_match.group("msg")
-            as_variable = as_match.group("var")
 
         def _extract(*args, **kwargs):
             return args, kwargs
@@ -1077,23 +1061,36 @@ class TranslateNode(Node):
         if not isinstance(message, str):
             raise TypeError("@trans message must be a string literal")
 
-        msg_context = extracted_kwargs.get("context")
-        noop = extracted_kwargs.get("noop", False)
+        msg_context = extracted_kwargs.get("context") or self.context
+        noop = extracted_kwargs.get("noop", False) or self.noop
+        as_variable = extracted_kwargs.get("as") or self.as_name
 
         if noop:
             translated = message
         else:
-            try:
-                from django.utils.translation import gettext_lazy, pgettext
-            except ImportError as exc:  # pragma: no cover - only when Django absent
-                raise RuntimeError("Django is required to use @trans directive") from exc
+            # Try to get the translation function from context (set by framework integration)
+            # or fall back to Django for compatibility
+            gettext_func = context.get("_gettext")
+            pgettext_func = context.get("_pgettext")
+            
+            if gettext_func is None:
+                # Try Django for backward compatibility
+                try:
+                    from django.utils.translation import gettext_lazy, pgettext
+                    gettext_func = gettext_lazy
+                    pgettext_func = pgettext
+                except ImportError:
+                    # Fallback to standard gettext - requires domain setup
+                    # This is a basic fallback; proper usage requires domain configuration
+                    gettext_func = lambda x: x
+                    pgettext_func = lambda ctx, x: x
 
-            if msg_context:
+            if msg_context and pgettext_func:
                 if not isinstance(msg_context, str):
                     raise TypeError("context must be a string")
-                translated = pgettext(msg_context, message)
+                translated = pgettext_func(msg_context, message)
             else:
-                translated = gettext_lazy(message)
+                translated = gettext_func(message)
 
         if as_variable:
             context[as_variable] = translated
@@ -1119,6 +1116,128 @@ class BlockTranslateNode(Node):
         count='{self.count}', \
         context='{self.context}', \
         trimmed={self.trimmed}')"
+
+    def render(self, context):
+        """Render a block translation with pluralization support.
+
+        Converts {{ variable }} placeholders to %(variable)s for gettext,
+        then translates using ngettext for plural forms.
+        """
+        import gettext
+        import re
+
+        # Render the body to get the template string
+        body_parts = []
+        for node in self.body:
+            rendered = node.render(context)
+            if rendered:
+                body_parts.append(rendered)
+        singular = "".join(body_parts)
+
+        # Normalize whitespace if trimmed
+        if self.trimmed:
+            singular = " ".join(singular.split())
+
+        # Convert {{ variable }} placeholders to %(variable)s
+        placeholder_pattern = re.compile(r'\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}')
+        singular = placeholder_pattern.sub(r'%(\1)s', singular)
+
+        # Handle plural form
+        if self.plural_body:
+            plural_parts = []
+            for node in self.plural_body:
+                rendered = node.render(context)
+                if rendered:
+                    plural_parts.append(rendered)
+            plural = "".join(plural_parts)
+
+            if self.trimmed:
+                plural = " ".join(plural.split())
+
+            # Convert placeholders in plural form
+            plural = placeholder_pattern.sub(r'%(\1)s', plural)
+
+            # Evaluate count expression
+            count_value = 1
+            if self.count:
+                try:
+                    count_value = self.eval(self.count, context)
+                    if not isinstance(count_value, (int, float)):
+                        count_value = 1
+                except Exception:
+                    count_value = 1
+
+            # Get translation functions
+            ngettext_func = context.get("_ngettext")
+            npgettext_func = context.get("_npgettext")
+
+            if ngettext_func is None:
+                # Try Django for backward compatibility
+                try:
+                    from django.utils.translation import ngettext_lazy, npgettext
+                    ngettext_func = ngettext_lazy
+                    npgettext_func = npgettext
+                except ImportError:
+                    # Fallback
+                    ngettext_func = lambda s, p, n: s if n == 1 else p
+                    npgettext_func = lambda ctx, s, p, n: s if n == 1 else p
+
+            # Build interpolation dict from context
+            # Extract all placeholder names from the template
+            placeholders = placeholder_pattern.findall(singular)
+            interp_dict = {}
+            for placeholder in placeholders:
+                if placeholder in context:
+                    interp_dict[placeholder] = context[placeholder]
+
+            # Translate with pluralization
+            if self.context and npgettext_func:
+                translated = npgettext_func(self.context, singular, plural, count_value)
+            else:
+                translated = ngettext_func(singular, plural, count_value)
+
+            # Interpolate placeholders
+            try:
+                result = translated % interp_dict
+            except (KeyError, TypeError):
+                # If interpolation fails, return the translated string as-is
+                result = translated
+
+            return result
+        else:
+            # Singular only
+            gettext_func = context.get("_gettext")
+            pgettext_func = context.get("_pgettext")
+
+            if gettext_func is None:
+                try:
+                    from django.utils.translation import gettext_lazy, pgettext
+                    gettext_func = gettext_lazy
+                    pgettext_func = pgettext
+                except ImportError:
+                    gettext_func = lambda x: x
+                    pgettext_func = lambda ctx, x: x
+
+            # Build interpolation dict
+            placeholders = placeholder_pattern.findall(singular)
+            interp_dict = {}
+            for placeholder in placeholders:
+                if placeholder in context:
+                    interp_dict[placeholder] = context[placeholder]
+
+            # Translate
+            if self.context and pgettext_func:
+                translated = pgettext_func(self.context, singular)
+            else:
+                translated = gettext_func(singular)
+
+            # Interpolate placeholders
+            try:
+                result = translated % interp_dict
+            except (KeyError, TypeError):
+                result = translated
+
+            return result
 
 
 class WithNode(Node):
