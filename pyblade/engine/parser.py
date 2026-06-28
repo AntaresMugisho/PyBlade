@@ -214,9 +214,9 @@ class Parser:
                 elif directive_name == "ratio":
                     ast.append(self._parse_ratio(directive_args_str, token))
                 elif directive_name == "get_static_prefix":
-                    ast.append(GetStaticPrefixNode())
+                    ast.append(self._parse_get_static_prefix(directive_args_str, token))
                 elif directive_name == "get_media_prefix":
-                    ast.append(GetMediaPrefixNode())
+                    ast.append(self._parse_get_media_prefix(directive_args_str, token))
                 elif directive_name == "querystring":
                     ast.append(self._parse_querystring(directive_args_str, token))
                 elif directive_name == "block":
@@ -1028,6 +1028,38 @@ class Parser:
             as_name = None
 
         return StaticNode(path, as_name, line=token.line, column=token.column)
+
+    def _parse_get_static_prefix(self, args_str, token):
+        """Parse @get_static_prefix or @get_static_prefix(as variable_name)"""
+        # Remove parentheses if present
+        match = re.match(r"^\s*\((.*)\)\s*$", args_str)
+        if match:
+            inner_args = match.group(1).strip()
+        else:
+            inner_args = args_str.strip()
+
+        # Check if there's an 'as' clause
+        if inner_args.startswith("as "):
+            as_name = inner_args[3:].strip()
+            return GetStaticPrefixNode(as_name=as_name, line=token.line, column=token.column)
+        else:
+            return GetStaticPrefixNode(line=token.line, column=token.column)
+
+    def _parse_get_media_prefix(self, args_str, token):
+        """Parse @get_media_prefix or @get_media_prefix(as variable_name)"""
+        # Remove parentheses if present
+        match = re.match(r"^\s*\((.*)\)\s*$", args_str)
+        if match:
+            inner_args = match.group(1).strip()
+        else:
+            inner_args = args_str.strip()
+
+        # Check if there's an 'as' clause
+        if inner_args.startswith("as "):
+            as_name = inner_args[3:].strip()
+            return GetMediaPrefixNode(as_name=as_name, line=token.line, column=token.column)
+        else:
+            return GetMediaPrefixNode(line=token.line, column=token.column)
 
     def _parse_method(self, args_str):
         method = self._extract_expression_from_args(args_str, "@method")

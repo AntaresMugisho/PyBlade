@@ -1451,32 +1451,54 @@ class RatioNode(Node):
 class GetStaticPrefixNode(Node):
     """Represents a @get_static_prefix directive."""
 
+    def __init__(self, as_name=None, line=None, column=None):
+        super().__init__(line, column)
+        self.as_name = as_name
+
     def __repr__(self):
-        return "GetStaticPrefixNode()"
+        return f"GetStaticPrefixNode(as_name='{self.as_name}')"
 
     def render(self, context):
         try:
             from django.conf import settings as dj_settings
 
-            return dj_settings.STATIC_URL
+            result = dj_settings.STATIC_URL
         except Exception:
             # Fallback to a sensible default
-            return "/static/"
+            result = "/static/"
+
+        # If 'as variable_name' was specified, store the result in context
+        if self.as_name:
+            context[self.as_name] = result
+            return ""  # Don't output anything when storing to variable
+        else:
+            return result
 
 
 class GetMediaPrefixNode(Node):
     """Represents a @get_media_prefix directive."""
 
+    def __init__(self, as_name=None, line=None, column=None):
+        super().__init__(line, column)
+        self.as_name = as_name
+
     def __repr__(self):
-        return "GetMediaPrefixNode()"
+        return f"GetMediaPrefixNode(as_name='{self.as_name}')"
 
     def render(self, context):
         try:
             from django.conf import settings as dj_settings
 
-            return dj_settings.MEDIA_URL
+            result = dj_settings.MEDIA_URL
         except Exception:
-            return "/media/"
+            result = "/media/"
+
+        # If 'as variable_name' was specified, store the result in context
+        if self.as_name:
+            context[self.as_name] = result
+            return ""  # Don't output anything when storing to variable
+        else:
+            return result
 
 
 class QuerystringNode(Node):
