@@ -1010,15 +1010,21 @@ class Parser:
 
     def _parse_static(self, args_str, token):
         """Parse @static(path) or @static(path as variable_name)"""
-        path = self._extract_expression_from_args(args_str, "@static")
+        # Remove parentheses and parse arguments
+        match = re.match(r"^\s*\((.*)\)\s*$", args_str)
+        if match:
+            inner_args = match.group(1).strip()
+        else:
+            inner_args = args_str.strip()
 
-        # Check if there's an 'as' clause in the original args_str
-        if " as " in args_str:
+        # Check if there's an 'as' clause
+        if " as " in inner_args:
             # Split on ' as ' to separate the path from the variable name
-            path_part, as_name = args_str.split(" as ", 1)
-            path = self._extract_expression_from_args(path_part.strip(), "@static")
+            path_part, as_name = inner_args.split(" as ", 1)
+            path = path_part.strip()
             as_name = as_name.strip()
         else:
+            path = inner_args
             as_name = None
 
         return StaticNode(path, as_name, line=token.line, column=token.column)

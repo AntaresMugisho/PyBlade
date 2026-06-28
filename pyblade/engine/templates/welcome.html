@@ -38,24 +38,24 @@
 </head>
 <body class="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 min-h-screen text-slate-100">
     <div class="max-w-7xl mx-auto px-6 py-12">
-        <!-- Header Section -->
+        {# Header Section #}
         <div class="text-left mb-16 animate-fade-in">
             <div class="flex items-center justify-center gap-8 mb-8">
-                <!-- PyBlade Logo -->
+                {# PyBlade Logo #}
                 <div class="no-animate-float">
                     <img src="./pyblade.png" alt="PyBlade Logo" class="w-20 h-20">
                 </div>
 
-                <!-- Plus Icon -->
+                {# Plus Icon #}
                 <div class="text-slate-600">
                     <svg class="w-12 h-12" fill="currentColor" viewBox="0 0 20 20">
                         <path fill-rule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clip-rule="evenodd"/>
                     </svg>
                 </div>
 
-                <!-- Framework Logo Placeholder (will be dynamically set) -->
+                {# Framework Logo Placeholder (will be dynamically set) #}
                 <div id="framework-logo" class="no-animate-float" style="animation-delay: 0.2s;">
-                    <!-- Django Logo -->
+                    {# Django Logo #}
                     <div class="framework-django">
                         <svg class="w-24 h-24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                             <rect width="24" height="24" rx="4" fill="#092E20"/>
@@ -63,7 +63,7 @@
                             <path d="M15 9h3c0 2.5-.8 4.5-3 4.5v-2.4c.8 0 1.5-.5 1.5-1.3V9h-1.5V9z" fill="#FFF"/>
                         </svg>
                     </div>
-                    <!-- Flask Logo -->
+                    {# Flask Logo #}
                     <div class="framework-flask hidden">
                         <svg class="w-24 h-24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                             <path d="M9 3h6v2H9V3zm1 3h4v5l4 8c.5 1 0 2-1 2H7c-1 0-1.5-1-1-2l4-8V6z" fill="#FFF"/>
@@ -72,7 +72,7 @@
                             <circle cx="15" cy="15" r="1" fill="#000"/>
                         </svg>
                     </div>
-                    <!-- FastAPI Logo -->
+                    {# FastAPI Logo #}
                     <div class="framework-fastapi hidden">
                         <svg class="w-24 h-24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                             <rect width="24" height="24" rx="4" fill="#009688"/>
@@ -96,9 +96,9 @@
             </div>
         </div>
 
-        <!-- Quick Links Grid -->
+        {# Quick Links Grid #}
         <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
-            <!-- PyBlade Documentation -->
+            {# PyBlade Documentation #}
             <a href="https://docs.pyblade.dev" class="card-hover bg-gradient-to-br from-blue-500/10 to-blue-600/10 border border-blue-500/30 rounded-xl p-6 animate-fade-in stagger-1">
                 <div class="flex items-start gap-4">
                     <div class="bg-blue-500 rounded-lg p-3 flex-shrink-0">
@@ -113,7 +113,7 @@
                 </div>
             </a>
 
-            <!-- Framework Documentation -->
+            {# Framework Documentation #}
             <a href="#" id="framework-docs" class="card-hover bg-gradient-to-br from-yellow-500/10 to-yellow-600/10 border border-yellow-500/30 rounded-xl p-6 animate-fade-in stagger-2">
                 <div class="flex items-start gap-4">
                     <div class="bg-yellow-500 rounded-lg p-3 flex-shrink-0">
@@ -128,7 +128,7 @@
                 </div>
             </a>
 
-            <!-- GitHub Repository -->
+            {# GitHub Repository #}
             <a href="https://github.com/antaresmugisho/PyBlade" class="card-hover bg-gradient-to-br from-purple-500/10 to-purple-600/10 border border-purple-500/30 rounded-xl p-6 animate-fade-in stagger-3">
                 <div class="flex items-start gap-4">
                     <div class="bg-purple-500 rounded-lg p-3 flex-shrink-0">
@@ -143,7 +143,7 @@
                 </div>
             </a>
 
-            <!-- Community -->
+            {# Community #}
             <a href="#" class="card-hover bg-gradient-to-br from-green-500/10 to-green-600/10 border border-green-500/30 rounded-xl p-6 animate-fade-in stagger-4">
                 <div class="flex items-start gap-4">
                     <div class="bg-green-500 rounded-lg p-3 flex-shrink-0">
@@ -158,7 +158,7 @@
                 </div>
             </a>
 
-            <!-- Examples -->
+            {# Examples #}
             <a href="#" class="card-hover bg-gradient-to-br from-orange-500/10 to-orange-600/10 border border-orange-500/30 rounded-xl p-6 animate-fade-in stagger-1">
                 <div class="flex items-start gap-4">
                     <div class="bg-orange-500 rounded-lg p-3 flex-shrink-0">
@@ -173,7 +173,7 @@
                 </div>
             </a>
 
-            <!-- PyPI Package -->
+            {# PyPI Package #}
             <a href="#" class="card-hover bg-gradient-to-br from-cyan-500/10 to-cyan-600/10 border border-cyan-500/30 rounded-xl p-6 animate-fade-in stagger-2">
                 <div class="flex items-start gap-4">
                     <div class="bg-cyan-500 rounded-lg p-3 flex-shrink-0">
@@ -189,7 +189,7 @@
             </a>
         </div>
 
-        <!-- Features Section -->
+        {# Features Section #}
         <div class="bg-slate-800/50 backdrop-blur-sm rounded-2xl border border-slate-700/50 p-8 mb-12 animate-fade-in stagger-3">
             <h2 class="text-2xl font-bold mb-6 flex items-center gap-3">
                 <svg class="w-7 h-7 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -267,7 +267,7 @@
             </div>
         </div>
 
-        <!-- Footer -->
+        {# Footer #}
         <div class="mt-12 text-center text-slate-500 text-sm">
             <p>PyBlade Template Engine - The joy of template coding</p>
         </div>
