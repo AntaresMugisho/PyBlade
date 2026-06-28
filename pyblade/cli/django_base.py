@@ -9,7 +9,7 @@ from pyblade.utils import get_project_root
 # Mapping of Django commands to PyBlade command aliases
 DJANGO_COMMAND_ALIASES = {
     "check": [],
-    "compilemessages": ["messages:compile"],
+    "compilemessages": [],
     "changepassword": ["password:change"],
     "clearsessions": ["sessions:clear"],
     "createcachetable": ["make:cachetable"],
@@ -22,7 +22,7 @@ DJANGO_COMMAND_ALIASES = {
     "findstatic": ["static:find"],
     "inspectdb": ["db:inspect"],
     "loaddata": ["data:load"],
-    "makemessages": ["make:messages", "messages:make"],
+    "makemessages": [],
     "makemigrations": ["make:migrations"],
     "migrate": [],
     "optimizemigration": ["migrations:optimize"],
