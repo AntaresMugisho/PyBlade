@@ -117,7 +117,7 @@ class Parser:
                 directive_full_str = token.value
 
                 # Extract directive name and its argument string from the full directive token value
-                match = re.match(r"@([a-zA-Z_][a-zA-Z0-9_]*)(.*)", directive_full_str)
+                match = re.match(r"@([a-zA-Z_*[a-zA-Z0-9_]*)(.*)", directive_full_str)
                 if not match:
                     raise SyntaxError(
                         f"Invalid directive format: {directive_full_str} at line {token.line}, col {token.column}"
@@ -141,7 +141,7 @@ class Parser:
                     ast.append(self._parse_switch(directive_args_str, token, directive_name))
                 elif directive_name == "auth":
                     ast.append(self._parse_auth(directive_args_str, token))
-                elif directive_name == "guest":
+                elif directive_name == "guest" or directive_name == "anonymous":
                     ast.append(self._parse_guest(directive_args_str, token))
                 elif directive_name == "ifchanged":
                     ast.append(self._parse_ifchanged(directive_args_str, token))
@@ -189,9 +189,9 @@ class Parser:
                     ast.append(self._parse_lorem(directive_args_str))
                 elif directive_name == "spaceless":
                     ast.append(self._parse_spaceless(directive_args_str, token))
-                elif directive_name == "trans" or directive_name == "translate":
+                elif directive_name == "translate" or directive_name == "trans":
                     ast.append(self._parse_trans(directive_args_str, token))
-                elif directive_name == "blocktranslate":
+                elif directive_name == "blocktranslate" or directive_name == "blocktrans":
                     ast.append(self._parse_blocktranslate(directive_args_str, token))
                 elif directive_name == "with":
                     ast.append(self._parse_with(directive_args_str))
@@ -209,17 +209,15 @@ class Parser:
                     ast.append(self._parse_required(directive_args_str))
                 elif directive_name == "checked":
                     ast.append(self._parse_checked(directive_args_str))
-                elif directive_name == "autocomplete":
-                    ast.append(self._parse_autocomplete(directive_args_str))
                 elif directive_name == "ratio":
                     ast.append(self._parse_ratio(directive_args_str, token))
-                elif directive_name == "get_static_prefix":
+                elif directive_name == "get_static_prefix" or directive_name == "gsp":
                     ast.append(self._parse_get_static_prefix(directive_args_str, token))
-                elif directive_name == "get_media_prefix":
+                elif directive_name == "get_media_prefix" or direcive_name == "gmp":
                     ast.append(self._parse_get_media_prefix(directive_args_str, token))
                 elif directive_name == "querystring":
                     ast.append(self._parse_querystring(directive_args_str, token))
-                elif directive_name == "block":
+                elif directive_name == "block" or direcive_name == "section":
                     ast.append(self._parse_block(directive_args_str))
                 elif directive_name == "live":
                     ast.append(LiveBladeNode())

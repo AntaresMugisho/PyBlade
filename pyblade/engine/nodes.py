@@ -1,3 +1,4 @@
+import gettext
 import random
 import re
 from html import escape as html_escape
@@ -1040,7 +1041,6 @@ class TranslateNode(Node):
         Falls back to Django's i18n when available for compatibility.
         """
         import re as _re
-        import gettext
 
         args_str = self.message.strip()
         if args_str.startswith("(") and args_str.endswith(")"):
@@ -1085,6 +1085,9 @@ class TranslateNode(Node):
                     gettext_func = lambda x: x
                     pgettext_func = lambda ctx, x: x
 
+            print(gettext_func)
+            print(pgettext_func)
+            
             if msg_context and pgettext_func:
                 if not isinstance(msg_context, str):
                     raise TypeError("context must be a string")
@@ -1123,9 +1126,6 @@ class BlockTranslateNode(Node):
         Converts {{ variable }} placeholders to %(variable)s for gettext,
         then translates using ngettext for plural forms.
         """
-        import gettext
-        import re
-
         # Render the body to get the template string
         body_parts = []
         for node in self.body:
