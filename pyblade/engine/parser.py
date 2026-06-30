@@ -213,11 +213,11 @@ class Parser:
                     ast.append(self._parse_ratio(directive_args_str, token))
                 elif directive_name == "get_static_prefix" or directive_name == "gsp":
                     ast.append(self._parse_get_static_prefix(directive_args_str, token))
-                elif directive_name == "get_media_prefix" or direcive_name == "gmp":
+                elif directive_name == "get_media_prefix" or directive_name == "gmp":
                     ast.append(self._parse_get_media_prefix(directive_args_str, token))
                 elif directive_name == "querystring":
                     ast.append(self._parse_querystring(directive_args_str, token))
-                elif directive_name == "block" or direcive_name == "section":
+                elif directive_name == "block" or directive_name == "section":
                     ast.append(self._parse_block(directive_args_str))
                 elif directive_name == "live":
                     ast.append(LiveBladeNode())
@@ -718,7 +718,9 @@ class Parser:
             message = inner_args
             as_name = None
 
-        return TranslateNode(message, as_name=as_name, line=token.line if token else None, column=token.column if token else None)
+        return TranslateNode(
+            message, as_name=as_name, line=token.line if token else None, column=token.column if token else None
+        )
 
     def _parse_blocktranslate(self, args_str, token=None):
         """Parses an @blocktranslate...@endblocktranslate block."""

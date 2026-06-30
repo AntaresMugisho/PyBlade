@@ -34,7 +34,6 @@ DEFAULT_COMMANDS = {
         "make:template",
         "messages:make",
         "messages:compile",
-
         "tailwind:config",
         "upgrade",
     ],
@@ -156,8 +155,7 @@ class CommandGroup(click.Group):
 
     def format_help(self, ctx, formatter):
         """Format the help text with Rich formatting."""
-        console.print(
-            """
+        console.print("""
 [bold]Welcome in the [blue]PyBlade CLI[/blue][/bold]
 [italic]- The modern Python web development toolkit -[/italic]
 
@@ -167,8 +165,7 @@ class CommandGroup(click.Group):
   [blue]-h, --help[/blue]\tShow this message and exit.
 
 [bold italic]Available commands[/bold italic]:
-"""
-        )
+""")
 
         table = Table(show_header=True, header_style="white", box=None)
         table.add_column("Command", justify="left")

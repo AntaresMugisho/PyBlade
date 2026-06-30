@@ -129,4 +129,3 @@ class Command(BaseCommand):
         except Exception as e:
             self.error(f"Could not compile {po_file}: {e}")
             return False
-

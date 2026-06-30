@@ -57,9 +57,10 @@ def get_project_root():
     for directory in [current, *current.parents]:
         if (directory / "pyblade.json").exists():
             return directory
-    
+
     # Falback to CWD if no pyblade.json file was found
     return current
-    
+
+
 def setup_django():
     pass

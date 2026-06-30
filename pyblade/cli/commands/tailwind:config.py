@@ -3,7 +3,7 @@ from pathlib import Path
 from pyblade.cli import BaseCommand
 from pyblade.cli.exceptions import CommandError
 from pyblade.config import Config
-from pyblade.utils import run_command, get_project_root
+from pyblade.utils import get_project_root, run_command
 
 
 class Command(BaseCommand):
@@ -55,7 +55,6 @@ class Command(BaseCommand):
             return
 
         self.success("Tailwind CSS 4 has been configured successfully.")
-
 
     def _npm_install(self, package: str):
         """Installs an NPM package using npm"""

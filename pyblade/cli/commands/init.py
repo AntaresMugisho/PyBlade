@@ -6,7 +6,7 @@ from questionary import Choice
 from pyblade.cli import BaseCommand
 from pyblade.cli.exceptions import CommandError
 from pyblade.config import Config
-from pyblade.utils import get_version, run_command, get_project_root
+from pyblade.utils import get_project_root, get_version, run_command
 
 _SETTINGS_PATERN = re.compile(
     r"\"\"\"(?P<banner>.*?)\"\"\"\s*.*?\s*INSTALLED_APPS\s=\s\[\s*(?P<installed_apps>.*?)\s*\]\s*.*?\s*MIDDLEWARE\s=\s\[\s*(?P<middleware>.*?)\s*\]\s*.*?\s*TEMPLATES\s=\s*\[\s*(?P<templates>\{.*?\},)\n\]",  # noqa E501
@@ -48,14 +48,12 @@ class Command(BaseCommand):
                 return
 
             # Confirm project details
-            self.line(
-                f"""
+            self.line(f"""
     Project details :
         - Project name : [bold]{self.project.name}[/bold]
         - Framework : [bold]{self.project.framework.capitalize()}[/bold]
         - CSS framework : [bold]{self.project.css_framework or 'None'}[/bold]
-    """
-            )
+    """)
 
             if not self.confirm("Is this correct?", True):
                 self.info("Aborted by user.")
@@ -107,7 +105,9 @@ class Command(BaseCommand):
                         self._configure_bootstrap()
 
                 status.update("Making things ready ...")
-                self.success(f"Your [bold]{self.project.framework.capitalize()}[/bold] project powered by PyBlade was created and configured successfully.")
+                self.success(
+                    f"Your [bold]{self.project.framework.capitalize()}[/bold] project powered by PyBlade was created and configured successfully."
+                )
                 self.line("Run [blue]pyblade serve[/blue] to start a development server.\n")
 
     def _configure_pyblade(self):

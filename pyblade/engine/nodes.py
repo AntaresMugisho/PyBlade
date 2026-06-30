@@ -1,4 +1,3 @@
-import gettext
 import random
 import re
 from html import escape as html_escape
@@ -13,6 +12,7 @@ from pyblade.engine.exceptions import (
     TemplateNotFoundError,
     TemplateRenderError,
 )
+from pyblade.i18n import gettext, ngettext, pgettext, npgettext
 
 from . import loader
 from .contexts import CycleContext, LoopContext
@@ -1068,32 +1068,12 @@ class TranslateNode(Node):
         if noop:
             translated = message
         else:
-            # Try to get the translation function from context (set by framework integration)
-            # or fall back to Django for compatibility
-            gettext_func = context.get("_gettext")
-            pgettext_func = context.get("_pgettext")
-            
-            if gettext_func is None:
-                # Try Django for backward compatibility
-                try:
-                    from django.utils.translation import gettext_lazy, pgettext
-                    gettext_func = gettext_lazy
-                    pgettext_func = pgettext
-                except ImportError:
-                    # Fallback to standard gettext - requires domain setup
-                    # This is a basic fallback; proper usage requires domain configuration
-                    gettext_func = lambda x: x
-                    pgettext_func = lambda ctx, x: x
-
-            print(gettext_func)
-            print(pgettext_func)
-            
-            if msg_context and pgettext_func:
+            if msg_context:
                 if not isinstance(msg_context, str):
                     raise TypeError("context must be a string")
-                translated = pgettext_func(msg_context, message)
+                translated = pgettext(msg_context, message)
             else:
-                translated = gettext_func(message)
+                translated = gettext(message)
 
         if as_variable:
             context[as_variable] = translated
@@ -1139,8 +1119,8 @@ class BlockTranslateNode(Node):
             singular = " ".join(singular.split())
 
         # Convert {{ variable }} placeholders to %(variable)s
-        placeholder_pattern = re.compile(r'\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}')
-        singular = placeholder_pattern.sub(r'%(\1)s', singular)
+        placeholder_pattern = re.compile(r"\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}")
+        singular = placeholder_pattern.sub(r"%(\1)s", singular)
 
         # Handle plural form
         if self.plural_body:
@@ -1155,7 +1135,7 @@ class BlockTranslateNode(Node):
                 plural = " ".join(plural.split())
 
             # Convert placeholders in plural form
-            plural = placeholder_pattern.sub(r'%(\1)s', plural)
+            plural = placeholder_pattern.sub(r"%(\1)s", plural)
 
             # Evaluate count expression
             count_value = 1
@@ -1167,20 +1147,6 @@ class BlockTranslateNode(Node):
                 except Exception:
                     count_value = 1
 
-            # Get translation functions
-            ngettext_func = context.get("_ngettext")
-            npgettext_func = context.get("_npgettext")
-
-            if ngettext_func is None:
-                # Try Django for backward compatibility
-                try:
-                    from django.utils.translation import ngettext_lazy, npgettext
-                    ngettext_func = ngettext_lazy
-                    npgettext_func = npgettext
-                except ImportError:
-                    # Fallback
-                    ngettext_func = lambda s, p, n: s if n == 1 else p
-                    npgettext_func = lambda ctx, s, p, n: s if n == 1 else p
 
             # Build interpolation dict from context
             # Extract all placeholder names from the template
@@ -1191,10 +1157,10 @@ class BlockTranslateNode(Node):
                     interp_dict[placeholder] = context[placeholder]
 
             # Translate with pluralization
-            if self.context and npgettext_func:
-                translated = npgettext_func(self.context, singular, plural, count_value)
+            if self.context:
+                translated = npgettext(self.context, singular, plural, count_value)
             else:
-                translated = ngettext_func(singular, plural, count_value)
+                translated = ngettext(singular, plural, count_value)
 
             # Interpolate placeholders
             try:
@@ -1205,19 +1171,6 @@ class BlockTranslateNode(Node):
 
             return result
         else:
-            # Singular only
-            gettext_func = context.get("_gettext")
-            pgettext_func = context.get("_pgettext")
-
-            if gettext_func is None:
-                try:
-                    from django.utils.translation import gettext_lazy, pgettext
-                    gettext_func = gettext_lazy
-                    pgettext_func = pgettext
-                except ImportError:
-                    gettext_func = lambda x: x
-                    pgettext_func = lambda ctx, x: x
-
             # Build interpolation dict
             placeholders = placeholder_pattern.findall(singular)
             interp_dict = {}
@@ -1226,10 +1179,10 @@ class BlockTranslateNode(Node):
                     interp_dict[placeholder] = context[placeholder]
 
             # Translate
-            if self.context and pgettext_func:
-                translated = pgettext_func(self.context, singular)
+            if self.context:
+                translated = pgettext(self.context, singular)
             else:
-                translated = gettext_func(singular)
+                translated = gettext(singular)
 
             # Interpolate placeholders
             try:

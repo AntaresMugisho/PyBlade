@@ -12,7 +12,7 @@ from pyblade.engine.parser import Parser
 class Command(BaseCommand):
     """
     Runs over the entire source tree of the current directory and pulls out all strings marked for translation.
-    
+
     You must run this command with one of either the --locale, --exclude, or --all options.
     """
 
@@ -190,7 +190,7 @@ class Command(BaseCommand):
 
     def _extract_from_node(self, node, template_path, messages):
         """Recursively extract translatable strings from AST nodes"""
-        from pyblade.engine.nodes import TranslateNode, BlockTranslateNode
+        from pyblade.engine.nodes import BlockTranslateNode, TranslateNode
 
         if isinstance(node, TranslateNode):
             # Extract the message string
@@ -261,8 +261,8 @@ class Command(BaseCommand):
             message = " ".join(message.split())
 
         # Convert {{ variable }} placeholders to %(variable)s
-        placeholder_pattern = re.compile(r'\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}')
-        message = placeholder_pattern.sub(r'%(\1)s', message)
+        placeholder_pattern = re.compile(r"\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}")
+        message = placeholder_pattern.sub(r"%(\1)s", message)
 
         return message
 
@@ -314,4 +314,3 @@ class Command(BaseCommand):
         # Save the .po file
         po.save(str(po_file))
         self.info(f"Updated {po_file}")
-

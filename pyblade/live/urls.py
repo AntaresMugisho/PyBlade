@@ -1,8 +1,9 @@
 from django.http import JsonResponse
 from django.urls import path
-from django.views.generic import TemplateView
 from django.views.decorators.csrf import csrf_exempt
-from  pyblade.live import liveBlade
+from django.views.generic import TemplateView
+
+from pyblade.live import liveBlade
 
 
 def LiveBladeView(request):
@@ -12,5 +13,5 @@ def LiveBladeView(request):
 
 
 urlpatterns = [
-    path('live/', csrf_exempt(liveBlade.Live), name='live'),
+    path("live/", csrf_exempt(liveBlade.Live), name="live"),
 ]

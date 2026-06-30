@@ -12,6 +12,9 @@ class Config:
         "templates_dir": "templates",
         "components_dir": "components",
         "commands_dir": "management/commands",
+        "default_locale": "en",
+        "translation_domain": "pyblade",
+        "locale_dir": "locale",
         "stubs_dir": str(Path(__file__).parent / "cli/stubs"),
         "live": {
             "paginator": None,
