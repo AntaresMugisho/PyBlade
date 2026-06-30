@@ -18,10 +18,11 @@ def _get_default_locale() -> str:
     if settings.framework == "django":
         try:
             from django.utils.translation import get_language
+
             return get_language()
         except Exception:
             pass
-    
+
     # Fallback to the default locale from settings or environment variable
     value = getattr(settings, "default_locale", None)
     if value:
