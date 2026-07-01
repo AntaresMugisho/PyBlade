@@ -116,7 +116,7 @@ class Command(BaseCommand):
             locales_to_process = locale.split(",")
 
         self.info(f"Processing {len(locales_to_process)} locale{'' if len(locales_to_process) == 1 else 's'}: \
-                {', '.join(locales_to_process)}")
+{', '.join(locales_to_process)}")
 
         # Get project root directory
         project_root = get_project_root()
