@@ -24,16 +24,16 @@ class Command(BaseCommand):
         name = pascal_to_snake(kwargs.get("name"))
         path, component_name = split_dotted_path(name)
 
-        components_dir = Path(settings.live.components_dir / path)
-        templates_dir = Path(settings.templates_dir, settings.live.templates_dir / path)
+        classes_dir = Path(settings.components_dir, settings.live.classes_dir, path)
+        templates_dir = Path(settings.components_dir, settings.live.templates_dir, path)
 
         # Ensure live directories exist
-        components_dir.mkdir(parents=True, exist_ok=True)
+        classes_dir.mkdir(parents=True, exist_ok=True)
         templates_dir.mkdir(parents=True, exist_ok=True)
 
         # Create component path
         html_file = templates_dir / f"{component_name}.html"
-        python_file = components_dir / f"{component_name}.py"
+        python_file = classes_dir / f"{component_name}.py"
 
         # Check for existing files
         if html_file.exists() or python_file.exists():
@@ -80,6 +80,6 @@ class Command(BaseCommand):
             file.write(python_template)
 
         self.success("Live component created successfully:")
-        self.line(f"  - Python: {python_file}")
         if not kwargs.get("inline"):
             self.line(f"  - HTML: {html_file}")
+        self.line(f"  - Python: {python_file}")

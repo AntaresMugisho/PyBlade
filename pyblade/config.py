@@ -13,12 +13,12 @@ class Config:
         "components_dir": "components",
         "commands_dir": "management/commands",
         "default_locale": "en",
-        "translation_domain": "pyblade",
+        "locale_domain": "pyblade",
         "locale_dir": "locale",
         "stubs_dir": str(Path(__file__).parent / "cli/stubs"),
         "live": {
             "paginator": None,
-            "components_dir": "live",
+            "classes_dir": "live",
             "templates_dir": "live",
         },
     }

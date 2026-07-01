@@ -120,6 +120,10 @@ class BaseCommand:
         """Must return the value of the option if it exists or None if not"""
         pass
 
+    def get(self, arg: str, default=None):
+        """Must return the value of the argument/option if it exists or the default value if not"""
+        pass
+
     # Prompting for inputs
     def ask(self, message: str, default: str = "") -> str:
         return questionary.text(message, default=default, style=questionnary_style).unsafe_ask()
@@ -141,11 +145,15 @@ class BaseCommand:
         return Response(*[answer for answer in questions.values()])
 
     # Command output
+
     def info(self, message: str):
         console.print(f"\n [info] INFO [/info] {message}\n")
 
-    def success(self, message: str):
-        console.print(f"\n[green] ✔️[/green] [bold] {message}[bold]\n")
+    def success(self, message: str, bold: bool = True):
+        if bold:
+            console.print(f"[green] ✓[/green][bold] {message}[bold]")
+        else:
+            console.print(f"[green] ✓[/green] {message}")
 
     def error(self, message: str):
         console.print(f"\n [danger] ERROR [/danger] {message}\n")
@@ -156,8 +164,11 @@ class BaseCommand:
     def tip(self, message: str):
         console.print(f" [tip] TIP [/tip] {message}\n")
 
-    def line(self, message: str):
+    def print(self, message: str):
         console.print(message)
+
+    def line(self, message: str):
+        self.print(message)
 
     def new_line(self, n: int = 1):
         console.print("\n" * n)

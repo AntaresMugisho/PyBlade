@@ -5,6 +5,7 @@ from pathlib import Path
 import polib
 
 from pyblade.cli import BaseCommand
+from pyblade.config import settings
 from pyblade.engine.lexer import Lexer
 from pyblade.engine.parser import Parser
 
@@ -25,22 +26,9 @@ class Command(BaseCommand):
             "--locale",
             "-l",
             help="The locale to create messages for (e.g., 'fr', 'de', 'es')",
-            required=True,
-        )
-        self.add_option(
-            "--domain",
-            "-d",
-            help="The gettext domain to use (default: 'pyblade')",
             required=False,
-            default="pyblade",
         )
-        self.add_option(
-            "--extensions",
-            "-e",
-            help="Comma-separated list of file extensions to parse (default: 'html,py')",
-            required=False,
-            default="html,py",
-        )
+
         self.add_option(
             "--all",
             "-a",
@@ -48,34 +36,66 @@ class Command(BaseCommand):
             is_flag=True,
             required=False,
         )
+
+        self.add_option(
+            "--exclude",
+            "-x",
+            help="Comma-separated list of locales to exclude from processing (e.g., 'fr,de')",
+            required=False,
+        )
+
+        self.add_option(
+            "--domain",
+            "-d",
+            help="The gettext domain to use (default: 'django' for django projects or 'pyblade' for other frameworks)",
+            required=False,
+            default="pyblade",
+        )
+
+        self.add_option(
+            "--extensions",
+            "-e",
+            help="Comma-separated list of file extensions to parse (default: 'html,py')",
+            required=False,
+            default="html",
+        )
+
         self.add_option(
             "--ignore",
             "-i",
-            help="Comma-separated list of directories to ignore",
+            help="Comma-separated list of files/directories to ignore",
             required=False,
-            default="venv,env,.git,node_modules",
-        )
-        self.add_option(
-            "--no-obsolete",
-            help="Remove obsolete messages from .po files",
-            is_flag=True,
-            required=False,
+            default="venv,env,.env,.venv,.git,node_modules",
         )
 
     def handle(self, **kwargs):
         """Execute the 'pyblade messages:make' command"""
         locale = kwargs.get("locale")
-        domain = kwargs.get("domain", "pyblade")
-        extensions = kwargs.get("extensions", "html,py").split(",")
         all_locales = kwargs.get("all", False)
-        ignore_dirs = kwargs.get("ignore", "venv,env,.env,.venv,.git,node_modules").split(",")
-        no_obsolete = kwargs.get("no_obsolete", False)
+        excluded_locales = kwargs.get("exclude")
+        domain = kwargs.get("domain")
+        extensions = kwargs.get("extensions").split(",")
+        ignore_dirs = kwargs.get("ignore").split(",")
+
+        # Validate that at least one locale option is provided
+        if not locale and not all_locales and not excluded_locales:
+            self.error("You must specify one of: --locale, --all, or --exclude.")
+            self.tip("Type 'pyblade make:messages --help' for usage information.")
+            return
 
         # Determine locale directory
         locale_dir = self._find_locale_dir()
         if not locale_dir:
-            self.error("Could not find locale directory. Please create a 'locale' directory.")
+            self.error("Unable to find a locale path to store translations.")
+
+            if settings.framework == "django":
+                self.tip("Make sure the 'LOCALE_PATHS' setting is configured in your Django settings.")
+            else:
+                self.tip("Make sure the 'locale' directory exists or 'locale_dir' setting is set in pyblade.json")
             return
+
+        # Create the locale dir if not exists
+        locale_dir.mkdir(parents=True, exist_ok=True)
 
         # Determine which locales to process
         locales_to_process = []
@@ -84,11 +104,18 @@ class Command(BaseCommand):
             if not locales_to_process:
                 self.warning("No locales found in locale directory.")
                 return
+        elif excluded_locales:
+            all_locales_list = self._get_all_locales(locale_dir)
+            excluded_list = excluded_locales.split(",")
+            locales_to_process = [loc for loc in all_locales_list if loc not in excluded_list]
+            if not locales_to_process:
+                self.warning("No locales to process after excluding specified locales.")
+                return
         elif locale:
-            locales_to_process = [locale]
-        else:
-            self.error("You must specify either --locale or --all")
-            return
+            locales_to_process = locale.split(",")
+
+        self.info(f"Processing {len(locales_to_process)} locale{'' if len(locales_to_process) == 1 else 's'}: \
+                {', '.join(locales_to_process)}")
 
         # Find all template files
         templates_dir = self._find_templates_dir()
@@ -118,21 +145,39 @@ class Command(BaseCommand):
 
         # Process each locale
         for loc in locales_to_process:
-            self._process_locale(locale_dir, loc, domain, all_messages, no_obsolete)
+            self._process_locale(locale_dir, loc, domain, all_messages)
 
         self.success("Message files created/updated successfully")
 
     def _find_locale_dir(self):
         """Find the locale directory"""
-        # Check common locations
-        for path in ["i18n", "locale", "conf/locale", "app/locale"]:
-            if os.path.exists(path):
-                return Path(path)
+        locale_paths = None
+
+        # Find locale paths from Django settings
+        if settings.framework == "django":
+            try:
+                from django.conf import settings as django_settings
+
+                locale_paths = django_settings.LOCALE_PATHS
+                return Path(locale_paths[0]) if locale_paths else None
+            except Exception:
+                pass
+
+        # Fallback to the default 'locale' dir for other frameworks
+        # or use the value in pyblade.json
+        default_locale_dir = settings.locale_dir
+        if default_locale_dir != Path(""):
+            return Path(default_locale_dir)
         return None
 
     def _find_templates_dir(self):
         """Find the templates directory"""
-        for path in ["templates", "app/templates"]:
+        for path in [
+            settings.templates_dir,
+            settings.live.templates_dir,
+            settings.components_dir,
+            settings.live.components_dir,
+        ]:
             if os.path.exists(path):
                 return Path(path)
         return None
@@ -148,8 +193,9 @@ class Command(BaseCommand):
 
     def _find_template_files(self, templates_dir, extensions, ignore_dirs):
         """Find all template files with given extensions"""
+        _default_ignored_dirs = [".git", "__pycache__", ".venv", ".env", "venv", "env", ".idea", ".vscode", ".DS_Store"]
         template_files = []
-        ignore_dirs_set = set(ignore_dirs)
+        ignore_dirs_set = set(ignore_dirs + _default_ignored_dirs)
 
         for root, dirs, files in os.walk(templates_dir):
             # Remove ignored directories from traversal
@@ -266,7 +312,7 @@ class Command(BaseCommand):
 
         return message
 
-    def _process_locale(self, locale_dir, locale, domain, messages, no_obsolete):
+    def _process_locale(self, locale_dir, locale, domain, messages):
         """Process a single locale: create/update .po file"""
         locale_path = locale_dir / locale / "LC_MESSAGES"
         locale_path.mkdir(parents=True, exist_ok=True)
@@ -276,9 +322,7 @@ class Command(BaseCommand):
         # Load existing .po file or create new one
         if po_file.exists():
             po = polib.pofile(str(po_file))
-            if no_obsolete:
-                # Remove obsolete entries
-                po.obsolete_entries = []
+
         else:
             po = polib.POFile()
             po.metadata = {
