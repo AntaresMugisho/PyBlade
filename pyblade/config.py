@@ -13,7 +13,6 @@ class Config:
         "components_dir": "components",
         "commands_dir": "management/commands",
         "default_locale": "en",
-        "locale_domain": "pyblade",
         "locale_dir": "locale",
         "stubs_dir": str(Path(__file__).parent / "cli/stubs"),
         "live": {

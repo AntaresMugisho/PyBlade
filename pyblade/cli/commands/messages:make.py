@@ -8,6 +8,7 @@ from pyblade.cli import BaseCommand
 from pyblade.config import settings
 from pyblade.engine.lexer import Lexer
 from pyblade.engine.parser import Parser
+from pyblade.utils import get_project_root
 
 
 class Command(BaseCommand):
@@ -49,7 +50,7 @@ class Command(BaseCommand):
             "-d",
             help="The gettext domain to use (default: 'django' for django projects or 'pyblade' for other frameworks)",
             required=False,
-            default="pyblade",
+            default="django" if settings.framework == "django" else "pyblade",
         )
 
         self.add_option(
@@ -57,7 +58,7 @@ class Command(BaseCommand):
             "-e",
             help="Comma-separated list of file extensions to parse (default: 'html,py')",
             required=False,
-            default="html",
+            default="html,py",
         )
 
         self.add_option(
@@ -80,7 +81,7 @@ class Command(BaseCommand):
         # Validate that at least one locale option is provided
         if not locale and not all_locales and not excluded_locales:
             self.error("You must specify one of: --locale, --all, or --exclude.")
-            self.tip("Type 'pyblade make:messages --help' for usage information.")
+            self.tip("Type [bright_black]pyblade make:messages --help[/bright_black] for usage information.")
             return
 
         # Determine locale directory
@@ -117,23 +118,24 @@ class Command(BaseCommand):
         self.info(f"Processing {len(locales_to_process)} locale{'' if len(locales_to_process) == 1 else 's'}: \
                 {', '.join(locales_to_process)}")
 
-        # Find all template files
-        templates_dir = self._find_templates_dir()
-        if not templates_dir:
-            self.error("Could not find templates directory.")
+        # Get project root directory
+        project_root = get_project_root()
+        if not project_root:
+            self.error("Could not determine project root directory.")
             return
 
-        template_files = self._find_template_files(templates_dir, extensions, ignore_dirs)
-        if not template_files:
-            self.warning("No template files found.")
+        # Find all files with specified extensions
+        source_files = self._find_source_files(project_root, extensions, ignore_dirs)
+        if not source_files:
+            self.warning("No source files found with the specified extensions.")
             return
 
-        self.info(f"Found {len(template_files)} template files")
+        self.info(f"Found {len(source_files)} source files")
 
-        # Extract translatable strings from templates
+        # Extract translatable strings from source files
         all_messages = {}
-        for template_file in template_files:
-            messages = self._extract_from_template(template_file)
+        for source_file in source_files:
+            messages = self._extract_from_template(source_file)
             for msgid, metadata in messages.items():
                 if msgid not in all_messages:
                     all_messages[msgid] = metadata
@@ -170,18 +172,6 @@ class Command(BaseCommand):
             return Path(default_locale_dir)
         return None
 
-    def _find_templates_dir(self):
-        """Find the templates directory"""
-        for path in [
-            settings.templates_dir,
-            settings.live.templates_dir,
-            settings.components_dir,
-            settings.live.components_dir,
-        ]:
-            if os.path.exists(path):
-                return Path(path)
-        return None
-
     def _get_all_locales(self, locale_dir):
         """Get all locale directories"""
         locales = []
@@ -191,21 +181,34 @@ class Command(BaseCommand):
                     locales.append(item.name)
         return locales
 
-    def _find_template_files(self, templates_dir, extensions, ignore_dirs):
-        """Find all template files with given extensions"""
-        _default_ignored_dirs = [".git", "__pycache__", ".venv", ".env", "venv", "env", ".idea", ".vscode", ".DS_Store"]
-        template_files = []
+    def _find_source_files(self, root_dir, extensions, ignore_dirs):
+        """Find all source files with given extensions in the project root"""
+        _default_ignored_dirs = [
+            ".git",
+            "__pycache__",
+            ".venv",
+            ".env",
+            "venv",
+            "env",
+            ".idea",
+            ".vscode",
+            ".DS_Store",
+            "node_modules",
+            "locale",
+            ".pytest_cache",
+        ]
+        source_files = []
         ignore_dirs_set = set(ignore_dirs + _default_ignored_dirs)
 
-        for root, dirs, files in os.walk(templates_dir):
+        for root, dirs, files in os.walk(root_dir):
             # Remove ignored directories from traversal
             dirs[:] = [d for d in dirs if d not in ignore_dirs_set]
 
             for file in files:
                 if any(file.endswith(f".{ext}") for ext in extensions):
-                    template_files.append(Path(root) / file)
+                    source_files.append(Path(root) / file)
 
-        return template_files
+        return source_files
 
     def _extract_from_template(self, template_path):
         """Extract translatable strings from a template file"""
@@ -357,4 +360,4 @@ class Command(BaseCommand):
 
         # Save the .po file
         po.save(str(po_file))
-        self.info(f"Updated {po_file}")
+        self.success(f"Updated {po_file}")
