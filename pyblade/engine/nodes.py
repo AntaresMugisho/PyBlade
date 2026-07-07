@@ -1032,7 +1032,8 @@ class TranslateNode(Node):
         self.as_name = as_name
 
     def __repr__(self):
-        return f"TranslateNode(message='{self.message}', context='{self.context}', noop={self.noop}, as_name='{self.as_name}')"
+        return f"TranslateNode(message='{self.message}', context='{self.context}',"
+        f" noop={self.noop}, as_name='{self.as_name}')"
 
     def render(self, context):
         """Render a translated string using standard gettext.
@@ -1040,7 +1041,6 @@ class TranslateNode(Node):
         Framework-agnostic implementation that uses Python's gettext module.
         Falls back to Django's i18n when available for compatibility.
         """
-        import re as _re
 
         args_str = self.message.strip()
         if args_str.startswith("(") and args_str.endswith(")"):
@@ -1085,20 +1085,24 @@ class TranslateNode(Node):
 class BlockTranslateNode(Node):
     """Represents an @blocktranslate...@plural...@endblocktranslate block."""
 
-    def __init__(self, body, plural_body=None, count=None, context=None, trimmed=False, line=None, column=None):
+    def __init__(
+        self, body, plural_body=None, count=None, context=None, trimmed=False, kwargs=None, line=None, column=None
+    ):
         super().__init__(line, column)
         self.body = body
         self.plural_body = plural_body
         self.count = count
         self.context = context
         self.trimmed = trimmed
+        self.kwargs = kwargs or {}
 
     def __repr__(self):
         return f"BlockTranslateNode(body={self.body}, \
         plural_body={self.plural_body}, \
         count='{self.count}', \
         context='{self.context}', \
-        trimmed={self.trimmed}')"
+        trimmed={self.trimmed}, \
+        kwargs={self.kwargs})"
 
     def render(self, context):
         """Render a block translation with pluralization support.
@@ -1106,10 +1110,26 @@ class BlockTranslateNode(Node):
         Converts {{ variable }} placeholders to %(variable)s for gettext,
         then translates using ngettext for plural forms.
         """
+        # Evaluate kwargs and add to context
+        eval_context = context.copy()
+        for key, value_expr in self.kwargs.items():
+            try:
+                eval_context[key] = self.eval(value_expr, context)
+            except Exception:
+                eval_context[key] = ""
+
+        # Evaluate count and add to context if it exists
+        if self.count:
+            try:
+                count_value = self.eval(self.count, context)
+                eval_context["count"] = count_value
+            except Exception:
+                eval_context["count"] = 1
+
         # Render the body to get the template string
         body_parts = []
         for node in self.body:
-            rendered = node.render(context)
+            rendered = node.render(eval_context)
             if rendered:
                 body_parts.append(rendered)
         singular = "".join(body_parts)
@@ -1126,7 +1146,7 @@ class BlockTranslateNode(Node):
         if self.plural_body:
             plural_parts = []
             for node in self.plural_body:
-                rendered = node.render(context)
+                rendered = node.render(eval_context)
                 if rendered:
                     plural_parts.append(rendered)
             plural = "".join(plural_parts)
@@ -1147,13 +1167,13 @@ class BlockTranslateNode(Node):
                 except Exception:
                     count_value = 1
 
-            # Build interpolation dict from context
+            # Build interpolation dict from eval_context
             # Extract all placeholder names from the template
             placeholders = placeholder_pattern.findall(singular)
             interp_dict = {}
             for placeholder in placeholders:
-                if placeholder in context:
-                    interp_dict[placeholder] = context[placeholder]
+                if placeholder in eval_context:
+                    interp_dict[placeholder] = eval_context[placeholder]
 
             # Translate with pluralization
             if self.context:
@@ -1170,12 +1190,12 @@ class BlockTranslateNode(Node):
 
             return result
         else:
-            # Build interpolation dict
+            # Build interpolation dict from eval_context
             placeholders = placeholder_pattern.findall(singular)
             interp_dict = {}
             for placeholder in placeholders:
-                if placeholder in context:
-                    interp_dict[placeholder] = context[placeholder]
+                if placeholder in eval_context:
+                    interp_dict[placeholder] = eval_context[placeholder]
 
             # Translate
             if self.context:

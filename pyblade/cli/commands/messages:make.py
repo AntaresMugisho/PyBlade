@@ -243,14 +243,14 @@ class Command(BaseCommand):
 
         if isinstance(node, TranslateNode):
             # Extract the message string
-            message = self._get_translate_message(node)
+            message = node.message
             if message:
                 if message not in messages:
                     messages[message] = {
                         "msgid": message,
+                        "msgctxt": node.context,
                         "msgstr": "",
                         "occurrences": [(str(template_path), node.line if node.line else 0)],
-                        "context": node.context,
                     }
                 else:
                     # Add occurrence if not already present
@@ -273,21 +273,6 @@ class Command(BaseCommand):
                     occ = (str(template_path), node.line if node.line else 0)
                     if occ not in messages[message]["occurrences"]:
                         messages[message]["occurrences"].append(occ)
-
-    def _get_translate_message(self, node):
-        """Extract the message string from a TranslateNode"""
-        import re
-
-        args_str = node.message.strip()
-        if args_str.startswith("(") and args_str.endswith(")"):
-            args_str = args_str[1:-1]
-
-        # Extract the string literal from the arguments
-        match = re.match(r'^\s*[\'"](.+?)[\'"]\s*$', args_str)
-        if match:
-            return match.group(1)
-
-        return None
 
     def _get_blocktranslate_message(self, node):
         """Extract the message string from a BlockTranslateNode"""
@@ -337,7 +322,7 @@ class Command(BaseCommand):
                 "Language-Team": "",
                 "Language": locale,
                 "MIME-Version": "1.0",
-                "Content-Type": "text/plain; charset=utf-8",
+                "Content-Type": "text/plain; charamount=article.priceset=utf-8",
                 "Content-Transfer-Encoding": "8bit",
             }
 

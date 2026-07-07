@@ -729,6 +729,7 @@ class Parser:
         count = None
         context = None
         trimmed = False
+        kwargs = {}
 
         if args_str.strip():
             match = re.match(r"^\s*\((.*)\)\s*$", args_str)
@@ -738,27 +739,43 @@ class Parser:
                 inner_args = args_str.strip()
 
             # Parse keyword arguments
-            # Simple approach: look for count=, context=, and trimmed
-            if "count=" in inner_args:
-                count_match = re.search(r"count\s*=\s*([^,)]+)", inner_args)
-                if count_match:
-                    count = count_match.group(1).strip()
+            # Split by commas to get individual key=value pairs
+            arg_pairs = [arg.strip() for arg in inner_args.split(",") if arg.strip()]
 
-            if "context=" in inner_args:
-                context_match = re.search(r"context\s*=\s*['\"]([^'\"]+)['\"]", inner_args)
-                if context_match:
-                    context = context_match.group(1).strip()
+            for arg_pair in arg_pairs:
+                # Check for special keywords
+                if arg_pair == "trimmed":
+                    trimmed = True
+                    continue
 
-            if "trimmed" in inner_args:
-                trimmed = True
+                # Try to parse as key=value
+                if "=" in arg_pair:
+                    key, value = arg_pair.split("=", 1)
+                    key = key.strip()
+                    value = value.strip()
+
+                    # Handle special keywords
+                    if key == "count":
+                        count = value
+                    elif key == "context":
+                        # Remove quotes if present
+                        if (value.startswith("'") and value.endswith("'")) or (
+                            value.startswith('"') and value.endswith('"')
+                        ):
+                            value = value[1:-1]
+                        context = value
+                    else:
+                        # Store as general kwargs
+                        kwargs[key] = value
 
         # Parse until @plural or @endblocktranslate
-        body = self._parse_until_directives(["@plural", "@endblocktranslate"])
+        # Only allow text, variables, and @plural directive in blocktranslate body
+        body = self._parse_blocktranslate_body(["@plural", "@endblocktranslate"])
         plural_body = None
 
         if self.current_token() and self.current_token().value == "@plural":
             self.advance()  # Consume @plural
-            plural_body = self._parse_until_directives(["@endblocktranslate"])
+            plural_body = self._parse_blocktranslate_body(["@endblocktranslate"])
 
         self.expect("DIRECTIVE", value_prefix="@endblocktranslate")
 
@@ -768,6 +785,58 @@ class Parser:
             count=count,
             context=context,
             trimmed=trimmed,
+            kwargs=kwargs,
+            line=token.line if token else None,
+            column=token.column if token else None,
+        )
+
+    def _parse_blocktranslate_body(self, directives_to_stop_at):
+        """
+        Parses nodes within a blocktranslate body.
+        Only allows text, variables, and the @plural directive.
+        Other directives are not allowed in blocktranslate bodies.
+        """
+        body = []
+        while self.current_token():
+            token = self.current_token()
+
+            if token.type == "DIRECTIVE":
+                directive_name_match = re.match(r"@([a-zA-Z_][a-zA-Z0-9_]*).*", token.value)
+                if directive_name_match:
+                    full_directive_name = f"@{directive_name_match.group(1)}"
+                    if full_directive_name in directives_to_stop_at:
+                        return body  # Stop parsing this body, the directive will be handled by the parent
+
+                # Only allow @plural directive in blocktranslate body
+                directive_full_str = token.value
+                match = re.match(r"@([a-zA-Z_][a-zA-Z0-9_]*)(.*)", directive_full_str)
+                directive_name = match.group(1) if match else ""
+
+                if directive_name == "plural":
+                    # This should be caught by directives_to_stop_at, but handle it here for safety
+                    return body
+                else:
+                    raise TemplateRenderError(
+                        f"Only @plural directive is allowed inside @blocktranslate, found @{directive_name}",
+                        line=token.line,
+                        column=token.column,
+                    )
+
+            elif token.type == "TEXT":
+                body.append(TextNode(token.value, line=token.line, column=token.column))
+                self.advance()
+            elif token.type == "VAR_START":
+                body.append(self._parse_variable(escaped=True))
+            elif token.type == "UNESCAPED_VAR_START":
+                body.append(self._parse_variable(escaped=False))
+            else:
+                raise TemplateRenderError(
+                    f"Unexpected token type in @blocktranslate body: {token.type}", line=token.line, column=token.column
+                )
+
+        # If we reach here, we hit end of file without finding a closing directive.
+        raise TemplateRenderError(
+            f"Expected one of {directives_to_stop_at} but reached end of template without closure.",
             line=token.line if token else None,
             column=token.column if token else None,
         )
