@@ -1053,14 +1053,38 @@ class TranslateNode(Node):
         eval_context = dict(context)
         eval_context["_extract"] = _extract
 
-        extracted_args, extracted_kwargs = self.eval(f"_extract({args_str})", eval_context)
+        # Try to evaluate the arguments
+        try:
+            extracted_args, extracted_kwargs = self.eval(f"_extract({args_str})", eval_context)
 
-        if not extracted_args:
-            raise ValueError("@trans requires a string literal")
+            if not extracted_args:
+                raise ValueError("@trans requires a message")
 
-        message = extracted_args[0]
-        if not isinstance(message, str):
-            raise TypeError("@trans message must be a string literal")
+            message = extracted_args[0]
+
+            # If the message is not a string, try to convert it
+            if not isinstance(message, str):
+                message = str(message)
+
+        except Exception:
+            # If evaluation fails, try to use the raw message string
+            # This handles cases where the message is a variable name
+            message = args_str.strip()
+            # Remove quotes if present
+            if (message.startswith("'") and message.endswith("'")) or (
+                message.startswith('"') and message.endswith('"')
+            ):
+                message = message[1:-1]
+            else:
+                # It might be a variable, try to evaluate it
+                try:
+                    message = self.eval(message, context)
+                    if not isinstance(message, str):
+                        message = str(message)
+                except Exception:
+                    message = str(message)
+
+            extracted_kwargs = {}
 
         msg_context = extracted_kwargs.get("context") or self.context
         noop = extracted_kwargs.get("noop", False) or self.noop
