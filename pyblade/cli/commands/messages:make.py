@@ -1,12 +1,15 @@
 import os
 import re
+from datetime import datetime
 from pathlib import Path
+from pprint import pprint  # noqa
 
 import polib
 
 from pyblade.cli import BaseCommand
 from pyblade.config import settings
 from pyblade.engine.lexer import Lexer
+from pyblade.engine.nodes import BlockTranslateNode, CommentNode, TranslateNode
 from pyblade.engine.parser import Parser
 from pyblade.utils import get_project_root
 
@@ -135,13 +138,16 @@ class Command(BaseCommand):
         # Extract translatable strings from source files
         all_messages = {}
         for source_file in source_files:
-            messages = self._extract_from_template(source_file)
+            messages = self._extract_from_template(source_file, project_root)
             for msgid, metadata in messages.items():
                 if msgid not in all_messages:
                     all_messages[msgid] = metadata
                 else:
                     # Merge metadata
                     all_messages[msgid]["occurrences"].extend(metadata["occurrences"])
+                    # Merge comment if exists
+                    if metadata.get("comment") and not all_messages[msgid].get("comment"):
+                        all_messages[msgid]["comment"] = metadata["comment"]
 
         self.info(f"Extracted {len(all_messages)} translatable strings")
 
@@ -210,7 +216,39 @@ class Command(BaseCommand):
 
         return source_files
 
-    def _extract_from_template(self, template_path):
+    def _extract_translator_comments(self, ast):
+        """Extract translator comments from AST nodes.
+
+        Looks for CommentNode instances containing 'Translators' and
+        associates them with translation directives based on line proximity.
+        """
+        comments = {}
+
+        # First pass: collect all translation directives with their line numbers
+        translation_directives = {}
+        for node in ast:
+            if isinstance(node, (TranslateNode, BlockTranslateNode)):
+                if node.line:
+                    translation_directives[node.line] = node
+
+        # Second pass: find comments and associate with nearby translation directives
+        for node in ast:
+            if isinstance(node, CommentNode):
+                if node.content and node.content.lstrip().lower().startswith("translators"):
+                    comment = node.content.strip()
+                    comment_line = node.line
+
+                    if comment_line:
+                        # Look for translation directives on the same line or next few lines
+                        # This will not work for long multiline comments, we should find a better way to do this
+                        for offset in range(0, 4):  # Check current line and next 3 lines
+                            target_line = comment_line + offset
+                            if target_line in translation_directives:
+                                comments[target_line] = comment
+                                break
+        return comments
+
+    def _extract_from_template(self, template_path, project_root):
         """Extract translatable strings from a template file"""
         messages = {}
 
@@ -228,55 +266,77 @@ class Command(BaseCommand):
             parser = Parser(tokens)
             ast = parser.parse()
 
+            # Extract translator comments from the AST
+            translator_comments = self._extract_translator_comments(ast)
+
             # Walk the AST and extract translatable strings
             for node in ast:
-                self._extract_from_node(node, template_path, messages)
+                self._extract_from_node(node, template_path, messages, translator_comments, project_root)
 
         except Exception as e:
             self.warning(f"Could not parse {template_path}: {e}")
 
         return messages
 
-    def _extract_from_node(self, node, template_path, messages):
+    def _extract_from_node(self, node, template_path, messages, translator_comments, project_root):
         """Recursively extract translatable strings from AST nodes"""
-        from pyblade.engine.nodes import BlockTranslateNode, TranslateNode
+        # Get relative path from project root
+        try:
+            relative_path = template_path.relative_to(project_root)
+        except ValueError:
+            relative_path = template_path
 
         if isinstance(node, TranslateNode):
             # Extract the message string
             message = node.message
             if message:
+                comment = translator_comments.get(node.line, "")
                 if message not in messages:
                     messages[message] = {
                         "msgid": message,
                         "msgctxt": node.context,
                         "msgstr": "",
-                        "occurrences": [(str(template_path), node.line if node.line else 0)],
+                        "occurrences": [(str(relative_path), node.line if node.line else 0)],
+                        "comment": comment,
                     }
                 else:
                     # Add occurrence if not already present
-                    occ = (str(template_path), node.line if node.line else 0)
+                    occ = (str(relative_path), node.line if node.line else 0)
                     if occ not in messages[message]["occurrences"]:
                         messages[message]["occurrences"].append(occ)
+                    # Merge comment if exists
+                    if comment and not messages[message].get("comment"):
+                        messages[message]["comment"] = comment
 
         elif isinstance(node, BlockTranslateNode):
             # Extract block translation
-            message = self._get_blocktranslate_message(node)
-            if message:
-                if message not in messages:
-                    messages[message] = {
-                        "msgid": message,
-                        "msgstr": "",
-                        "occurrences": [(str(template_path), node.line if node.line else 0)],
-                        "context": node.context,
+            singular, plural = self._get_blocktranslate_message(node)
+            if singular:
+                comment = translator_comments.get(node.line, "")
+                # Create a unique key for the message (singular + context)
+                message_key = singular
+                if node.context:
+                    message_key = f"{singular}|{node.context}"
+
+                if message_key not in messages:
+                    messages[message_key] = {
+                        "msgid": singular,
+                        "msgid_plural": plural if plural else "",
+                        "msgstr": ["", ""] if plural else "",
+                        "occurrences": [(str(relative_path), node.line if node.line else 0)],
+                        "msgctxt": node.context,
+                        "comment": comment,
                     }
                 else:
-                    occ = (str(template_path), node.line if node.line else 0)
-                    if occ not in messages[message]["occurrences"]:
-                        messages[message]["occurrences"].append(occ)
+                    occ = (str(relative_path), node.line if node.line else 0)
+                    if occ not in messages[message_key]["occurrences"]:
+                        messages[message_key]["occurrences"].append(occ)
+                    if comment and not messages[message_key].get("comment"):
+                        messages[message_key]["comment"] = comment
 
     def _get_blocktranslate_message(self, node):
-        """Extract the message string from a BlockTranslateNode"""
-        # Render the body to get the template string
+        """Extract the singular and plural message strings from a BlockTranslateNode"""
+        # Render the body to get the singular template string
         body_parts = []
         for child in node.body:
             if hasattr(child, "content"):
@@ -288,17 +348,40 @@ class Command(BaseCommand):
                         if hasattr(subchild, "content"):
                             body_parts.append(subchild.content)
 
-        message = "".join(body_parts)
+        singular = "".join(body_parts)
 
         # Normalize whitespace
         if node.trimmed:
-            message = " ".join(message.split())
+            singular = " ".join(singular.split())
 
         # Convert {{ variable }} placeholders to %(variable)s
         placeholder_pattern = re.compile(r"\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}")
-        message = placeholder_pattern.sub(r"%(\1)s", message)
+        singular = placeholder_pattern.sub(r"%(\1)s", singular)
 
-        return message
+        # Extract plural form if it exists
+        plural = None
+        if node.plural_body:
+            plural_parts = []
+            for child in node.plural_body:
+                if hasattr(child, "content"):
+                    plural_parts.append(child.content)
+                elif hasattr(child, "render"):
+                    # Try to get raw content
+                    if hasattr(child, "body"):
+                        for subchild in child.body:
+                            if hasattr(subchild, "content"):
+                                plural_parts.append(subchild.content)
+
+            plural = "".join(plural_parts)
+
+            # Normalize whitespace
+            if node.trimmed:
+                plural = " ".join(plural.split())
+
+            # Convert {{ variable }} placeholders to %(variable)s
+            plural = placeholder_pattern.sub(r"%(\1)s", plural)
+
+        return singular, plural
 
     def _process_locale(self, locale_dir, locale, domain, messages):
         """Process a single locale: create/update .po file"""
@@ -310,39 +393,52 @@ class Command(BaseCommand):
         # Load existing .po file or create new one
         if po_file.exists():
             po = polib.pofile(str(po_file))
+            po.metadata["PO-Revision-Date"] = datetime.now().strftime("%Y-%m-%d %H:%M%z")
 
         else:
             po = polib.POFile()
             po.metadata = {
                 "Project-Id-Version": "1.0",
-                "Report-Msgid-Bugs-To": "",
-                "POT-Creation-Date": "",
-                "PO-Revision-Date": "",
-                "Last-Translator": "",
-                "Language-Team": "",
-                "Language": locale,
+                "Report-Msgid-Bugs-To": "you@example.com",
+                "POT-Creation-Date": datetime.now().strftime("%Y-%m-%d %H:%M%z"),
+                "PO-Revision-Date": datetime.now().strftime("%Y-%m-%d %H:%M%z"),
+                "Last-Translator": "you <you@example.com>",
+                "Language-Team": "Your Team <yourteam@example.com>",
                 "MIME-Version": "1.0",
-                "Content-Type": "text/plain; charamount=article.priceset=utf-8",
+                "Content-Type": "text/plain; charset=utf-8",
                 "Content-Transfer-Encoding": "8bit",
             }
 
-        # Add or update entries
-        for msgid, metadata in messages.items():
+        for metadata in messages.values():
             # Check if entry already exists
-            entry = po.find(msgid, msgctxt=metadata["context"])
+            entry = po.find(metadata["msgid"], msgctxt=metadata.get("msgctxt"))
             if entry:
-                # Update occurrences
                 entry.occurrences = metadata["occurrences"]
+                if metadata.get("comment"):
+                    entry.comment = metadata["comment"]
+                if metadata.get("msgctxt"):
+                    entry.msgctxt = metadata["msgctxt"]
+                if metadata.get("msgid_plural"):
+                    entry.msgid_plural = metadata["msgid_plural"]
+                    if isinstance(metadata.get("msgstr"), list):
+                        entry.msgstr_plural = {0: metadata["msgstr"][0], 1: metadata["msgstr"][1]}
             else:
                 # Create new entry
                 entry = polib.POEntry(
-                    msgid=msgid,
+                    msgid=metadata["msgid"],
                     msgstr="",
-                    msgctxt=metadata["context"],
                     occurrences=metadata["occurrences"],
                 )
+
+                if metadata.get("msgctxt"):
+                    entry.msgctxt = metadata["msgctxt"]
+                if metadata.get("comment"):
+                    entry.comment = metadata["comment"]
+
+                if metadata.get("msgid_plural"):
+                    entry.msgid_plural = metadata["msgid_plural"]
+                    if isinstance(metadata.get("msgstr"), list):
+                        entry.msgstr_plural = {0: metadata["msgstr"][0], 1: metadata["msgstr"][1]}
                 po.append(entry)
 
-        # Save the .po file
         po.save(str(po_file))
-        self.success(f"Updated {po_file}")

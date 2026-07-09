@@ -692,7 +692,8 @@ class VerbatimNode(Node):
 class CommentNode(Node):
     """Represents an @comment...@endcomment block."""
 
-    def __init__(self, content):
+    def __init__(self, content, line=None, column=None):
+        super().__init__(line, column)
         self.content = content
 
     def __repr__(self):

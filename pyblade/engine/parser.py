@@ -69,9 +69,9 @@ class Parser:
             return self.tokens[self.pos]
         return None
 
-    def advance(self):
+    def advance(self, steps: int = 1):
         """Advances to the next token."""
-        self.pos += 1
+        self.pos += steps
         return self.current_token()
 
     def expect(self, token_type, value_prefix=None):
@@ -101,11 +101,17 @@ class Parser:
             token = self.current_token()
             if token.type == "COMMENT_START":
                 # Handle inline comments {# ... #}
-                # Consume until COMMENT_END
+                # Collect comment content
+                comment_parts = []
+                comment_line = token.line
+                comment_column = token.column
                 while self.current_token() and self.current_token().type != "COMMENT_END":
+                    comment_parts.append(self.current_token().value)
                     self.advance()
                 self.expect("COMMENT_END")
-                # We don't add anything to AST for comments, they are stripped.
+                ast.append(
+                    CommentNode("".join(comment_parts[1:]), line=comment_line, column=comment_column)
+                )  # The first part is the comment start marker {#
             elif token.type == "TEXT":
                 ast.append(TextNode(token.value, line=token.line, column=token.column))
                 self.advance()
@@ -689,6 +695,8 @@ class Parser:
         """Parses an @comment...@endcomment block."""
         # Just consume until endcomment
         content_parts = []
+        comment_line = token.line if token else None
+        comment_column = token.column if token else None
         while self.current_token():
             token = self.current_token()
             if token.type == "DIRECTIVE" and token.value == "@endcomment":
@@ -697,7 +705,7 @@ class Parser:
             self.advance()
 
         self.expect("DIRECTIVE", value_prefix="@endcomment")
-        return CommentNode("".join(content_parts))
+        return CommentNode("".join(content_parts), line=comment_line, column=comment_column)
 
     def _parse_trans(self, args_str, token=None):
         """Parses an @trans('message') or @trans('message' as var) directive."""
@@ -708,18 +716,56 @@ class Parser:
         else:
             inner_args = args_str.strip()
 
-        # Check if there's an 'as' clause
+        # Parse arguments
+        message = None
+        context = None
+        noop = False
+        as_name = None
+
+        # Check if there's an 'as' clause at the end
         if " as " in inner_args:
             # Split on ' as ' to separate the message from the variable name
-            message_part, as_name = inner_args.split(" as ", 1)
-            message = message_part.strip()
-            as_name = as_name.strip()
-        else:
-            message = inner_args
-            as_name = None
+            parts = inner_args.split(" as ", 1)
+            inner_args = parts[0].strip()
+            as_name = parts[1].strip()
+
+        # Parse the remaining arguments
+        # Split by commas to get individual arguments
+        arg_parts = [arg.strip() for arg in inner_args.split(",") if arg.strip()]
+
+        for i, arg in enumerate(arg_parts):
+            # Check for keyword arguments
+            if "=" in arg:
+                key, value = arg.split("=", 1)
+                key = key.strip()
+                value = value.strip()
+
+                if key == "context":
+                    # Remove quotes if present
+                    if (value.startswith("'") and value.endswith("'")) or (
+                        value.startswith('"') and value.endswith('"')
+                    ):
+                        value = value[1:-1]
+                    context = value
+                elif key == "noop":
+                    noop = value.lower() in ("true", "1")
+            else:
+                # This is the message (first positional argument)
+                if message is None:
+                    message = arg
+                    # Remove quotes if present
+                    if (message.startswith("'") and message.endswith("'")) or (
+                        message.startswith('"') and message.endswith('"')
+                    ):
+                        message = message[1:-1]
 
         return TranslateNode(
-            message, as_name=as_name, line=token.line if token else None, column=token.column if token else None
+            message,
+            context=context,
+            noop=noop,
+            as_name=as_name,
+            line=token.line if token else None,
+            column=token.column if token else None,
         )
 
     def _parse_blocktranslate(self, args_str, token=None):
