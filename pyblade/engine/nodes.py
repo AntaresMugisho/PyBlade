@@ -15,7 +15,7 @@ from pyblade.engine.exceptions import (
 from pyblade.i18n import gettext, ngettext, npgettext, pgettext
 
 from . import loader
-from .contexts import CycleContext, LoopContext
+from .contexts import AttributesContext, CycleContext, LoopContext
 from .sandbox import SafeEvaluator
 
 
@@ -617,14 +617,27 @@ class ComponentNode(Node):
     def __repr__(self):
         return f"ComponentNode(path_expr='{self.path_expr}', data_expr='{self.data_expr}')"
 
+    def _parse_props(self, component: str) -> tuple:
+        pattern = re.compile(r"@props\s*\((?P<dictionary>.*?)\s*\)", re.DOTALL)
+        match = pattern.search(component)
+
+        props = {}
+        if match:
+            component = re.sub(pattern, "", component)
+            dictionary = match.group("dictionary")
+            try:
+                props = self.eval(dictionary, {})
+            except (SyntaxError, ValueError) as e:
+                raise e
+
+        return component, props
+
     def render(self, context):
         """Render a component, similar to TemplateProcessor.render_component."""
 
         try:
-            # Evaluate the path expression
             path = self.eval(self.path_expr, context)
 
-            # Evaluate data expression if provided
             data = {}
             if self.data_expr:
                 data = self.eval(self.data_expr, context)
@@ -632,12 +645,18 @@ class ComponentNode(Node):
                     data = {}
 
             template = loader.load_template(path, [settings.components_dir])
+            original_content = template.content  # This is what may be displayed if an Exception occures
 
-            # Create new context with additional data
-            new_context = dict(context)
-            new_context.update(data)
+            new_content, props = self._parse_props(original_content)
+            template.content = new_content
 
-            return template.render(new_context)
+            data["attributes"] = AttributesContext(props=props, attributes={}, context=data)
+
+            try:
+                return template.render(props | data)
+            except Exception:
+                template.content = original_content
+                raise
 
         except TemplateNotFoundError as exc:
             setattr(exc, "line", self.line)
