@@ -609,46 +609,47 @@ class AutoescapeNode(Node):
 class ComponentNode(Node):
     """Represents an @component('name', data)...@endcomponent block."""
 
-    def __init__(self, name, data_expr=None, body=None, line=None, column=None):
+    def __init__(self, path_expr, data_expr=None, line=None, column=None):
         super().__init__(line, column)
-        self.name = name
+        self.path_expr = path_expr
         self.data_expr = data_expr
-        self.body = body  # The default slot content
 
     def __repr__(self):
-        return f"ComponentNode(name='{self.name}', data_expr='{self.data_expr}', body={self.body})"
+        return f"ComponentNode(path_expr='{self.path_expr}', data_expr='{self.data_expr}')"
 
     def render(self, context):
         """Render a component, similar to TemplateProcessor.render_component."""
+
         try:
-            args_tuple = self.eval(f"({self.name})", context)
-            if not isinstance(args_tuple, tuple):
-                args_tuple = (args_tuple,)
+            # Evaluate the path expression
+            path = self.eval(self.path_expr, context)
 
-            name = args_tuple[0]
-            data = args_tuple[1] if len(args_tuple) > 1 else {}
+            # Evaluate data expression if provided
+            data = {}
+            if self.data_expr:
+                data = self.eval(self.data_expr, context)
+                if not isinstance(data, dict):
+                    data = {}
 
-            # Render body as default slot
-            output = []
-            if self.body:
-                for node in self.body:
-                    rendered = node.render(context)
-                    if rendered:
-                        output.append(rendered)
-            slot_content = "".join(output)
+            template = loader.load_template(path, [settings.components_dir])
 
+            # Create new context with additional data
             new_context = dict(context)
-            if isinstance(data, dict):
-                new_context.update(data)
-            new_context["slot"] = slot_content
-
-            path = f"{settings.components_dir}.{name}"
-            template = loader.load_template(path)
+            new_context.update(data)
 
             return template.render(new_context)
 
+        except TemplateNotFoundError as exc:
+            setattr(exc, "line", self.line)
+            setattr(exc, "column", self.column)
+            raise
+
+        except PyBladeException as exc:
+            setattr(exc, "template", template)
+            raise
+
         except Exception as exc:
-            return f"<!-- Error rendering component '{self.name}': {exc} -->"
+            self._raise(exc)
 
 
 class SlotNode(Node):

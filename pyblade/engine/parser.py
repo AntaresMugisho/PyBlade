@@ -575,8 +575,11 @@ class Parser:
         self.expect("DIRECTIVE", value_prefix="@endguest")
         return GuestNode(body, else_body, guard, line=token.line, column=token.column)
 
-    def _parse_include(self, args_str, token):
-        """Parses an @include('path') or @include('path', {'data': value}) directive."""
+    def _parse_function_args(self, args_str):
+        """Parses function-like arguments like ('path', {'data': value}) into path and data expressions.
+
+        Returns a tuple of (path_expr, data_expr) where data_expr may be None.
+        """
         # Remove parentheses and parse the function-like arguments
         match = re.match(r"^\s*\((.*)\)\s*$", args_str)
         if match:
@@ -630,16 +633,22 @@ class Parser:
                 else:
                     data_expr = current_arg.strip()
 
-            if not path_expr:
-                raise DirectiveParsingError(
-                    "@include requires at least a path argument",
-                    line=token.line,
-                    column=token.column,
-                )
-            return IncludeNode(path_expr, data_expr, line=token.line, column=token.column)
+            return path_expr, data_expr
         else:
             # No parentheses - treat as single path argument
-            return IncludeNode(args_str.strip(), None, line=token.line, column=token.column)
+            return args_str.strip(), None
+
+    def _parse_include(self, args_str, token):
+        """Parses an @include('path') or @include('path', {'data': value}) directive."""
+        path_expr, data_expr = self._parse_function_args(args_str)
+
+        if not path_expr:
+            raise DirectiveParsingError(
+                "@include requires at least a path argument",
+                line=token.line,
+                column=token.column,
+            )
+        return IncludeNode(path_expr, data_expr, line=token.line, column=token.column)
 
     def _parse_extends(self, args_str):
         """Parses an @extends('layout') directive."""
@@ -658,12 +667,17 @@ class Parser:
         # Similar to include, might have multiple args.
         return YieldNode(args_str)
 
-    def _parse_component(self, args_str):
+    def _parse_component(self, args_str, token):
         """Parses an @component('name', data)...@endcomponent block."""
         # args_str could be "('alert', {'type': 'error'})"
-        body = self._parse_until_directives(["@endcomponent"])
-        self.expect("DIRECTIVE", value_prefix="@endcomponent")
-        return ComponentNode(args_str, body=body)
+        path_expr, data_expr = self._parse_function_args(args_str)
+        if not path_expr:
+            raise DirectiveParsingError(
+                "@compoent requires at least a path argument",
+                line=token.line,
+                column=token.column,
+            )
+        return ComponentNode(path_expr, data_expr, line=token.line, column=token.column)
 
     def _parse_slot(self, args_str):
         """Parses an @slot('name')...@endslot block."""

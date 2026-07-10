@@ -107,7 +107,7 @@ def load_template(template_name: str, directories: Optional[List[Union[str, Path
 
     Args:
         template_name: Name of the template to load
-        directories: Optional list of template directories
+        directories: Optional list of template directories. If provided, only these directories will be searched.
 
     Returns:
         The template content
@@ -117,5 +117,10 @@ def load_template(template_name: str, directories: Optional[List[Union[str, Path
     """
 
     if directories:
-        _default_loader.add_directories(directories)
-    return _default_loader.load_template(template_name)
+        # Create a temporary loader with only the specified directories
+        temp_loader = TemplateLoader()
+        temp_loader.add_directories(directories)
+        return temp_loader.load_template(template_name)
+    else:
+        # Use the default loader with its configured directories
+        return _default_loader.load_template(template_name)
