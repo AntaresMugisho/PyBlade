@@ -638,6 +638,17 @@ class ComponentNode(Node):
         try:
             path = self.eval(self.path_expr, context)
 
+            # Prevent loading normal components from the live component's directory
+            if path.startswith(f"{settings.live.templates_dir}."):
+                raise TemplateRenderError(
+                    "Cannot load 'simple' Component from Live Component directory",
+                    line=self.line,
+                    column=self.column,
+                    help=f"@component('{path}') refers to a Live Component. "
+                    f"If you intended to render a Live Component, use @live('{".".join(path.split(".")[1:])}') "
+                    "instead. Otherwise, load the component from the Components directory.",
+                )
+
             data = {}
             if self.data_expr:
                 data = self.eval(self.data_expr, context)
@@ -657,6 +668,10 @@ class ComponentNode(Node):
             except Exception:
                 template.content = original_content
                 raise
+
+        except TemplateRenderError:
+            # To avoid the error being cathed by the following except clauses
+            raise
 
         except TemplateNotFoundError as exc:
             setattr(exc, "line", self.line)
