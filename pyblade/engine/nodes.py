@@ -6,6 +6,7 @@ from pprint import pformat
 from pyblade.config import settings
 from pyblade.engine.exceptions import (
     BreakLoopError,
+    ComponentNotFoundError,
     ContinueLoopError,
     DirectiveParsingError,
     PyBladeException,
@@ -618,6 +619,9 @@ class ComponentNode(Node):
         return f"ComponentNode(path_expr='{self.path_expr}', data_expr='{self.data_expr}')"
 
     def _parse_props(self, component: str) -> tuple:
+        """
+        Parse the @props directive in the component
+        """
         pattern = re.compile(r"@props\s*\((?P<dictionary>.*?)\s*\)", re.DOTALL)
         match = pattern.search(component)
 
@@ -632,22 +636,75 @@ class ComponentNode(Node):
 
         return component, props
 
+    def _resolve_component(self, name: str):
+        """
+        Resolve a component.
+
+        Static component:
+            components/button.html
+
+        Live component:
+            components/counter/
+                counter.py
+                counter.html  # optional
+
+        """
+
+        components_dir = settings.components_dir
+        parts = name.replace(".", "/").split("/")
+        component_name = parts[-1]
+        parent = components_dir.joinpath(*parts[:-1])
+
+        # Static component
+        html_file = parent / f"{component_name}.html"
+        if html_file.is_file():
+            return {
+                "type": "static",
+                "html": html_file,
+                "python": None,
+            }
+
+        # Single-file live component
+        python_file = parent / f"{component_name}.py"
+        if python_file.is_file():
+            return {
+                "type": "live",
+                "html": None,
+                "python": python_file,
+            }
+
+        # Directory-based live component
+        directory = parent / component_name
+        python_file = directory / f"{component_name}.py"
+        html_file = directory / f"{component_name}.html"
+
+        if python_file.is_file():
+            return {
+                "type": "live",
+                "html": html_file if html_file.is_file() else None,
+                "python": python_file,
+            }
+
+        return None
+
     def render(self, context):
         """Render a component, similar to TemplateProcessor.render_component."""
 
         try:
             path = self.eval(self.path_expr, context)
 
-            # Prevent loading normal components from the live component's directory
-            if path.startswith(f"{settings.live.templates_dir}."):
-                raise TemplateRenderError(
-                    "Cannot load 'simple' Component from Live Component directory",
-                    line=self.line,
-                    column=self.column,
-                    help=f"@component('{path}') refers to a Live Component. "
-                    f"If you intended to render a Live Component, use @live('{".".join(path.split(".")[1:])}') "
-                    "instead. Otherwise, load the component from the Components directory.",
-                )
+            component = self._resolve_component(path)
+
+            if component is None:
+                raise ComponentNotFoundError(line=self.line, column=self.column)
+
+            elif component["type"] == "static":
+                print(component)
+                return "Static Component"
+
+            elif component["type"] == "live":
+                print(component)
+                return "Live component found"
 
             data = {}
             if self.data_expr:
@@ -671,6 +728,9 @@ class ComponentNode(Node):
 
         except TemplateRenderError:
             # To avoid the error being cathed by the following except clauses
+            raise
+
+        except ComponentNotFoundError:
             raise
 
         except TemplateNotFoundError as exc:

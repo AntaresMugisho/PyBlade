@@ -26,6 +26,15 @@ class TemplateNotFoundError(PyBladeException):
         super().__init__(message, line, column, help)
 
 
+class ComponentNotFoundError(PyBladeException):
+    """Raised when a component can not be found"""
+
+    def __init__(self, message: str = None, line: int = None, column: int = None, help: str = None):
+        self.message = message or "No component with the provided name."
+        self.help = help or "Check the component spelling, "
+        super().__init__(message, line, column, help)
+
+
 class DirectiveParsingError(PyBladeException):
     """Raised when there's an error parsing a template directive."""
 
