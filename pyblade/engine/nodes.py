@@ -687,24 +687,36 @@ class ComponentNode(Node):
 
         return None
 
+    def _render_static_component(self, name, data):
+
+        template = loader.load_template(name, [settings.components_dir])
+        original_content = template.content  # This is what may be displayed if an Exception occures
+
+        new_content, props = self._parse_props(original_content)
+        template.content = new_content
+
+        data["attributes"] = AttributesContext(props=props, attributes={}, context=data)
+
+        try:
+            return template.render(props | data)
+        except Exception:
+            template.content = original_content
+            raise
+
+    def _render_live_component(self, name, data):
+        ...
+        return f"Live COMPONENT {name}"
+
     def render(self, context):
         """Render a component, similar to TemplateProcessor.render_component."""
 
         try:
-            path = self.eval(self.path_expr, context)
+            name = self.eval(self.path_expr, context)
 
-            component = self._resolve_component(path)
+            component = self._resolve_component(name)
 
             if component is None:
                 raise ComponentNotFoundError(line=self.line, column=self.column)
-
-            elif component["type"] == "static":
-                print(component)
-                return "Static Component"
-
-            elif component["type"] == "live":
-                print(component)
-                return "Live component found"
 
             data = {}
             if self.data_expr:
@@ -712,19 +724,11 @@ class ComponentNode(Node):
                 if not isinstance(data, dict):
                     data = {}
 
-            template = loader.load_template(path, [settings.components_dir])
-            original_content = template.content  # This is what may be displayed if an Exception occures
+            if component["type"] == "static":
+                return self._render_static_component(name, data)
 
-            new_content, props = self._parse_props(original_content)
-            template.content = new_content
-
-            data["attributes"] = AttributesContext(props=props, attributes={}, context=data)
-
-            try:
-                return template.render(props | data)
-            except Exception:
-                template.content = original_content
-                raise
+            elif component["type"] == "live":
+                return self._render_live_component(name, data)
 
         except TemplateRenderError:
             # To avoid the error being cathed by the following except clauses
@@ -738,9 +742,9 @@ class ComponentNode(Node):
             setattr(exc, "column", self.column)
             raise
 
-        except PyBladeException as exc:
-            setattr(exc, "template", template)
-            raise
+        # except PyBladeException as exc:
+        #     setattr(exc, "template", template)
+        #     raise
 
         except Exception as exc:
             self._raise(exc)
