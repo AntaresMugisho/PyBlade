@@ -11,8 +11,7 @@ _OPENING_TAG_PATTERN: Pattern = re.compile(r"<(?P<tag>\w+)\s*(?P<attributes>.*?)
 class Component:
     instances = {}
 
-    def __init__(self, name: str):
-        self._name = name
+    def __init__(self):
         self._id = uuid4().hex
 
         # Register the instance in the intances list.
@@ -20,11 +19,14 @@ class Component:
 
     @property
     def id(self):
-        return f"{self._name}-{self._id}"
+        return f"{self.get_template_name()}-{self._id}"
 
     @classmethod
     def get_instance(cls, id: str):
         return cls.instances.get(id)
+
+    def get_template_name(self):
+        return self.template_name
 
     def get_html(self):
         return self.render()
@@ -48,9 +50,9 @@ class Component:
 
         # Load the component's template
         try:
-            template = loader.load_template(self._name)
+            template = loader.load_template(self.get_template_name())
         except TemplateNotFoundError:
-            raise TemplateNotFoundError(f"No component named {self._name}")
+            raise TemplateNotFoundError(f"No component named {self.get_template_name()}")
 
         # Add liveblade_id attribute to the root node of the component
         match = re.search(_OPENING_TAG_PATTERN, template.content)
@@ -88,14 +90,32 @@ class Component:
     def rendered(self):
         pass
 
-    def update(self):
+    def updating(self, property: str, value):
+        """
+        property: The name of the current property being updated
+        value: The value about to be set to the property
+        """
         pass
 
-    def updating(self):
+    def updated(self, property: str):
+        """
+        property: The name of the current property that was updated
+        """
         pass
 
-    def updated(self):
-        pass
+    def _call_property_hook(self, phase: str, property_name: str, *args):
+        """
+        Allow generic property related methods (e.g: updated_email)
+        """
+        # Generic hook (updated / updating)
+        generic = getattr(self, phase, None)
+        if callable(generic):
+            generic(property_name, *args)
+
+        # Property-specific hook (updated_username / updating_username)
+        specific = getattr(self, f"{phase}_{property_name}", None)
+        if callable(specific):
+            specific(*args)
 
     def serialize(self):
         pass
@@ -147,6 +167,9 @@ class Component:
 
     @staticmethod
     def exception(exc, stopPropagation):
+        pass
+
+    def stop_propagation():
         pass
 
     @staticmethod

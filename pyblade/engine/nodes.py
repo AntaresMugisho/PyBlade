@@ -1,3 +1,5 @@
+import importlib
+import inspect
 import random
 import re
 from html import escape as html_escape
@@ -14,6 +16,7 @@ from pyblade.engine.exceptions import (
     TemplateRenderError,
 )
 from pyblade.i18n import gettext, ngettext, npgettext, pgettext
+from pyblade.utils import validate_single_root_node
 
 from . import loader
 from .contexts import AttributesContext, CycleContext, LoopContext
@@ -692,6 +695,14 @@ class ComponentNode(Node):
         template = loader.load_template(name, [settings.components_dir])
         original_content = template.content  # This is what may be displayed if an Exception occures
 
+        if not validate_single_root_node(original_content):
+            raise TemplateRenderError(
+                "Component files should have single root node",
+                help="Enclose all HTML tags into a single parent tag such as <div>...</div>",
+                template=template,
+                line=self.line,
+            )
+
         new_content, props = self._parse_props(original_content)
         template.content = new_content
 
@@ -703,9 +714,44 @@ class ComponentNode(Node):
             template.content = original_content
             raise
 
-    def _render_live_component(self, name, data):
-        ...
-        return f"Live COMPONENT {name}"
+    def _render_live_component(self, name, python_file, data):
+
+        # Render the template content
+        m = str(python_file).removesuffix(".py").replace("/", ".")
+        try:
+            module = importlib.import_module(m)
+
+            cls = getattr(module, f"{re.sub('[-_]', '', name.title())}")
+            template_name = getattr(cls, "template_name", m)
+            setattr(cls, "template_name", template_name)
+
+            component = cls()
+
+            # Call component lifecycle hooks
+            mount = getattr(component, "mount", None)
+
+            sig = inspect.signature(mount)
+            params = sig.parameters
+
+            print(params)
+
+            if len(params) == 0:
+                mount()
+            else:
+                mount(**params)
+
+            component.boot()
+            component.rendering()
+            template = component.render()
+            component.rendered()
+
+            return template
+
+        except ModuleNotFoundError:
+            raise DirectiveParsingError(f"Component module not found: {python_file}")
+
+        except AttributeError as e:
+            raise DirectiveParsingError(f"Error loading Live component: {str(e)}")
 
     def render(self, context):
         """Render a component, similar to TemplateProcessor.render_component."""
@@ -716,7 +762,7 @@ class ComponentNode(Node):
             component = self._resolve_component(name)
 
             if component is None:
-                raise ComponentNotFoundError(line=self.line, column=self.column)
+                raise ComponentNotFoundError(line=self.line, column=self.column, help="")
 
             data = {}
             if self.data_expr:
@@ -728,26 +774,27 @@ class ComponentNode(Node):
                 return self._render_static_component(name, data)
 
             elif component["type"] == "live":
-                return self._render_live_component(name, data)
+                return self._render_live_component(name, component["python"], data)
 
-        except TemplateRenderError:
-            # To avoid the error being cathed by the following except clauses
-            raise
+        # except TemplateRenderError:
+        #     # To avoid the error being cathed by the following except clauses
+        #     raise
 
-        except ComponentNotFoundError:
-            raise
+        # except ComponentNotFoundError:
+        #     raise
 
-        except TemplateNotFoundError as exc:
-            setattr(exc, "line", self.line)
-            setattr(exc, "column", self.column)
-            raise
+        # except TemplateNotFoundError as exc:
+        #     setattr(exc, "line", self.line)
+        #     setattr(exc, "column", self.column)
+        #     raise
 
         # except PyBladeException as exc:
         #     setattr(exc, "template", template)
         #     raise
 
         except Exception as exc:
-            self._raise(exc)
+            raise exc
+            # self._raise(exc)
 
 
 class SlotNode(Node):

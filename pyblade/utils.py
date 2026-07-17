@@ -62,5 +62,40 @@ def get_project_root():
     return current
 
 
-def setup_django():
-    pass
+def validate_single_root_node(html_content: str):
+    """
+    Validate that an HTML component template has a single root node.
+
+    Args:
+        html_content (str): HTML content as a string
+
+    Returns:
+        bool: True if single root node, False otherwise
+    """
+
+    # Remove all comments first
+    html_content = re.sub(r"<!--.*?-->", "", html_content, flags=re.DOTALL)
+    html_content = re.sub(r"{#(.*?)#}", "", html_content, flags=re.DOTALL)
+    html_content = re.sub(r"@comment\s*(?P<content>.*?)@endcomment", "", html_content, flags=re.DOTALL)
+
+    # Count tags
+    tags = []
+    depth = 0
+
+    # Simple state machine to track tag depth
+    for match in re.finditer(r"<(/)?(\w+)[^>]*>", html_content):
+        is_closing = match.group(1) == "/"
+        tag = match.group(2)
+
+        if not is_closing:
+            depth += 1
+            if depth == 1:
+                tags.append(tag)
+        else:
+            depth -= 1
+
+    # Ignore single-tag templates or templates with only whitespace
+    if len(tags) <= 1:
+        return True
+
+    return False
