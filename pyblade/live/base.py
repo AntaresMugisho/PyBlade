@@ -1,6 +1,7 @@
 import re
 from typing import Any, Dict, Pattern
 from uuid import uuid4
+import json
 
 from pyblade.engine import loader
 from pyblade.engine.exceptions import TemplateNotFoundError
@@ -9,38 +10,18 @@ _OPENING_TAG_PATTERN: Pattern = re.compile(r"<(?P<tag>\w+)\s*(?P<attributes>.*?)
 
 
 class Component:
-    instances = {}
+    _instances = {}
 
     def __init__(self):
-        self._id = uuid4().hex
+        self._id = f"{self.get_template_name()}-{uuid4().hex[:8]}"
 
         # Register the instance in the intances list.
-        self.__class__.instances[self.id] = self
+        self.__class__._instances[self._id] = self
 
-    @property
-    def id(self):
-        return f"{self.get_template_name()}-{self._id}"
-
-    @classmethod
-    def get_instance(cls, id: str):
-        return cls.instances.get(id)
-
-    def get_template_name(self):
-        return self.template_name
-
-    def get_html(self):
-        return self.render()
 
     def get_methods(self):
-        return {k: v for k, v in self.__class__.__dict__.items() if not k.startswith("__") and callable(v)}
+        return {k: v for k, v in self.__class__.__dict__.items() if not k.startswith("_") and callable(v)}
 
-    def get_context(self):
-        """Get all variables of the class and the instance"""
-        return {
-            k: v
-            for k, v in {**self.__class__.__dict__, **self.__dict__}.items()
-            if not (k.startswith("_") or callable(v))
-        }
 
     def view(self, context: Dict[str, Any] = None):
         """Render a component with its context"""
@@ -60,7 +41,7 @@ class Component:
         attributes = match.group("attributes")
         updated_content = re.sub(
             rf"{tag}\s*{attributes}",
-            f'{tag} {attributes} liveblade_id="{self.id}"',
+            f'{tag} {attributes} pb-id="{self._id}"',
             template.content,
             1,
         )
@@ -69,43 +50,56 @@ class Component:
         context = {**context, **self.get_context()}
         return template.render(context)
 
-    def update_form_data(self, form_data):
-        for key, value in form_data.items():
-            setattr(self, key, value)
-
-    # Lifecycle hooks
-    def mount(self, *args, **kwargs):
-        """The equivalent of __init__()"""
+    # LIFECYCLE HOOKS
+    def mount(self, **kwargs):
+        """Called at the initial component rendering. This is the equivalent of __init__() in python"""
         pass
 
     def boot(self):
+        """Called on every request, after the component is mounted."""
+        pass
+        
+    def hydrate(self):
+        """Called on every AJAX request, just after the state is deserialized."""
         pass
 
     def render(self):
+        """
+        Called to render the component.
+        """
         raise NotImplementedError()
 
     def rendering(self):
+        """
+        Called before the component is rendered.
+        """
         pass
 
     def rendered(self):
+        """
+        Called after the component is rendered.
+        """
         pass
 
     def updating(self, property: str, value):
         """
+        Called before a property is updated.
         property: The name of the current property being updated
         value: The value about to be set to the property
         """
         pass
 
-    def updated(self, property: str):
+    def updated(self, property: str, value):
         """
+        Called after a property is updated.
         property: The name of the current property that was updated
+        value: The new value of the property
         """
         pass
 
     def _call_property_hook(self, phase: str, property_name: str, *args):
         """
-        Allow generic property related methods (e.g: updated_email)
+        Allow generic property related methods (e.g: updating_email, updated_email)
         """
         # Generic hook (updated / updating)
         generic = getattr(self, phase, None)
@@ -117,11 +111,39 @@ class Component:
         if callable(specific):
             specific(*args)
 
-    def serialize(self):
-        pass
+    
+    # SYSTEM METHODS
+    @classmethod
+    def get_instance(cls, id: str):
+        """Retrieve a component instance based on an ID"""
+        return cls._instances.get(id)
 
-    def deserialize(self):
-        pass
+    def get_template_name(self):
+        """Get the HTML template name of the component"""
+        return self.template_name
+
+    def get_state(self):
+        """Get public state og the component (variables the instance)"""
+        return {
+            k: v
+            for k, v in self.__dict__.items()
+            if not (k.startswith("_") and not callable(v))
+        }
+
+    def serialize(self):
+        """Serialize the component state to JSON"""
+        return json.dumps(self.get_sate())
+
+    @classmethod
+    def deserialize(cls, state_json: str):
+        """Recreate a component's instance from a JSON state from client"""
+        state = json.loads(state_json)
+        instance = cls()
+        for key, value in state.items():
+            setattr(instance, key, value)
+        return instance
+
+
 
     # Actions
     def reset(self, *args):
