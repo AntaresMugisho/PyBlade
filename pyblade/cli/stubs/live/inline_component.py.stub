@@ -3,7 +3,7 @@ from pyblade import live
 class {class_name}(live.Component):
 
     def render(self):
-        return self.inline("""
+        return self.render_inline("""
             <div>
                 {{# Component content goes here #}}
             </div>

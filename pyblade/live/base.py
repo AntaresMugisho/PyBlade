@@ -2,28 +2,43 @@ import re
 from typing import Any, Dict, Pattern
 from uuid import uuid4
 import json
+import inspect
+from pprint import pprint # noqa
 
 from pyblade.engine import loader
 from pyblade.engine.exceptions import TemplateNotFoundError
+from pyblade.engine.template import Template
+from pyblade.config import settings
 
 _OPENING_TAG_PATTERN: Pattern = re.compile(r"<(?P<tag>\w+)\s*(?P<attributes>.*?)>")
 
 
 class Component:
     _instances = {}
+    _rendered = ""
 
-    def __init__(self):
-        self._id = f"{self.get_template_name()}-{uuid4().hex[:8]}"
+    def __init__(self, pb_id: str | None = None):
+        self._id = pb_id or f"pb-{uuid4().hex[:8]}"
 
         # Register the instance in the intances list.
         self.__class__._instances[self._id] = self
 
+    
+    def _inject_component_id(self, template_string: str):
+        """Inject the component id into the template string"""
 
-    def get_methods(self):
-        return {k: v for k, v in self.__class__.__dict__.items() if not k.startswith("_") and callable(v)}
+        match = re.search(_OPENING_TAG_PATTERN, template_string)
+        tag = match.group("tag")
+        attributes = match.group("attributes")
+        return re.sub(
+            rf"{tag}\s*{attributes}",
+            f'{tag} {attributes} key="{self._id}"',
+            template_string,
+            1,
+        )
 
 
-    def view(self, context: Dict[str, Any] = None):
+    def render_template(self, context: Dict[str, Any] = None):
         """Render a component with its context"""
 
         if not context:
@@ -31,24 +46,37 @@ class Component:
 
         # Load the component's template
         try:
-            template = loader.load_template(self.get_template_name())
+            template = loader.load_template(self.get_template_name(), [settings.components_dir])
         except TemplateNotFoundError:
-            raise TemplateNotFoundError(f"No component named {self.get_template_name()}")
+            raise TemplateNotFoundError(f"No cocomponentmponent named {self.get_template_name()}")
+       
+        # Add pb-id to the root node of the template
+        template.content = self._inject_component_id(template.content)
 
-        # Add liveblade_id attribute to the root node of the component
-        match = re.search(_OPENING_TAG_PATTERN, template.content)
-        tag = match.group("tag")
-        attributes = match.group("attributes")
-        updated_content = re.sub(
-            rf"{tag}\s*{attributes}",
-            f'{tag} {attributes} pb-id="{self._id}"',
-            template.content,
-            1,
+        # Update the context
+        context |= self.get_state()
+
+        self._rendered = template.render(context)
+
+        return self._rendered
+
+    def render_inline(self, template_string: str, context: Dict[str, Any] = None):
+        """Render an inline live component (not attached to an HTML template file)"""
+        template = Template(
+            template_name=self.get_template_name(),
+            template_path=f"{self.get_template_name().removesuffix('.html')}.py",
+            template_string=template_string,
         )
+        
+        # Add pb-id to the root node of the template
+        template.content = self._inject_component_id(template.content)
 
-        template.content = updated_content
-        context = {**context, **self.get_context()}
-        return template.render(context)
+        # Update context
+        context |= self.get_state()
+
+        self._rendered = template.render(context)
+        
+        return self._rendered
 
     # LIFECYCLE HOOKS
     def mount(self, **kwargs):
@@ -66,8 +94,21 @@ class Component:
     def render(self):
         """
         Called to render the component.
+
+        This method intentionally delegates to `self.render_template()` instead of
+        `self.render_inline()`.
+
+        Inline components are expected to override this method and explicitly call
+        `self.render_inline()`, since rendering inline requires the component to
+        provide its template string.
+
+        If a component does not implement `render()`, we assume it is a template-
+        based component and fall back to `self.render_template()`. This behavior
+        also allows `render()` to be intentionally omitted from component
+        class.
         """
-        raise NotImplementedError()
+        print("FROM CLASS", self.__dict__)
+        return self.render_template()
 
     def rendering(self):
         """
@@ -75,7 +116,7 @@ class Component:
         """
         pass
 
-    def rendered(self):
+    def rendered(self, rendered_content: str):
         """
         Called after the component is rendered.
         """
@@ -132,7 +173,7 @@ class Component:
 
     def serialize(self):
         """Serialize the component state to JSON"""
-        return json.dumps(self.get_sate())
+        return json.dumps(self.get_state())
 
     @classmethod
     def deserialize(cls, state_json: str):
@@ -144,8 +185,104 @@ class Component:
         return instance
 
 
+    # LIFECYCLE CALLERS (SSR and AJAX HANDLING)
+    @classmethod
+    def render_initial(cls, props, attributes, slots, template_html, render_engine):
+        """
+        Gère le cycle de vie du PREMIER rendu (Server-Side Rendering).
+        """
+        # 1. Préparation de l'état initial par défaut
+        initial_state = dict(props)
+        class_defaults = {k: v for k, v in cls.__dict__.items() if not k.startswith('_') and not callable(v)}
+        initial_state.update(class_defaults)
 
-    # Actions
+        # Get Component ID from attributes
+        pb_id = attributes.get("key")
+
+        # 2. Instanciation
+        instance = cls(pb_id)
+        for key, value in initial_state.items():
+            setattr(instance, key, value)
+
+        # 3. Résolution et appel de mount()
+        mount = getattr(instance, "mount", None)
+
+        sig = inspect.signature(mount)
+        params = sig.parameters
+
+        if len(params) == 0:
+            mount()
+        else:
+            mount(**params)
+
+        # 4. Surcharge par les attributs HTML parents
+        for key, value in attributes.items():
+            setattr(instance, key, value)
+        
+        # Hook: boot()
+        instance.boot()
+
+        # 5. Hook : rendering()
+        instance.rendering()
+
+        # 6. Hook: render()
+        instance.render()
+
+        # 7. Hook : rendered()
+        instance.rendered(instance._rendered)
+
+        # 8. Sérialisation de l'état pour le JS
+        state_snapshot = instance.serialize()
+        # Comment envoyer cet état au JS ????
+
+        return instance._rendered
+
+    @classmethod
+    def handle_ajax_action(cls, state_snapshot, action_name, action_args, template_html, render_engine, slots):
+        """
+        Gère le cycle de vie lors d'une mise à jour dynamique (Requête AJAX).
+        """
+        # 1. Recréer l'instance à partir de l'état précédent (Désérialisation)
+        instance = cls.deserialize(state_snapshot)
+
+        # 2. Hook : hydrate()
+        instance.hydrate()
+
+        # 3. Si l'action consiste à modifier une propriété (ex: pb:model)
+        if action_name == "$set":
+            prop_name, new_value = action_args[0], action_args[1]
+            
+            # Hooks : updating() et updated() autour de la modification
+            instance.updating(prop_name, new_value)
+            setattr(instance, prop_name, new_value)
+            instance.updated(prop_name, new_value)
+
+        # 4. Si l'action est l'appel d'une méthode (ex: pb:click="increment")
+        else:
+            method = getattr(instance, action_name, None)
+            if method and callable(method):
+                # Optionnel : Tu pourrais aussi appeler updating/updated ici si tu traques les changements globaux
+                method(*action_args)
+
+        # 5. Hook : rendering()
+        instance.rendering()
+
+        # 6. Ré-exécution du rendu du template avec le nouvel état
+        live_context = instance.get_state()
+        live_context.update(slots)
+        new_html = render_engine(template_html, live_context)
+
+        # 7. Hook : rendered()
+        new_html = instance.rendered(new_html)
+
+        # 8. Renvoie le nouveau HTML et le nouvel état sérialisé pour le frontend
+        return {
+            "html": new_html,
+            "new_state": instance.serialize()
+        }
+
+
+    # MAGIC ACTIONS
     def reset(self, *args):
         """Reset properties to their initial values"""
         pass
@@ -168,7 +305,7 @@ class Component:
 
     def dispatch(self, event: str):
         """Dispatch an event. Same as emit()"""
-        pass
+        self.emit(event)
 
     def emit(self, event: str):
         """Emit an event. Same as dispatch()"""
@@ -178,7 +315,8 @@ class Component:
         """Call js functions from python"""
         pass
 
-    # Properties
+
+    # MAGIC PROPERTIES
     @property
     def event(self):
         pass
@@ -191,7 +329,7 @@ class Component:
     def exception(exc, stopPropagation):
         pass
 
-    def stop_propagation():
+    def stop_propagation(self):
         pass
 
     @staticmethod
@@ -205,11 +343,11 @@ class Component:
 
 
 # Navigation
-def bladeRedirect(route):
+def pb_redirect(route):
     return {"redirect": True, "url": route}
 
 
-def bladeNavigate(route):
+def pb_navigate(route):
     return {"navigate": True, "url": route}
 
 

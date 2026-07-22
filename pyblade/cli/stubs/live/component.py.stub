@@ -5,4 +5,4 @@ class {class_name}(live.Component):
     def render(self):
         """Render {template_name}"""
 
-        return self.view(context={{}})
+        return self.render_template(context={{}})

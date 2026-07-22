@@ -1,9 +1,11 @@
 import importlib
-import inspect
+from pathlib import Path
 import random
 import re
 from html import escape as html_escape
-from pprint import pformat
+from pprint import pformat, pprint
+
+from questionary.prompts.path import path
 
 from pyblade.config import settings
 from pyblade.engine.exceptions import (
@@ -16,7 +18,7 @@ from pyblade.engine.exceptions import (
     TemplateRenderError,
 )
 from pyblade.i18n import gettext, ngettext, npgettext, pgettext
-from pyblade.utils import validate_single_root_node
+from pyblade.utils import validate_single_root_node, snakebab_to_pascal, pascal_to_snake
 
 from . import loader
 from .contexts import AttributesContext, CycleContext, LoopContext
@@ -652,10 +654,11 @@ class ComponentNode(Node):
                 counter.html  # optional
 
         """
+        name = pascal_to_snake(name)
 
-        components_dir = settings.components_dir
         parts = name.replace(".", "/").split("/")
         component_name = parts[-1]
+        components_dir = settings.components_dir
         parent = components_dir.joinpath(*parts[:-1])
 
         # Static component
@@ -714,44 +717,23 @@ class ComponentNode(Node):
             template.content = original_content
             raise
 
-    def _render_live_component(self, name, python_file, data):
+    def _render_live_component(self, python_file : Path, data):
 
         # Render the template content
-        m = str(python_file).removesuffix(".py").replace("/", ".")
+        m = str(python_file.with_suffix("")).replace("/", ".")
+        module_name = python_file.stem
+
         try:
-            module = importlib.import_module(m)
 
-            cls = getattr(module, f"{re.sub('[-_]', '', name.title())}")
-            template_name = getattr(cls, "template_name", m)
+            module = importlib.import_module(m) 
+            cls = getattr(module, snakebab_to_pascal(module_name))
+
+            template_name = getattr(cls, "template_name", ".".join(m.split(".")[1:]))
             setattr(cls, "template_name", template_name)
-
-            component = cls()
-
-            # Call component lifecycle hooks
-            mount = getattr(component, "mount", None)
-
-            sig = inspect.signature(mount)
-            params = sig.parameters
-
-            print(params)
-
-            if len(params) == 0:
-                mount()
-            else:
-                mount(**params)
-
-            component.boot()
-            component.rendering()
-            template = component.render()
-            component.rendered()
-
+            template = cls.render_initial({}, {}, {}, "", None)
             return template
-
-        except ModuleNotFoundError:
-            raise DirectiveParsingError(f"Component module not found: {python_file}")
-
-        except AttributeError as e:
-            raise DirectiveParsingError(f"Error loading Live component: {str(e)}")
+        except Exception:
+            raise
 
     def render(self, context):
         """Render a component, similar to TemplateProcessor.render_component."""
@@ -774,11 +756,11 @@ class ComponentNode(Node):
                 return self._render_static_component(name, data)
 
             elif component["type"] == "live":
-                return self._render_live_component(name, component["python"], data)
+                return self._render_live_component(component["python"], data)
 
-        # except TemplateRenderError:
-        #     # To avoid the error being cathed by the following except clauses
-        #     raise
+        except TemplateRenderError:
+            # To avoid the error being cathed by the following except clauses
+            raise
 
         # except ComponentNotFoundError:
         #     raise
@@ -793,8 +775,7 @@ class ComponentNode(Node):
         #     raise
 
         except Exception as exc:
-            raise exc
-            # self._raise(exc)
+            self._raise(exc)
 
 
 class SlotNode(Node):

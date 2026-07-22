@@ -15,6 +15,8 @@ class Command(BaseCommand):
     def config(self):
         """Setup command arguments and options here"""
         self.add_argument("name")
+        self.add_flag("-l", "--live", help="Create a pyblade live component")
+        self.add_flag("-i", "--inline", help="Create a template-less live component")
         self.add_flag("-f", "--force", help="Create the component even if it already exists")
 
     def handle(self, **kwargs):
