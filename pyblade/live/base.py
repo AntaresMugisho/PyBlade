@@ -255,7 +255,6 @@ class Component:
 
         # 3. Si l'action consiste à modifier une propriété (ex: pb:model)
         if action_name == "$set":
-            print("SET METHOD DONE")
             prop_name, new_value = action_args[0], action_args[1]
             
             # Hooks : updating() et updated() autour de la modification
@@ -266,7 +265,6 @@ class Component:
         # 4. Si l'action est l'appel d'une méthode (ex: pb:click="increment")
         else:
             method = getattr(instance, action_name, None)
-            print("METHOD: ", method)
             if method and callable(method):
                 # Optionnel : Tu pourrais aussi appeler updating/updated ici si tu traques les changements globaux
                 method(*action_args)

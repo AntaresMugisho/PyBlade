@@ -5,7 +5,7 @@ from django.urls import path
 from django.views.decorators.csrf import csrf_exempt
 from django.views.generic import TemplateView
 
-from pyblade.live.base import Component
+from pyblade.live import Component
 
 # from pyblade.live import Live
 
@@ -14,10 +14,10 @@ from django.http import HttpResponse, Http404
 
 def serve_assets(request):
     current_dir = Path(__file__).resolve().parent
-    js_file_path = current_dir / "static" / "pyblade.js"
+    js_file_path = current_dir / "static" / "pyblade.min.js"
 
     if not js_file_path.exists():
-        raise Http404("Fichier pyblade.js introuvable")
+        raise Http404("Fichier pyblade.min.js introuvable")
 
     with open(js_file_path, "rb") as f:
         content = f.read()
@@ -31,15 +31,15 @@ def update_component(request):
     from pprint import pprint
 
     component_id = data.get('id')
-    snapshot = data.get('snapshot')
+    snapshot = data.get('state')
+    action = data.get('action')
+
     if snapshot is None:
         snapshot = {}
 
-    action = data.get('action')
-
     print("DATA \n")
     pprint(data)
-    
+
     new_data = Component.handle_ajax_action(component_id, snapshot, action)
 
     return JsonResponse(dict(new_data))

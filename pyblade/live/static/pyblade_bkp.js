@@ -37,8 +37,8 @@ function emit(eventName, detail) {
 }
 
 class StateManager {
-    constructor() {d'exemples
-        this.state = {};d'exemples
+    constructor() {
+        this.state = {};
     }
 
     get(key) {
@@ -77,7 +77,7 @@ class Component {
     }
 
     _setupModelBindings() {
-        const rootElement = document.querySelector(`[pb-id="${this.id}"]`);
+        const rootElement = document.querySelector(`[pb:id="${this.id}"]`);
         if (!rootElement) return;
 
         // Set up model bindings
@@ -105,7 +105,7 @@ class Component {
 
     handleModelChange(key, value) {
         // Update all elements bound to this model
-        const rootElement = document.querySelector(`[liveblade_id="${this.id}"]`);
+        const rootElement = document.querySelector(`[pb:id="${this.id}"]`);
         if (!rootElement) return;
 
         // Update input elements
@@ -163,7 +163,7 @@ class Component {
         const tempDiv = document.createElement('div');
         tempDiv.innerHTML = html;
 
-        const currentComponent = document.querySelector(`[liveblade_id="${this.id}"]`);
+        const currentComponent = document.querySelector(`[pb:id="${this.id}"]`);
         if (currentComponent) {
             morphdom(currentComponent, tempDiv.firstElementChild, {
                 onBeforeElUpdated: (fromEl, toEl) => {
@@ -193,7 +193,7 @@ class Component {
     }
 
     async callServerMethod(methodName, el, ...args) {
-        const component = el.closest("[liveblade_id]").getAttribute('liveblade_id');
+        const component = el.closest("[pb:id]").getAttribute('pb:id');
         const loadingTarget = document.querySelector(`[pb:loading-target="${methodName}"]`);
         
         try {
@@ -228,7 +228,7 @@ class Component {
             if (data.data) {
                 const tempDiv = document.createElement('div');
                 tempDiv.innerHTML = data.data;
-                const currentComponent = document.querySelector(`[liveblade_id="${component}"]`);
+                const currentComponent = document.querySelector(`[pb:id="${component}"]`);
                 if (currentComponent) {
                     morphdom(currentComponent, tempDiv.firstElementChild, {
                         onBeforeElUpdated: (fromEl, toEl) => {
@@ -268,7 +268,7 @@ class Component {
 
     async callServerMethodOld(methodName, el, ...args) {
         document.dispatchEvent(new Event('request.start')); 
-        const component = el.closest("[liveblade_id]").getAttribute('liveblade_id')
+        const component = el.closest("[pb:id]").getAttribute('pb:id')
         try {
             const formData = new FormData();
             formData.append('component', component); 
@@ -371,8 +371,8 @@ class Component {
             const tempDiv = document.createElement('div');
             tempDiv.innerHTML = newData.html;
             
-            // Trouver l'élément parent avec l'attribut liveblade_id
-            const currentComponent = document.querySelector(`[liveblade_id="${this.id}"]`);
+            // Trouver l'élément parent avec l'attribut pb:id
+            const currentComponent = document.querySelector(`[pb:id="${this.id}"]`);
             if (currentComponent) {
                 currentComponent.innerHTML = tempDiv.firstElementChild.innerHTML;
             }
@@ -771,7 +771,7 @@ directive('upload', ({ el, directive, component }) => {
             }
             
             // Récupérer l'ID du composant
-            const componentId = el.closest("[liveblade_id]").getAttribute('liveblade_id');
+            const componentId = el.closest("[pb:id]").getAttribute('pb:id');
             
             console.log('Files data to send:', filesData);
             
@@ -803,7 +803,7 @@ directive('upload', ({ el, directive, component }) => {
                 tempDiv.innerHTML = result.data;
                 const newContent = tempDiv.firstElementChild;
 
-                const currentComponent = document.querySelector(`[liveblade_id="${componentId}"]`);
+                const currentComponent = document.querySelector(`[pb:id="${componentId}"]`);
                 if (currentComponent) {
                     morphdom(currentComponent, newContent, {
                         onBeforeElUpdated: (fromEl, toEl) => {
@@ -939,168 +939,6 @@ function getCookie(name) {
     return cookieValue;
 }
 
-// Styles pour le loading
-const loadingStyles = `
-.blade-loading {
-    position: relative;
-    pointer-events: none;
-    opacity: 0.6;
-    transition: opacity 0.3s;
-}
-
-/* Spinner classique */
-.blade-loading-spinner::after {
-    content: "";
-    position: absolute;
-    top: calc(50% - 0.5em);
-    left: calc(50% - 0.5em);
-    width: 1em;
-    height: 1em;
-    border: 2px solid #3498db;
-    border-radius: 50%;
-    border-top-color: transparent;
-    animation: blade-spin 0.6s linear infinite;
-}
-
-/* Dots loading */
-.blade-loading-dots::after {
-    content: "...";
-    position: absolute;
-    animation: blade-dots 1.5s infinite;
-    font-weight: bold;
-    letter-spacing: 2px;
-}
-
-/* Pulse loading */
-.blade-loading-pulse::after {
-    content: "";
-    position: absolute;
-    top: calc(50% - 0.5em);
-    left: calc(50% - 0.5em);
-    width: 1em;
-    height: 1em;
-    background: #3498db;
-    border-radius: 50%;
-    animation: blade-pulse 1s ease-in-out infinite;
-}
-
-/* Progress bar */
-.blade-loading-progress::after {
-    content: "";
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    height: 2px;
-    background: #3498db;
-    animation: blade-progress 1s ease-in-out infinite;
-}
-
-/* Skeleton loading */
-.blade-loading-skeleton {
-    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-    background-size: 200% 100%;
-    animation: blade-skeleton 1.5s infinite;
-}
-
-/* Fade loading */
-.blade-loading-fade {
-    animation: blade-fade 1s ease-in-out infinite alternate;
-}
-
-/* Bounce loading */
-.blade-loading-bounce::after {
-    content: "";
-    position: absolute;
-    top: calc(50% - 0.25em);
-    left: calc(50% - 0.25em);
-    width: 0.5em;
-    height: 0.5em;
-    background: #3498db;
-    border-radius: 50%;
-    animation: blade-bounce 0.5s cubic-bezier(0.19, 1, 0.22, 1) infinite alternate;
-}
-
-/* Overlay avec différents styles */
-.blade-loading-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(255, 255, 255, 0.7);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-}
-
-.blade-loading-overlay.blur {
-    backdrop-filter: blur(3px);
-}
-
-.blade-loading-overlay.dark {
-    background: rgba(0, 0, 0, 0.5);
-}
-
-/* Button loading styles */
-.blade-loading-button {
-    position: relative;
-    padding-right: 2.5em;
-}
-
-.blade-loading-button::after {
-    content: "";
-    position: absolute;
-    right: 0.75em;
-    top: calc(50% - 0.5em);
-    width: 1em;
-    height: 1em;
-    border: 2px solid currentColor;
-    border-radius: 50%;
-    border-top-color: transparent;
-    animation: blade-spin 0.6s linear infinite;
-}
-
-/* Animations */
-@keyframes blade-spin {
-    to { transform: rotate(360deg); }
-}
-
-@keyframes blade-dots {
-    0%, 20% { content: "."; }
-    40% { content: ".."; }
-    60%, 100% { content: "..."; }
-}
-
-@keyframes blade-pulse {
-    0% { transform: scale(0.8); opacity: 0.5; }
-    100% { transform: scale(1.2); opacity: 0; }
-}
-
-@keyframes blade-progress {
-    0% { width: 0; }
-    50% { width: 100%; }
-    100% { width: 0; }
-}
-
-@keyframes blade-skeleton {
-    0% { background-position: 200% 0; }
-    100% { background-position: -200% 0; }
-}
-
-@keyframes blade-fade {
-    0% { opacity: 0.4; }
-    100% { opacity: 0.8; }
-}
-
-@keyframes blade-bounce {
-    from { transform: translateY(-50%); }
-    to { transform: translateY(50%); }
-}
-`;
-
-// // Ajouter les styles au document
-// doc/media/antares/Data/setups/idiomorph.min.jsument.head.insertAdjacentHTML('beforeend', `<style>${loadingStyles}</style>`);
 
 function updateLoadingState(el, isLoading) {
     // Récupérer les modifiers
