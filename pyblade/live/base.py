@@ -32,10 +32,15 @@ class Component:
         attributes = match.group("attributes")
         return re.sub(
             rf"{tag}\s*{attributes}",
-            f'{tag} {attributes} key="{self._id}"',
+            f'{tag} {attributes} pb:id="{self._id}"',
             template_string,
             1,
         )
+    
+    @classmethod
+    def _get_component_instance(cls, id: str):
+        """Get component instance from id"""
+        return cls._instances.get(id)
 
 
     def render_template(self, context: Dict[str, Any] = None):
@@ -107,7 +112,6 @@ class Component:
         also allows `render()` to be intentionally omitted from component
         class.
         """
-        print("FROM CLASS", self.__dict__)
         return self.render_template()
 
     def rendering(self):
@@ -173,16 +177,16 @@ class Component:
 
     def serialize(self):
         """Serialize the component state to JSON"""
+        print("STATE \n")
+        pprint(self.get_state())
         return json.dumps(self.get_state())
 
-    @classmethod
-    def deserialize(cls, state_json: str):
+    def deserialize(self, state_json):
         """Recreate a component's instance from a JSON state from client"""
-        state = json.loads(state_json)
-        instance = cls()
-        for key, value in state.items():
-            setattr(instance, key, value)
-        return instance
+        # state = json.load(state_json)
+        for key, value in state_json.items():
+            setattr(self, key, value)
+        return self
 
 
     # LIFECYCLE CALLERS (SSR and AJAX HANDLING)
@@ -238,18 +242,20 @@ class Component:
         return instance._rendered
 
     @classmethod
-    def handle_ajax_action(cls, state_snapshot, action_name, action_args, template_html, render_engine, slots):
+    def handle_ajax_action(cls, component_id, state_snapshot, action_name, action_args = []):
         """
         Gère le cycle de vie lors d'une mise à jour dynamique (Requête AJAX).
         """
-        # 1. Recréer l'instance à partir de l'état précédent (Désérialisation)
-        instance = cls.deserialize(state_snapshot)
+        # 1. Recréer l'instance
+        instance = cls._get_component_instance(component_id)
+        instance = instance.deserialize(state_snapshot)
 
         # 2. Hook : hydrate()
         instance.hydrate()
 
         # 3. Si l'action consiste à modifier une propriété (ex: pb:model)
         if action_name == "$set":
+            print("SET METHOD DONE")
             prop_name, new_value = action_args[0], action_args[1]
             
             # Hooks : updating() et updated() autour de la modification
@@ -260,27 +266,27 @@ class Component:
         # 4. Si l'action est l'appel d'une méthode (ex: pb:click="increment")
         else:
             method = getattr(instance, action_name, None)
+            print("METHOD: ", method)
             if method and callable(method):
                 # Optionnel : Tu pourrais aussi appeler updating/updated ici si tu traques les changements globaux
                 method(*action_args)
+            else:
+                raise NameError(f"Method '{action_name}' is not defined")
 
         # 5. Hook : rendering()
         instance.rendering()
 
-        # 6. Ré-exécution du rendu du template avec le nouvel état
-        live_context = instance.get_state()
-        live_context.update(slots)
-        new_html = render_engine(template_html, live_context)
+        # 6. Hook: render()
+        instance.render()
 
         # 7. Hook : rendered()
-        new_html = instance.rendered(new_html)
+        instance.rendered(instance._rendered)
 
         # 8. Renvoie le nouveau HTML et le nouvel état sérialisé pour le frontend
         return {
-            "html": new_html,
+            "html": instance._rendered,
             "new_state": instance.serialize()
         }
-
 
     # MAGIC ACTIONS
     def reset(self, *args):

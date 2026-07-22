@@ -30,6 +30,8 @@ from .nodes import (
     LoremNode,
     MethodNode,
     NowNode,
+    PybladeScriptsNode,
+    PybladeStylesNode,
     QuerystringNode,
     RatioNode,
     RegroupNode,
@@ -137,6 +139,10 @@ class Parser:
                 # Start parsing: order matters
                 if directive_name == "comment":
                     ast.append(self._parse_comment(directive_args_str, token))
+                elif directive_name == "pbscripts":
+                    ast.append(PybladeScriptsNode(line=token.line, column=token.column))
+                elif directive_name == "pbstyles":
+                    ast.append(PybladeStylesNode(line=token.line, column=token.column))
                 elif directive_name == "if":
                     ast.append(self._parse_if(directive_args_str, token))
                 elif directive_name == "unless":

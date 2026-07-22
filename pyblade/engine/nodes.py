@@ -1057,6 +1057,31 @@ class CsrfNode(Node):
         return f'<input type="hidden" name="csrfmiddlewaretoken" value="{token}">'
 
 
+class PybladeScriptsNode(Node):
+    """Represents an @pbscripts directive that renders the pyblade.js file."""
+
+    def __repr__(self):
+        return "PybladeScriptsNode()"
+
+    def render(self, context):
+       return f'<script src="/pyblade/live/assets/pyblade.js" data-csrf={context.get("csrf_token", "")} defer></script>'
+
+class PybladeStylesNode(Node):
+    """Represents an @pbstyles directive that renders the pyblade.js file."""
+
+    def __repr__(self):
+        return "PybladeStylesNode()"
+
+    def render(self, context):
+        try:
+            from django.conf import settings as dj_settings
+            static_url = dj_settings.STATIC_URL
+        except Exception:
+            static_url = "/static/"
+
+        return f'<script src="{static_url}pyblade/live/static/pyblade.js"></script>'
+
+
 class MethodNode(Node):
     """Represents an @method('POST') directive."""
 

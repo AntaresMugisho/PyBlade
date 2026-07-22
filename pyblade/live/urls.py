@@ -1,17 +1,51 @@
+import json
+
 from django.http import JsonResponse
 from django.urls import path
 from django.views.decorators.csrf import csrf_exempt
 from django.views.generic import TemplateView
 
-from pyblade.live import liveBlade
+from pyblade.live.base import Component
+
+# from pyblade.live import Live
+
+from pathlib import Path
+from django.http import HttpResponse, Http404
+
+def serve_assets(request):
+    current_dir = Path(__file__).resolve().parent
+    js_file_path = current_dir / "static" / "pyblade.js"
+
+    if not js_file_path.exists():
+        raise Http404("Fichier pyblade.js introuvable")
+
+    with open(js_file_path, "rb") as f:
+        content = f.read()
+
+    return HttpResponse(content, content_type="application/javascript")
 
 
-def LiveBladeView(request):
-    if request.method == "GET":
-        return JsonResponse({"error": "Method not allowed"}, status=405)
-    return liveBlade.Live(request)
+def update_component(request):
+    data = json.loads(request.body)
+
+    from pprint import pprint
+
+    component_id = data.get('id')
+    snapshot = data.get('snapshot')
+    if snapshot is None:
+        snapshot = {}
+
+    action = data.get('action')
+
+    print("DATA \n")
+    pprint(data)
+    
+    new_data = Component.handle_ajax_action(component_id, snapshot, action)
+
+    return JsonResponse(dict(new_data))
 
 
 urlpatterns = [
-    path("live/", csrf_exempt(liveBlade.Live), name="live"),
+    path("pyblade/live/", update_component, name="pyblade-ajax"),
+    path("pyblade/live/assets/pyblade.js", serve_assets, name="pyblade-assets"),
 ]
