@@ -199,7 +199,6 @@ class Component:
         instance = cls()
         for key, value in state.items():
             setattr(instance, key, value)
-        pprint(instance.__dict__)
         return instance
 
 
@@ -253,7 +252,7 @@ class Component:
         snapshot = instance.serialize()
 
         initial_scripts = f"""
-<script pb:snapshots-{pb_id}>
+<script pb:_snapshots_ >
     window.__PB_SNAPSHOTS__ = window.__PB_SNAPSHOTS__ || {{}};
     window.__PB_SNAPSHOTS__['{pb_id}'] = {json.dumps(snapshot)};
 </script>

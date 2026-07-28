@@ -11,20 +11,19 @@ class PyBladeCore {
     start() {
         document.addEventListener('DOMContentLoaded', () => {
             // Scan page for components initialized
-            console.log("Hello from PyBlade Live")
-
             document.querySelectorAll('[pb\\:id]').forEach(el => {
                 const id = el.getAttribute('pb:id');
-                const initialState = window.__PB_SNAPSHOTS__?.[id] || {};
+                const initialSnapshot = window.__PB_SNAPSHOTS__?.[id] || {};
 
-                const component = new Component(id, el, initialState, this.store);
+                const component = new Component(id, el, initialSnapshot, this.store);
                 this.components.set(id, component);
     
-                // Cleanup initial HTML script tag 
-                document.querySelector(`[pb\\:snapshots-${id}]`).remove();
             });
-
-            // Cleanup initial HTML tag memory
+            
+            // Cleanup initial HTML tag script and memory
+            document.querySelectorAll(`[pb\\:_snapshots_]`).forEach((el) => {
+                el.remove()
+            });
             delete window.__PB_SNAPSHOTS__;
         });
     }

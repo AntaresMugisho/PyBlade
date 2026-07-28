@@ -1,4 +1,3 @@
-console.log("Hello, from PyBlade Live .js")
 let customDirectiveNames = new Set();
 let components = new Map();
 
@@ -995,7 +994,7 @@ function updateLoadingState(el, isLoading) {
             'blade-loading-button'
         );
         el.removeAttribute('disabled');
-        const overlay = el.querySelector('.blade-loading-overlay');
+        const overlay = el.querySelector('.pb-loading-overlay');
         if (overlay) {
             overlay.remove();
         }

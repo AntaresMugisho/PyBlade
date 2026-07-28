@@ -1,5 +1,5 @@
 import { Directives } from './directives.js';
-import Idiomorph from '../vendor/idiomorph.min.js';
+import { Idiomorph } from "../vendor/idiomorph.esm.js"
 
 export class Component {
     constructor(id, element, snapshot, store) {

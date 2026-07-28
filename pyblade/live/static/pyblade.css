@@ -1,4 +1,4 @@
-.blade-loading {
+.pb-loading {
     position: relative;
     pointer-events: none;
     opacity: 0.6;
@@ -6,7 +6,7 @@
 }
 
 /* Spinner classique */
-.blade-loading-spinner::after {
+.pb-loading-spinner::after {
     content: "";
     position: absolute;
     top: calc(50% - 0.5em);
@@ -20,7 +20,7 @@
 }
 
 /* Dots loading */
-.blade-loading-dots::after {
+.pb-loading-dots::after {
     content: "...";
     position: absolute;
     animation: blade-dots 1.5s infinite;
@@ -29,7 +29,7 @@
 }
 
 /* Pulse loading */
-.blade-loading-pulse::after {
+.pb-loading-pulse::after {
     content: "";
     position: absolute;
     top: calc(50% - 0.5em);
@@ -42,7 +42,7 @@
 }
 
 /* Progress bar */
-.blade-loading-progress::after {
+.pb-loading-progress::after {
     content: "";
     position: absolute;
     bottom: 0;
@@ -53,19 +53,19 @@
 }
 
 /* Skeleton loading */
-.blade-loading-skeleton {
+.pb-loading-skeleton {
     background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
     background-size: 200% 100%;
     animation: blade-skeleton 1.5s infinite;
 }
 
 /* Fade loading */
-.blade-loading-fade {
+.pb-loading-fade {
     animation: blade-fade 1s ease-in-out infinite alternate;
 }
 
 /* Bounce loading */
-.blade-loading-bounce::after {
+.pb-loading-bounce::after {
     content: "";
     position: absolute;
     top: calc(50% - 0.25em);
@@ -78,7 +78,7 @@
 }
 
 /* Overlay avec différents styles */
-.blade-loading-overlay {
+.pb-loading-overlay {
     position: absolute;
     top: 0;
     left: 0;
@@ -91,21 +91,21 @@
     z-index: 1000;
 }
 
-.blade-loading-overlay.blur {
+.pb-loading-overlay.blur {
     backdrop-filter: blur(3px);
 }
 
-.blade-loading-overlay.dark {
+.pb-loading-overlay.dark {
     background: rgba(0, 0, 0, 0.5);
 }
 
 /* Button loading styles */
-.blade-loading-button {
+.pb-loading-button {
     position: relative;
     padding-right: 2.5em;
 }
 
-.blade-loading-button::after {
+.pb-loading-button::after {
     content: "";
     position: absolute;
     right: 0.75em;

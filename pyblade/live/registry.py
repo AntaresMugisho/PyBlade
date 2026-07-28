@@ -33,7 +33,6 @@ class ComponentRegistry:
         """
         # 1. Fast lookup from memory cache
         if class_path in self._components:
-            print("GOT CLASS FROM CACHE")
             return self._components[class_path]
 
         # 2. Lazy resolution via importlib on first access
@@ -44,7 +43,6 @@ class ComponentRegistry:
 
             # Cache the class reference for subsequent requests
             self._components[class_path] = cls
-            print("FOUND AND SAVED CLASS TO CACHE")
             return cls
         except (ValueError, ImportError, AttributeError) as err:
             raise ValueError(f"PyBlade component '{class_path}' could not be resolved.") from err

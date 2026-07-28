@@ -1063,7 +1063,7 @@ class PybladeScriptsNode(Node):
         return "PybladeScriptsNode()"
 
     def render(self, context):
-       return f'<script src="/pyblade/live/assets/js/" data-csrf={context.get("csrf_token", "")} defer></script>'
+       return f'<script type="module" src="/pyblade/live/assets/js/" data-csrf={context.get("csrf_token", "")} defer></script>'
 
 class PybladeStylesNode(Node):
     """Represents an @pbstyles directive that renders the pyblade css assets"""
