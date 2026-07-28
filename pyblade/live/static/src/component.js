@@ -10,6 +10,15 @@ export class Component {
         // Store snapshot directly in JS Memory
         this.store.set(this.id, snapshot);
 
+        // Callback registries for directives
+        this.loadingStartCallbacks = [];
+        this.loadingEndCallbacks = [];
+        this.dirtyCallbacks = [];
+        this.cleanCallbacks = [];
+        this.stateChangeCallbacks = [];
+        this.streamUpdateCallbacks = [];
+        this.destroyCallbacks = [];
+
         // Bind directives to DOM
         Directives.apply(this.element, this);
     }
@@ -19,27 +28,35 @@ export class Component {
     }
 
     async setProperties(updatedProperties) {
-        await this.sendRequest({ properties: updatedProperties });
+        await this.sendRequest({ action: "$set", params: updatedProperties });
     }
 
     async sendRequest(payload) {
         const csrfToken = document.querySelector('script[data-csrf]')?.getAttribute('data-csrf');
 
-        const response = await fetch('/pyblade/live/', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': csrfToken,
-            },
-            body: JSON.stringify({
-                id: this.id,
-                snapshot: this.store.get(this.id),
-                ...payload
-            })
-        });
+        // Trigger loading start callbacks
+        this.loadingStartCallbacks.forEach(cb => cb());
 
-        const data = await response.json();
-        if (data) this.update(data);
+        try {
+            const response = await fetch('/pyblade/live/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken,
+                },
+                body: JSON.stringify({
+                    id: this.id,
+                    snapshot: this.store.get(this.id),
+                    ...payload
+                })
+            });
+
+            const data = await response.json();
+            if (data) this.update(data);
+        } finally {
+            // Trigger loading end callbacks
+            this.loadingEndCallbacks.forEach(cb => cb());
+        }
     }
 
     update({ html, snapshot, events = [] }) {
@@ -50,5 +67,56 @@ export class Component {
         Directives.apply(this.element, this);
 
         events.forEach(evt => window.dispatchEvent(new CustomEvent(`pb:${evt.name}`, { detail: evt.data })));
+
+        // Trigger state change callbacks
+        this.stateChangeCallbacks.forEach(cb => cb());
+    }
+
+    // Callback registration methods for directives
+    onLoadingStart(callback) {
+        this.loadingStartCallbacks.push(callback);
+    }
+
+    onLoadingEnd(callback) {
+        this.loadingEndCallbacks.push(callback);
+    }
+
+    onDirty(callback) {
+        this.dirtyCallbacks.push(callback);
+    }
+
+    onClean(callback) {
+        this.cleanCallbacks.push(callback);
+    }
+
+    onStateChange(callback) {
+        this.stateChangeCallbacks.push(callback);
+    }
+
+    onStreamUpdate(callback) {
+        this.streamUpdateCallbacks.push(callback);
+    }
+
+    onDestroy(callback) {
+        this.destroyCallbacks.push(callback);
+    }
+
+    // Utility methods for directives
+    getState() {
+        return this.store.get(this.id)?.state || {};
+    }
+
+    navigate(url) {
+        // SPA-like navigation
+        window.history.pushState({}, '', url);
+        window.dispatchEvent(new PopStateEvent('popstate'));
+    }
+
+    async refresh() {
+        await this.sendRequest({ action: '$refresh' });
+    }
+
+    destroy() {
+        this.destroyCallbacks.forEach(cb => cb());
     }
 }

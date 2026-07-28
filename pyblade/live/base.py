@@ -124,19 +124,19 @@ class Component:
         """
         pass
 
-    def _call_property_hook(self, phase: str, property_name: str, *args):
+    def _call_property_hook(self, phase: str, property_name: str, value):
         """
         Allow generic property related methods (e.g: updating_email, updated_email)
         """
         # Generic hook (updated / updating)
         generic = getattr(self, phase, None)
         if callable(generic):
-            generic(property_name, *args)
+            generic(property_name, value)
 
         # Property-specific hook (updated_username / updating_username)
         specific = getattr(self, f"{phase}_{property_name}", None)
         if callable(specific):
-            specific(*args)
+            specific(value)
 
     def get_template_name(self):
         """Get the HTML template name of the component"""
@@ -280,12 +280,12 @@ class Component:
             
             # Hooks : updating() and updated() 
             instance.updating(prop_name, new_value)
-            self._call_property_hook('updating', prop_name, new_value)
+            instance._call_property_hook('updating', prop_name, new_value)
             
             setattr(instance, prop_name, new_value)
 
             instance.updated(prop_name, new_value)
-            self._call_property_hook('updated', prop_name, new_value)
+            instance._call_property_hook('updated', prop_name, new_value)
 
         # 4. If it's a method calling
         else:
