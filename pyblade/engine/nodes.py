@@ -19,6 +19,7 @@ from pyblade.engine.exceptions import (
 )
 from pyblade.i18n import gettext, ngettext, npgettext, pgettext
 from pyblade.utils import validate_single_root_node, snakebab_to_pascal, pascal_to_snake
+from pyblade.live.registry import registry as live_components_registry
 
 from . import loader
 from .contexts import AttributesContext, CycleContext, LoopContext
@@ -719,16 +720,14 @@ class ComponentNode(Node):
 
     def _render_live_component(self, python_file : Path, data):
 
-        # Render the template content
-        m = str(python_file.with_suffix("")).replace("/", ".")
-        module_name = python_file.stem
+        module_path = str(python_file.with_suffix("")).replace("/", ".")
+        class_name = snakebab_to_pascal(python_file.stem)
 
         try:
 
-            module = importlib.import_module(m) 
-            cls = getattr(module, snakebab_to_pascal(module_name))
-
-            template_name = getattr(cls, "template_name", ".".join(m.split(".")[1:]))
+            cls = live_components_registry.get(f'{module_path}.{class_name}')
+            
+            template_name = getattr(cls, "template_name", ".".join(module_path.split(".")[1:]))
             setattr(cls, "template_name", template_name)
             template = cls.render_initial({}, {}, {}, "", None)
             return template
@@ -1064,22 +1063,16 @@ class PybladeScriptsNode(Node):
         return "PybladeScriptsNode()"
 
     def render(self, context):
-       return f'<script src="/pyblade/live/assets/pyblade.js" data-csrf={context.get("csrf_token", "")} defer></script>'
+       return f'<script src="/pyblade/live/assets/js/" data-csrf={context.get("csrf_token", "")} defer></script>'
 
 class PybladeStylesNode(Node):
-    """Represents an @pbstyles directive that renders the pyblade.js file."""
+    """Represents an @pbstyles directive that renders the pyblade css assets"""
 
     def __repr__(self):
         return "PybladeStylesNode()"
 
     def render(self, context):
-        try:
-            from django.conf import settings as dj_settings
-            static_url = dj_settings.STATIC_URL
-        except Exception:
-            static_url = "/static/"
-
-        return f'<script src="{static_url}pyblade/live/static/pyblade.js"></script>'
+        return f'<script src="/pyblade/live/assets/css/"></script>'
 
 
 class MethodNode(Node):

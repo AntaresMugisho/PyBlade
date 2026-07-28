@@ -7,40 +7,20 @@ from pprint import pprint # noqa
 
 from pyblade.engine import loader
 from pyblade.engine.exceptions import TemplateNotFoundError
-from pyblade.engine.template import Template
+# from pyblade.engine.template import Template
 from pyblade.config import settings
+
+from .security import generate_checksum
+
 
 _OPENING_TAG_PATTERN: Pattern = re.compile(r"<(?P<tag>\w+)\s*(?P<attributes>.*?)>")
 
 
 class Component:
-    _instances = {}
     _rendered = ""
 
-    def __init__(self, pb_id: str | None = None):
-        self._id = pb_id or f"pb-{uuid4().hex[:8]}"
-
-        # Register the instance in the intances list.
-        self.__class__._instances[self._id] = self
-
-    
-    def _inject_component_id(self, template_string: str):
-        """Inject the component id into the template string"""
-
-        match = re.search(_OPENING_TAG_PATTERN, template_string)
-        tag = match.group("tag")
-        attributes = match.group("attributes")
-        return re.sub(
-            rf"{tag}\s*{attributes}",
-            f'{tag} {attributes} pb:id="{self._id}"',
-            template_string,
-            1,
-        )
-    
-    @classmethod
-    def _get_component_instance(cls, id: str):
-        """Get component instance from id"""
-        return cls._instances.get(id)
+    def __init__(self, pb_id: str = None):
+        self._id = pb_id
 
 
     def render_template(self, context: Dict[str, Any] = None):
@@ -53,13 +33,14 @@ class Component:
         try:
             template = loader.load_template(self.get_template_name(), [settings.components_dir])
         except TemplateNotFoundError:
-            raise TemplateNotFoundError(f"No cocomponentmponent named {self.get_template_name()}")
+            raise TemplateNotFoundError(f"No component named {self.get_template_name()}")
        
         # Add pb-id to the root node of the template
-        template.content = self._inject_component_id(template.content)
+        if self._id is not None:
+            template.content = self._inject_component_id(template.content)
 
         # Update the context
-        context |= self.get_state()
+        context |= self._get_state()
 
         self._rendered = template.render(context)
 
@@ -67,21 +48,22 @@ class Component:
 
     def render_inline(self, template_string: str, context: Dict[str, Any] = None):
         """Render an inline live component (not attached to an HTML template file)"""
-        template = Template(
-            template_name=self.get_template_name(),
-            template_path=f"{self.get_template_name().removesuffix('.html')}.py",
-            template_string=template_string,
-        )
+        pass
+        # template = Template(
+        #     template_name=self.get_template_name(),
+        #     template_path=f"{self.get_template_name().removesuffix('.html')}.py",
+        #     template_string=template_string,
+        # )
         
-        # Add pb-id to the root node of the template
-        template.content = self._inject_component_id(template.content)
+        # # Add pb-id to the root node of the template
+        # template.content = self._inject_component_id(template.content)
 
-        # Update context
-        context |= self.get_state()
+        # # Update context
+        # context |= self._get_state()
 
-        self._rendered = template.render(context)
+        # self._rendered = template.render(context)
         
-        return self._rendered
+        # return self._rendered
 
     # LIFECYCLE HOOKS
     def mount(self, **kwargs):
@@ -156,37 +138,69 @@ class Component:
         if callable(specific):
             specific(*args)
 
-    
-    # SYSTEM METHODS
-    @classmethod
-    def get_instance(cls, id: str):
-        """Retrieve a component instance based on an ID"""
-        return cls._instances.get(id)
-
     def get_template_name(self):
         """Get the HTML template name of the component"""
         return self.template_name
 
-    def get_state(self):
-        """Get public state og the component (variables the instance)"""
+    # SYSTEM METHODS
+    def _get_state(self):
+        """Get public properties of the component"""
         return {
             k: v
             for k, v in self.__dict__.items()
             if not (k.startswith("_") and not callable(v))
         }
+    
+    def _get_methods(self):
+        """Get public methods of the component"""
+        return {
+            k: v
+            for k, v in self.__dict__.items()
+            if not (k.startswith("_") and callable(v))
+        }
+    
+    def _get_events(self):
+        """Get server-to-client events"""
+        return []
+
+    def _inject_component_id(self, template_string: str):
+        """Inject the component id into the template string"""
+
+        match = re.search(_OPENING_TAG_PATTERN, template_string)
+        tag = match.group("tag")
+        attributes = match.group("attributes")
+
+        return re.sub(
+            rf"{tag}\s*{attributes}",
+            f'{tag} {attributes} pb:id="{self._id}"',
+            template_string,
+            1,
+        )
+    
 
     def serialize(self):
         """Serialize the component state to JSON"""
-        print("STATE \n")
-        pprint(self.get_state())
-        return json.dumps(self.get_state())
+        class_path = f"{self.__class__.__module__}.{self.__class__.__qualname__}"
 
-    def deserialize(self, state_json):
+        payload = {
+            "id": self._id,
+            "class": class_path,
+            "state": self._get_state()
+        }
+
+        # Attach signature
+        payload["checksum"] = generate_checksum(payload)
+        
+        return payload
+
+    @classmethod
+    def deserialize(cls, state):
         """Recreate a component's instance from a JSON state from client"""
-        # state = json.load(state_json)
-        for key, value in state_json.items():
-            setattr(self, key, value)
-        return self
+        instance = cls()
+        for key, value in state.items():
+            setattr(instance, key, value)
+        pprint(instance.__dict__)
+        return instance
 
 
     # LIFECYCLE CALLERS (SSR and AJAX HANDLING)
@@ -201,9 +215,9 @@ class Component:
         initial_state.update(class_defaults)
 
         # Get Component ID from attributes
-        pb_id = attributes.get("key")
+        pb_id = attributes.get("key", f"pb-{uuid4().hex[:8]}")
 
-        # 2. Instanciation
+        # 2. Initial instanciation with coponent_id
         instance = cls(pb_id)
         for key, value in initial_state.items():
             setattr(instance, key, value)
@@ -219,7 +233,7 @@ class Component:
         else:
             mount(**params)
 
-        # 4. Surcharge par les attributs HTML parents
+        # 4. Supercharge with HTML attributes
         for key, value in attributes.items():
             setattr(instance, key, value)
         
@@ -235,38 +249,52 @@ class Component:
         # 7. Hook : rendered()
         instance.rendered(instance._rendered)
 
-        # 8. Sérialisation de l'état pour le JS
-        state_snapshot = instance.serialize()
-        # Comment envoyer cet état au JS ????
+        # 8. State serialization for JS
+        snapshot = instance.serialize()
 
-        return instance._rendered
+        initial_scripts = f"""
+<script pb:snapshots-{pb_id}>
+    window.__PB_SNAPSHOTS__ = window.__PB_SNAPSHOTS__ || {{}};
+    window.__PB_SNAPSHOTS__['{pb_id}'] = {json.dumps(snapshot)};
+</script>
+"""
+
+        return instance._rendered + initial_scripts
 
     @classmethod
-    def handle_ajax_action(cls, component_id, state_snapshot, action_name, action_args = []):
+    def update_component(cls, state, action_name, action_args = []):
         """
         Gère le cycle de vie lors d'une mise à jour dynamique (Requête AJAX).
         """
         # 1. Recréer l'instance
-        instance = cls._get_component_instance(component_id)
-        instance = instance.deserialize(state_snapshot)
+        instance = cls.deserialize(state)
 
         # 2. Hook : hydrate()
         instance.hydrate()
 
-        # 3. Si l'action consiste à modifier une propriété (ex: pb:model)
+        # 3. If the action consists on updating a property (e.g., pb:model)
         if action_name == "$set":
             prop_name, new_value = action_args[0], action_args[1]
-            
-            # Hooks : updating() et updated() autour de la modification
-            instance.updating(prop_name, new_value)
-            setattr(instance, prop_name, new_value)
-            instance.updated(prop_name, new_value)
+            if prop_name.startswith("_"):
+                raise AttributeError("Mutating private properties on PyBlade Live components is prohibited")
 
-        # 4. Si l'action est l'appel d'une méthode (ex: pb:click="increment")
+            
+            # Hooks : updating() and updated() 
+            instance.updating(prop_name, new_value)
+            self._call_property_hook('updating', prop_name, new_value)
+            
+            setattr(instance, prop_name, new_value)
+
+            instance.updated(prop_name, new_value)
+            self._call_property_hook('updated', prop_name, new_value)
+
+        # 4. If it's a method calling
         else:
+            if action_name.startswith("_"):
+                raise AttributeError("Calling private methods on PyBlade Live components is prohibited")
+
             method = getattr(instance, action_name, None)
             if method and callable(method):
-                # Optionnel : Tu pourrais aussi appeler updating/updated ici si tu traques les changements globaux
                 method(*action_args)
             else:
                 raise NameError(f"Method '{action_name}' is not defined")
@@ -277,13 +305,14 @@ class Component:
         # 6. Hook: render()
         instance.render()
 
-        # 7. Hook : rendered()
+        # # 7. Hook : rendered()
         instance.rendered(instance._rendered)
 
         # 8. Renvoie le nouveau HTML et le nouvel état sérialisé pour le frontend
         return {
             "html": instance._rendered,
-            "new_state": instance.serialize()
+            "snapshot": instance.serialize(),
+            "events": instance._get_events()
         }
 
     # MAGIC ACTIONS

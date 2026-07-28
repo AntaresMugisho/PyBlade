@@ -19,9 +19,12 @@ class PyBladeCore {
 
                 const component = new Component(id, el, initialState, this.store);
                 this.components.set(id, component);
+    
+                // Cleanup initial HTML script tag 
+                document.querySelector(`[pb\\:snapshots-${id}]`).remove();
             });
 
-            // Cleanup initial HTML script tag memory
+            // Cleanup initial HTML tag memory
             delete window.__PB_SNAPSHOTS__;
         });
     }

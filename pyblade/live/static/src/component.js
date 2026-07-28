@@ -33,7 +33,7 @@ export class Component {
             },
             body: JSON.stringify({
                 id: this.id,
-                state: this.store.get(this.id),
+                snapshot: this.store.get(this.id),
                 ...payload
             })
         });
@@ -43,16 +43,12 @@ export class Component {
     }
 
     update({ html, snapshot, events = [] }) {
-        // 1. Update state in memory
         this.store.set(this.id, snapshot);
 
-        // 2. Morph DOM cleanly
         Idiomorph.morph(this.element, html);
 
-        // 3. Re-bind directives on the updated DOM
         Directives.apply(this.element, this);
 
-        // 4. Trigger any events dispatched from Django
         events.forEach(evt => window.dispatchEvent(new CustomEvent(`pb:${evt.name}`, { detail: evt.data })));
     }
 }
