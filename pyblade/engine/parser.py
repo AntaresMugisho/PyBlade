@@ -25,6 +25,7 @@ from .nodes import (
     GetMediaPrefixNode,
     GetStaticPrefixNode,
     GuestNode,
+    HtmlComponentNode,
     IfChangedNode,
     IfNode,
     IncludeNode,
@@ -123,6 +124,16 @@ class Parser:
                 ast.append(self._parse_variable(escaped=True))
             elif token.type == "UNESCAPED_VAR_START":
                 ast.append(self._parse_variable(escaped=False))
+            elif token.type == "PB_TAG_START":
+                ast.append(self._parse_pb_component(token, paired=True))
+            elif token.type == "PB_TAG_SELF_CLOSE":
+                ast.append(self._parse_pb_component(token, paired=False))
+            elif token.type == "PB_TAG_END":
+                raise DirectiveParsingError(
+                    f"Unexpected closing tag '{token.value}' without matching opening tag",
+                    line=token.line,
+                    column=token.column,
+                )
             elif token.type == "DIRECTIVE":
                 directive_full_str = token.value
 
@@ -1086,6 +1097,145 @@ class Parser:
         body = self._parse_until_directives(["@enderror"])
         self.expect("DIRECTIVE", value_prefix="@enderror")
         return ErrorNode(field_expr, body, line=token.line, column=token.column)
+
+    def _parse_pb_component(self, token, paired=True):
+        """Parses HTML-like pb- component tags and converts them to ComponentNode.
+        
+        Examples:
+            <pb-alert type="error">Error message</pb-alert>
+            <pb-button label="Click me" />
+        """
+        tag_value = token.value
+        self.advance()  # Consume the PB_TAG_START or PB_TAG_SELF_CLOSE token
+        
+        # Extract component name from tag like <pb-alert> or <pb-button>
+        match = re.match(r"<pb-([a-zA-Z0-9_-]+)", tag_value)
+        if not match:
+            raise DirectiveParsingError(
+                f"Invalid pb- tag format: {tag_value}",
+                line=token.line,
+                column=token.column,
+            )
+        
+        component_name = match.group(1)
+        
+        # Parse attributes from the tag
+        attributes = self._parse_pb_attributes(tag_value)
+        
+        # For paired tags, collect content as slot
+        slot_body = None
+        if paired:
+            # Parse content until matching closing tag
+            body = []
+            while self.current_token():
+                current = self.current_token()
+                
+                # Check for matching closing tag
+                if current.type == "PB_TAG_END":
+                    closing_match = re.match(r"</pb-([a-zA-Z0-9_-]+)\s*>", current.value)
+                    if closing_match and closing_match.group(1) == component_name:
+                        self.advance()  # Consume the closing tag
+                        break
+                    else:
+                        # Mismatched closing tag, treat as content
+                        body.append(TextNode(current.value, line=current.line, column=current.column))
+                        self.advance()
+                elif current.type == "PB_TAG_START":
+                    # Nested pb- component
+                    body.append(self._parse_pb_component(current, paired=True))
+                elif current.type == "PB_TAG_SELF_CLOSE":
+                    # Nested self-closing pb- component
+                    body.append(self._parse_pb_component(current, paired=False))
+                elif current.type == "TEXT":
+                    body.append(TextNode(current.value, line=current.line, column=current.column))
+                    self.advance()
+                elif current.type == "VAR_START":
+                    body.append(self._parse_variable(escaped=True))
+                elif current.type == "UNESCAPED_VAR_START":
+                    body.append(self._parse_variable(escaped=False))
+                elif current.type == "DIRECTIVE":
+                    # Handle directives inside component content
+                    directive_full_str = current.value
+                    match = re.match(r"@([a-zA-Z_*[a-zA-Z0-9_]*)(.*)", directive_full_str)
+                    if match:
+                        directive_name = match.group(1)
+                        directive_args_str = match.group(2).strip()
+                        self.advance()
+                        
+                        # Handle nested directives that can appear in content
+                        if directive_name == "if":
+                            body.append(self._parse_if(directive_args_str, current))
+                        elif directive_name == "for":
+                            body.append(self._parse_for(directive_args_str, current))
+                        elif directive_name == "slot":
+                            body.append(self._parse_slot(directive_args_str, current))
+                        else:
+                            # For other directives, just add text representation
+                            body.append(TextNode(current.value, line=current.line, column=current.column))
+                    else:
+                        body.append(TextNode(current.value, line=current.line, column=current.column))
+                        self.advance()
+                else:
+                    # Unknown token type, treat as text
+                    body.append(TextNode(current.value, line=current.line, column=current.column))
+                    self.advance()
+            
+            slot_body = body
+        
+        # Convert attributes to component data expression
+        if attributes:
+            # Build a Python dict expression from attributes
+            attr_pairs = []
+            for key, value in attributes.items():
+                if value.startswith('"') or value.startswith("'"):
+                    attr_pairs.append(f'"{key}": {value}')
+                else:
+                    # Assume it's a variable/expression
+                    attr_pairs.append(f'"{key}": {value}')
+            data_expr = "{" + ", ".join(attr_pairs) + "}"
+        else:
+            data_expr = None
+        
+        # Create an HtmlComponentNode with the parsed information
+        return HtmlComponentNode(component_name, attributes, slot_body, line=token.line, column=token.column)
+
+    def _parse_pb_attributes(self, tag_value):
+        """Parse attributes from a pb- tag string.
+        
+        Example: <pb-alert type="error" dismissible=true>
+        Returns: {'type': '"error"', 'dismissible': 'true'}
+        """
+        attributes = {}
+        
+        # Remove the opening tag part
+        match = re.match(r"<pb-[a-zA-Z0-9_-]+\s*(.*)>", tag_value)
+        if not match:
+            return attributes
+        
+        attrs_str = match.group(1).strip()
+        if not attrs_str or attrs_str.endswith("/"):
+            return attributes
+        
+        # Remove trailing slash if present
+        attrs_str = attrs_str.rstrip("/").strip()
+        
+        # Parse attributes using regex
+        attr_pattern = r'([a-zA-Z0-9_-]+)=(?:"([^"]*)"|\'([^\']*)\'|([^\s>]+))'
+        for match in re.finditer(attr_pattern, attrs_str):
+            attr_name = match.group(1)
+            # Value could be in group 2 (double quotes), group 3 (single quotes), or group 4 (unquoted)
+            attr_value = match.group(2) or match.group(3) or match.group(4)
+            
+            if attr_value is not None:
+                # If quoted, preserve quotes for evaluation
+                if match.group(2):  # Double quoted
+                    attributes[attr_name] = f'"{attr_value}"'
+                elif match.group(3):  # Single quoted
+                    attributes[attr_name] = f"'{attr_value}'"
+                else:  # Unquoted - treat as expression
+                    attributes[attr_name] = attr_value
+        
+        return attributes
 
     def _parse_autocomplete(self, args_str):
         return AutocompleteNode(args_str)

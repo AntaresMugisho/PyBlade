@@ -127,11 +127,34 @@ class Lexer:
                 else:
                     # An isolated '@' or '@' followed by non-keyword char. Treat as text.
                     self._add_token("TEXT", self._peek(1))
+
+            # PyBlade HTML-like component tags: <pb-component> or <pb-component />
+            elif self._peek(4) == "<pb-":
+                # Match closing tag: </pb-component>
+                match_closing = self._match_regex_at_current_pos(r"</pb-([a-zA-Z0-9_-]+)\s*>")
+                if match_closing:
+                    self._add_token("PB_TAG_END", match_closing)
+                else:
+                    # Match opening or self-closing tag: <pb-component attrs...> or <pb-component attrs... />
+                    match_tag = self._match_regex_at_current_pos(
+                        r"<pb-([a-zA-Z0-9_-]+)"  # Tag name
+                        r"(?:\s+[^>]*?)?"  # Optional attributes
+                        r"\s*/?>"  # Self-closing or regular closing
+                    )
+                    if match_tag:
+                        # Check if it's self-closing
+                        if match_tag.strip().endswith("/>"):
+                            self._add_token("PB_TAG_SELF_CLOSE", match_tag)
+                        else:
+                            self._add_token("PB_TAG_START", match_tag)
+                    else:
+                        # If it doesn't match the full pattern, treat '<' as text
+                        self._add_token("TEXT", self._peek(1))
             else:
                 # Match plain text segments. This must be the last "match anything" rule.
                 # It matches any character that is NOT the start of a special block
                 # We need to be careful not to consume closing delimiters
-                text_segment = self._match_regex_at_current_pos(r"[^@\{}\!#]+")
+                text_segment = self._match_regex_at_current_pos(r"[^@\{}\!#<]+")
                 if text_segment:
                     self._add_token("TEXT", text_segment)
                 else:
@@ -145,6 +168,8 @@ class Lexer:
                     elif next_char == "}" and self._peek(2) not in ["}}", "!}"]:
                         self._add_token("TEXT", next_char)
                     elif next_char == "!" and self._peek(2) not in ["!!", "!}"]:
+                        self._add_token("TEXT", next_char)
+                    elif next_char == "<" and self._peek(4) != "<pb-":
                         self._add_token("TEXT", next_char)
                     else:
                         # This shouldn't happen, but ensures progress
