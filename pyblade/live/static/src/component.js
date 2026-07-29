@@ -19,6 +19,15 @@ export class Component {
         this.streamUpdateCallbacks = [];
         this.destroyCallbacks = [];
 
+        // Form state registry (react-hook-form inspired)
+        this.formState = {
+            values: { ...snapshot.state },
+            dirtyFields: new Set(),
+            touchedFields: new Set(),
+        };
+        this.pendingUpdates = null;
+        this.pendingUpdateTimer = null;
+
         // Bind directives to DOM
         Directives.apply(this.element, this);
     }
@@ -28,7 +37,29 @@ export class Component {
     }
 
     async setProperties(updatedProperties) {
-        await this.sendRequest({ action: "$set", params: updatedProperties });
+        const [propName, value] = updatedProperties;
+        
+        // Update local form state immediately (react-hook-form pattern)
+        this.formState.values[propName] = value;
+        this.formState.dirtyFields.add(propName);
+        this.formState.touchedFields.add(propName);
+        
+        // Batch updates - don't send immediately
+        this.pendingUpdates = this.pendingUpdates || {};
+        this.pendingUpdates[propName] = value;
+        
+        // Clear existing timer and set new one for batched update
+        if (this.pendingUpdateTimer) {
+            clearTimeout(this.pendingUpdateTimer);
+        }
+        
+        this.pendingUpdateTimer = setTimeout(async () => {
+            if (this.pendingUpdates) {
+                const updates = Object.entries(this.pendingUpdates).flat();
+                this.pendingUpdates = null;
+                await this.sendRequest({ action: "$set", params: updates });
+            }
+        }, 300); // Default batch delay
     }
 
     async sendRequest(payload) {
@@ -107,7 +138,6 @@ export class Component {
     }
 
     navigate(url) {
-        // SPA-like navigation
         window.history.pushState({}, '', url);
         window.dispatchEvent(new PopStateEvent('popstate'));
     }

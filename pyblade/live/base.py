@@ -374,13 +374,13 @@ class Component:
         pass
 
 
-# Navigation
-def pb_redirect(route):
-    return {"redirect": True, "url": route}
+    # Navigation
+    def redirect(self, href):
+        return {"redirect": True, "href": href}
 
 
-def pb_navigate(route):
-    return {"navigate": True, "url": route}
+    def navigate(self, href):
+        return {"navigate": True, "href": href}
 
 
 # Decorators
