@@ -136,15 +136,31 @@ else:
 
 # Default framework configuration in lowercase
 DEFAULT_CONFIG: Dict[str, Any] = {
-    "core": {
-        "inject_assets": True,
-        "assets_url": "/pyblade/assets/pyblade.js",
+   "project": {
+        "name": "PyBlade Application",
     },
-    "security": {
+    "stack": {
+        "python": f"{sys.version_info.major}.{sys.version_info.minor}",
+        "web_framework": "django",
+        "web_framework_version": "5.0",
+        "css_framework": None,
+        "css_framework_version": "none",
+    },
+    "components": {
+        "directory": "components",
+        "paginator": "django.core.paginator.Paginator",
         "verify_checksum": True,
+    },
+    "assets": {
+        "inject": False,
     },
     "compiler": {
         "cache_templates": True,
+    },
+    "i18n": {
+        "locale": "en",
+        "fallback_locale": "en",
+        "directory": "locale",
     },
 }
 

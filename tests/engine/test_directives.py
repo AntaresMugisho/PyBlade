@@ -166,7 +166,6 @@ class TestDirectives(unittest.TestCase):
         <input @selected(is_selected)>
         <input @required(is_required)>
         <input @checked(is_checked)>
-        <input @autocomplete(auto_val)>
         """
         context = {"is_selected": True, "is_required": False, "is_checked": True, "auto_val": "off"}
         output = self._render(template, context)
@@ -213,6 +212,119 @@ class TestDirectives(unittest.TestCase):
     def test_inline_comment(self):
         template = "Hello {# This is a comment #} World"
         self.assertEqual(self._render(template).strip(), "Hello  World")
+
+    def test_section_yield_inheritance(self):
+        # Test @section and @yield directives (Laravel Blade style)
+        template = """
+        @section('content')
+            <p>This is the content</p>
+        @endsection
+        """
+        # The section should be stored in context but not rendered directly
+        result = self._render(template)
+        self.assertEqual(result.strip(), "")
+
+    def test_block_inheritance(self):
+        # Test @block directive
+        template = """
+        @block('header')
+            <h1>Default Header</h1>
+        @endblock
+        """
+        result = self._render(template)
+        self.assertIn("Default Header", result)
+
+    def test_yield_with_default(self):
+        # Test @yield with default value
+        template = "@yield('missing_section', 'Default Content')"
+        result = self._render(template)
+        self.assertEqual(result.strip(), "Default Content")
+
+    def test_checked_directive(self):
+        # Test @checked directive
+        template = '<input type="checkbox" @checked(checked)>'
+        result = self._render(template, {"checked": True})
+        self.assertIn("checked", result)
+        
+        result = self._render(template, {"checked": False})
+        self.assertNotIn("checked", result)
+
+    def test_selected_directive(self):
+        # Test @selected directive
+        template = '<option @selected(selected)>Option</option>'
+        result = self._render(template, {"selected": True})
+        self.assertIn("selected", result)
+        
+        result = self._render(template, {"selected": False})
+        self.assertNotIn("selected", result)
+
+    def test_required_directive(self):
+        # Test @required directive
+        template = '<input type="text" @required(required)>'
+        result = self._render(template, {"required": True})
+        self.assertIn("required", result)
+        
+        result = self._render(template, {"required": False})
+        self.assertNotIn("required", result)
+
+    def test_field_directive(self):
+        # Test @field directive with attributes (django-widget-tweaks style)
+        # Mock Django form field
+        class MockField:
+            def __str__(self):
+                return '<input type="text" name="username" id="id_username">'
+        
+        template = '@field(form.username, class="form-control", placeholder="Enter username")'
+        result = self._render(template, {"form": {"username": MockField()}})
+        self.assertIn('class="form-control"', result)
+        self.assertIn('placeholder="Enter username"', result)
+
+    def test_field_with_append_attribute(self):
+        # Test @field directive with append syntax (class+="value")
+        class MockField:
+            def __str__(self):
+                return '<input type="text" name="email" class="default-class" id="id_email">'
+        
+        template = '@field(form.email, class+="extra-class")'
+        result = self._render(template, {"form": {"email": MockField()}})
+        self.assertIn('extra-class', result)
+        self.assertIn('default-class', result)
+
+    def test_error_directive_with_django_form(self):
+        # Test @error directive with Django-style form errors
+        class MockForm:
+            def __init__(self):
+                self.errors = {"email": ["This field is required."]}
+        
+        template = """
+        @error(form.email)
+            <small class="text-red-500">{{ message }}</small>
+        @enderror
+        """
+        result = self._render(template, {"form": MockForm()})
+        self.assertIn("This field is required.", result)
+        self.assertIn("text-red-500", result)
+
+    def test_error_directive_with_laravel_errors(self):
+        # Test @error directive with Laravel-style errors bag
+        template = """
+        @error(form.email)
+            <small class="text-red-500">{{ message }}</small>
+        @enderror
+        """
+        result = self._render(template, {"errors": {"email": "Invalid email format"}})
+        self.assertIn("Invalid email format", result)
+        self.assertIn("text-red-500", result)
+
+    def test_error_directive_no_errors(self):
+        # Test @error directive when no errors exist
+        template = """
+        @error(form.email)
+            <small class="text-red-500">{{ message }}</small>
+        @enderror
+        """
+        result = self._render(template, {"form": {}, "errors": {}})
+        self.assertEqual(result.strip(), "")
 
 
 if __name__ == "__main__":

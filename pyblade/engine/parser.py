@@ -17,7 +17,9 @@ from .nodes import (
     CsrfNode,
     CycleNode,
     DebugNode,
+    ErrorNode,
     ExtendsNode,
+    FieldNode,
     FirstOfNode,
     ForNode,
     GetMediaPrefixNode,
@@ -216,11 +218,15 @@ class Parser:
                 elif directive_name == "autoescape":
                     ast.append(self._parse_autoescape(directive_args_str))
                 elif directive_name == "selected":
-                    ast.append(self._parse_selected(directive_args_str))
+                    ast.append(self._parse_selected(directive_args_str, token))
                 elif directive_name == "required":
-                    ast.append(self._parse_required(directive_args_str))
+                    ast.append(self._parse_required(directive_args_str, token))
                 elif directive_name == "checked":
-                    ast.append(self._parse_checked(directive_args_str))
+                    ast.append(self._parse_checked(directive_args_str, token))
+                elif directive_name == "field":
+                    ast.append(self._parse_field(directive_args_str, token))
+                elif directive_name == "error":
+                    ast.append(self._parse_error(directive_args_str, token))
                 elif directive_name == "ratio":
                     ast.append(self._parse_ratio(directive_args_str, token))
                 elif directive_name == "get_static_prefix" or directive_name == "gsp":
@@ -230,7 +236,7 @@ class Parser:
                 elif directive_name == "querystring":
                     ast.append(self._parse_querystring(directive_args_str, token))
                 elif directive_name == "block" or directive_name == "section":
-                    ast.append(self._parse_block(directive_args_str))
+                    ast.append(self._parse_block(directive_args_str, token))
                 elif directive_name == "live":
                     ast.append(LiveBladeNode())
                 elif directive_name in [
@@ -254,6 +260,7 @@ class Parser:
                     "endblocktranslate",
                     "endwith",
                     "endblock",
+                    "enderror",
                 ]:
                     # These are control flow directives handled by their parent block parsers.
                     # Encountering them at the top level or out of sequence is a syntax error.
@@ -445,6 +452,8 @@ class Parser:
                     body.append(self._parse_component(directive_args_str, token))
                 elif directive_name == "slot":
                     body.append(self._parse_slot(directive_args_str, token))
+                elif directive_name == "error":
+                    body.append(self._parse_error(directive_args_str, token))
                 elif directive_name == "with":
                     body.append(self._parse_with(directive_args_str, token))
                 elif directive_name == "verbatim":
@@ -656,22 +665,23 @@ class Parser:
             )
         return IncludeNode(path_expr, data_expr, line=token.line, column=token.column)
 
-    def _parse_extends(self, args_str):
+    def _parse_extends(self, args_str, token):
         """Parses an @extends('layout') directive."""
         layout = self._extract_expression_from_args(args_str, "@extends")
-        return ExtendsNode(layout)
+        return ExtendsNode(layout, line=token.line, column=token.column)
 
-    def _parse_section(self, args_str):
+    def _parse_section(self, args_str, token):
         """Parses an @section('name')...@endsection block."""
         name = self._extract_expression_from_args(args_str, "@section")
         body = self._parse_until_directives(["@endsection"])
         self.expect("DIRECTIVE", value_prefix="@endsection")
-        return SectionNode(name, body)
+        return SectionNode(name, body, line=token.line, column=token.column)
 
-    def _parse_yield(self, args_str):
+    def _parse_yield(self, args_str, token):
         """Parses an @yield('name', default) directive."""
-        # Similar to include, might have multiple args.
-        return YieldNode(args_str)
+        # Parse arguments like @yield('content', 'Default content')
+        name_expr, default_expr = self._parse_function_args(args_str)
+        return YieldNode(name_expr, default_expr, line=token.line, column=token.column)
 
     def _parse_component(self, args_str, token):
         """Parses an @component('name', data)...@endcomponent block."""
@@ -685,12 +695,12 @@ class Parser:
             )
         return ComponentNode(path_expr, data_expr, line=token.line, column=token.column)
 
-    def _parse_slot(self, args_str):
+    def _parse_slot(self, args_str, token):
         """Parses an @slot('name')...@endslot block."""
         name = self._extract_expression_from_args(args_str, "@slot")
         body = self._parse_until_directives(["@endslot"])
         self.expect("DIRECTIVE", value_prefix="@endslot")
-        return SlotNode(name, body)
+        return SlotNode(name, body, line=token.line, column=token.column)
 
     def _parse_verbatim(self, args_str, token=None):
         """Parses an @verbatim...@endverbatim block."""
@@ -989,14 +999,93 @@ class Parser:
         self.expect("DIRECTIVE", value_prefix="@endspaceless")
         return SpacelessNode(body)
 
-    def _parse_selected(self, args_str):
-        return SelectedNode(args_str)
+    def _parse_selected(self, args_str, token):
+        return SelectedNode(args_str, line=token.line, column=token.column)
 
-    def _parse_required(self, args_str):
-        return RequiredNode(args_str)
+    def _parse_required(self, args_str, token):
+        return RequiredNode(args_str, line=token.line, column=token.column)
 
-    def _parse_checked(self, args_str):
-        return CheckedNode(args_str)
+    def _parse_checked(self, args_str, token):
+        return CheckedNode(args_str, line=token.line, column=token.column)
+
+    def _parse_field(self, args_str, token):
+        """Parses an @field(form.field, attrs...) directive.
+        
+        Usage: @field(form.username, type="text", class="form-control")
+        """
+        # Remove outer parentheses if present
+        match = re.match(r"^\s*\((.*)\)\s*$", args_str)
+        if match:
+            args_str = match.group(1).strip()
+        
+        # Split by comma, but respect nested structures and quotes
+        parts = []
+        current_part = ""
+        bracket_count = 0
+        brace_count = 0
+        quote_char = None
+        
+        for char in args_str:
+            if quote_char:
+                current_part += char
+                if char == quote_char:
+                    quote_char = None
+            elif char in ('"', "'"):
+                quote_char = char
+                current_part += char
+            elif char in ("[", "("):
+                bracket_count += 1
+                current_part += char
+            elif char in ("]", ")"):
+                bracket_count -= 1
+                current_part += char
+            elif char == "{":
+                brace_count += 1
+                current_part += char
+            elif char == "}":
+                brace_count -= 1
+                current_part += char
+            elif char == "," and bracket_count == 0 and brace_count == 0:
+                parts.append(current_part.strip())
+                current_part = ""
+            else:
+                current_part += char
+        
+        if current_part.strip():
+            parts.append(current_part.strip())
+        
+        if not parts:
+            raise DirectiveParsingError(
+                "@field requires at least a field expression",
+                line=token.line,
+                column=token.column,
+            )
+        
+        # First part is the field expression
+        field_expr = parts[0]
+        
+        # Remaining parts are attributes
+        attributes = {}
+        for part in parts[1:]:
+            # Parse attribute as key="value" or key=value
+            attr_match = re.match(r'^(\w+)(?:\+?)=(.*)$', part.strip())
+            if attr_match:
+                attr_name = attr_match.group(1)
+                attr_value = attr_match.group(2).strip()
+                # Remove quotes if present
+                if (attr_value.startswith('"') and attr_value.endswith('"')) or \
+                   (attr_value.startswith("'") and attr_value.endswith("'")):
+                    attr_value = attr_value[1:-1]
+                attributes[attr_name] = attr_value
+        
+        return FieldNode(field_expr, attributes, line=token.line, column=token.column)
+
+    def _parse_error(self, args_str, token):
+        """Parses an @error(form.field)...@enderror block."""
+        field_expr = self._extract_expression_from_args(args_str, "@error")
+        body = self._parse_until_directives(["@enderror"])
+        self.expect("DIRECTIVE", value_prefix="@enderror")
+        return ErrorNode(field_expr, body, line=token.line, column=token.column)
 
     def _parse_autocomplete(self, args_str):
         return AutocompleteNode(args_str)
@@ -1032,12 +1121,12 @@ class Parser:
 
         return QuerystringNode(kwargs_str, as_name, line=token.line, column=token.column)
 
-    def _parse_block(self, args_str):
+    def _parse_block(self, args_str, token):
         """Parses an @block('name')...@endblock block."""
         name = self._extract_expression_from_args(args_str, "@block")
         body = self._parse_until_directives(["@endblock"])
         self.expect("DIRECTIVE", value_prefix="@endblock")
-        return BlockNode(name, body)
+        return BlockNode(name, body, line=token.line, column=token.column)
 
     def _parse_cycle(self, args_str, token):
         """Parse @cycle('value1', 'value2', ...) or @cycle('value1', 'value2' as variable_name)"""

@@ -185,18 +185,46 @@ class AttributesContext:
 
 
 class SlotContext:
+    """Manages named and unnamed slots for template inheritance and components."""
 
-    def __init__(self, content: str = ""):
-        self.content = content
+    def __init__(self):
+        self._named_slots = {}
+        self._unnamed_slots = []
+
+    def set_slot(self, name: str, content: str):
+        """Set a named slot's content."""
+        self._named_slots[name] = content
+
+    def get_slot(self, name: str, default: str = "") -> str:
+        """Get a named slot's content, or default if not found."""
+        return self._named_slots.get(name, default)
+
+    def has_slot(self, name: str) -> bool:
+        """Check if a named slot exists."""
+        return name in self._named_slots
+
+    def add_unnamed(self, content: str):
+        """Add content to the unnamed slots list."""
+        self._unnamed_slots.append(content)
+
+    def get_unnamed(self, index: int = 0, default: str = "") -> str:
+        """Get an unnamed slot by index, or default if not found."""
+        if 0 <= index < len(self._unnamed_slots):
+            return self._unnamed_slots[index]
+        return default
+
+    def get_all_unnamed(self) -> list:
+        """Get all unnamed slots."""
+        return self._unnamed_slots
 
     def __str__(self):
-        return self.content
+        return str(self._named_slots)
 
     def __bool__(self):
-        return bool(self.content)
+        return bool(self._named_slots or self._unnamed_slots)
 
     def is_empty(self):
-        return not self.content
+        return not (self._named_slots or self._unnamed_slots)
 
 
 class CycleContext:

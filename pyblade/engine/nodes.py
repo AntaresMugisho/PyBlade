@@ -22,7 +22,7 @@ from pyblade.utils import validate_single_root_node, snakebab_to_pascal, pascal_
 from pyblade.live.registry import registry as live_components_registry
 
 from . import loader
-from .contexts import AttributesContext, CycleContext, LoopContext
+from .contexts import AttributesContext, CycleContext, LoopContext, SlotContext
 from .sandbox import SafeEvaluator
 
 
@@ -504,9 +504,10 @@ class SectionNode(Node):
 
 
 class BlockNode(Node):
-    """Represents a @block('name')...@endblock block (Django style)."""
+    """Represents a @block('name')...@endblock block (Laravel Blade style)."""
 
-    def __init__(self, name, body):
+    def __init__(self, name, body, line=None, column=None):
+        super().__init__(line, column)
         self.name = name
         self.body = body
 
@@ -517,23 +518,31 @@ class BlockNode(Node):
         """Render a block with optional override.
 
         If context['__blocks'][name] exists, it is returned; otherwise the
-        block's own body is rendered. This matches the behavior relied on in
-        test_block_inheritance.
+        block's own body is rendered and stored in context['__blocks'].
+        This works like Laravel Blade's @block directive.
         """
         # Resolve block name (usually a string literal)
         name = self.eval(self.name, context)
 
-        # Check for override
+        # Check for override in child template
         blocks = context.get("__blocks", {})
         if isinstance(blocks, dict) and name in blocks:
             return blocks[name]
 
+        # Render the block's own body
         output = []
         for node in self.body:
             rendered = node.render(context)
             if rendered:
                 output.append(rendered)
-        return "".join(output)
+        content = "".join(output)
+
+        # Store the block content for potential use by parent templates
+        if "__blocks" not in context:
+            context["__blocks"] = {}
+        context["__blocks"][name] = content
+
+        return content
 
 
 class YieldNode(Node):
@@ -780,7 +789,8 @@ class ComponentNode(Node):
 class SlotNode(Node):
     """Represents an @slot('name')...@endslot block."""
 
-    def __init__(self, name, body):
+    def __init__(self, name, body, line=None, column=None):
+        super().__init__(line, column)
         self.name = name
         self.body = body
 
@@ -788,7 +798,7 @@ class SlotNode(Node):
         return f"SlotNode(name='{self.name}', body={self.body})"
 
     def render(self, context):
-        """Render and register a named slot in the context."""
+        """Render and register a named slot in the SlotContext."""
         output = []
         for node in self.body:
             rendered = node.render(context)
@@ -797,7 +807,15 @@ class SlotNode(Node):
         content = "".join(output)
 
         name = self.eval(self.name, context)
-        context[name] = content
+        
+        # Get or create SlotContext from context
+        slot_context = context.get("__slots")
+        if slot_context is None:
+            slot_context = SlotContext()
+            context["__slots"] = slot_context
+        
+        # Store the slot content
+        slot_context.set_slot(name, content)
         return ""
 
 
@@ -1617,7 +1635,8 @@ class SelectedNode(Node):
 class RequiredNode(Node):
     """Represents a @required(condition) directive."""
 
-    def __init__(self, condition):
+    def __init__(self, condition, line=None, column=None):
+        super().__init__(line, column)
         self.condition = condition
 
     def __repr__(self):
@@ -1632,7 +1651,8 @@ class RequiredNode(Node):
 class CheckedNode(Node):
     """Represents a @checked(condition) directive."""
 
-    def __init__(self, condition):
+    def __init__(self, condition, line=None, column=None):
+        super().__init__(line, column)
         self.condition = condition
 
     def __repr__(self):
@@ -1642,6 +1662,176 @@ class CheckedNode(Node):
         if self.eval(self.condition, context):
             return " checked"
         return ""
+
+
+class FieldNode(Node):
+    """Represents a @field(form.field, attrs...) directive for rendering form fields with extra attributes.
+    
+    Works like django-widget-tweaks' {% render_field %} tag to add/modify HTML attributes.
+    Usage: @field(form.username, type="text", class="form-control", placeholder="Username")
+    """
+
+    def __init__(self, field_expr, attributes=None, line=None, column=None):
+        super().__init__(line, column)
+        self.field_expr = field_expr
+        self.attributes = attributes or {}
+
+    def __repr__(self):
+        return f"FieldNode(field_expr='{self.field_expr}', attributes={self.attributes})"
+
+    def render(self, context):
+        """Render the form field with additional attributes.
+        
+        The field expression should evaluate to a Django form field or similar object
+        that can be rendered as HTML. The attributes dict contains HTML attributes to add/modify.
+        """
+        try:
+            # Get the field object from context
+            field = self.eval(self.field_expr, context)
+            
+            # If field is None or not renderable, return empty string
+            if field is None:
+                return ""
+            
+            # Try to render the field (Django form field)
+            field_html = str(field)
+            
+            # Parse the field HTML and add/modify attributes
+            from html.parser import HTMLParser
+            
+            class FieldAttributeParser(HTMLParser):
+                def __init__(self, extra_attrs):
+                    super().__init__()
+                    self.extra_attrs = extra_attrs
+                    self.result = ""
+                    self.in_field_tag = False
+                    self.current_tag = ""
+                    self.current_attrs = {}
+                    
+                def handle_starttag(self, tag, attrs):
+                    self.current_tag = tag
+                    self.current_attrs = dict(attrs)
+                    self.in_field_tag = True
+                    
+                def handle_endtag(self, tag):
+                    if self.in_field_tag and tag == self.current_tag:
+                        # Merge attributes
+                        for attr_name, attr_value in self.extra_attrs.items():
+                            # Handle append syntax (class+="value")
+                            if attr_name.endswith('+'):
+                                base_name = attr_name[:-1]
+                                existing = self.current_attrs.get(base_name, '')
+                                self.current_attrs[base_name] = f"{existing} {attr_value}".strip()
+                            else:
+                                self.current_attrs[attr_name] = attr_value
+                        
+                        # Rebuild the tag with merged attributes
+                        attrs_str = " ".join(f'{k}="{v}"' for k, v in self.current_attrs.items())
+                        if attrs_str:
+                            self.result += f"<{self.current_tag} {attrs_str}>"
+                        else:
+                            self.result += f"<{self.current_tag}>"
+                        self.in_field_tag = False
+                    else:
+                        self.result += f"</{tag}>"
+                        
+                def handle_data(self, data):
+                    if not self.in_field_tag:
+                        self.result += data
+                        
+                def handle_entityref(self, name):
+                    if not self.in_field_tag:
+                        self.result += f"&{name};"
+                        
+                def handle_charref(self, name):
+                    if not self.in_field_tag:
+                        self.result += f"&#{name};"
+            
+            parser = FieldAttributeParser(self.attributes)
+            parser.feed(field_html)
+            
+            return parser.result
+            
+        except Exception as exc:
+            # If rendering fails, return the field as-is or empty string
+            try:
+                field = self.eval(self.field_expr, context)
+                return str(field) if field else ""
+            except:
+                return ""
+
+
+class ErrorNode(Node):
+    """Represents an @error(form.field)...@enderror block for displaying form validation errors.
+    
+    Usage:
+        @error(form.email)
+            <small class="text-red-500">{{ message }}</small>
+        @enderror
+    """
+
+    def __init__(self, field_expr, body, line=None, column=None):
+        super().__init__(line, column)
+        self.field_expr = field_expr
+        self.body = body
+
+    def __repr__(self):
+        return f"ErrorNode(field_expr='{self.field_expr}', body={self.body})"
+
+    def render(self, context):
+        """Render the error block if the field has validation errors.
+        
+        Checks for errors in Django form style (form.errors) or Laravel style (errors bag).
+        """
+        try:
+            field_expr = self.eval(self.field_expr, context)
+            
+            # Extract field name from expression like "form.email"
+            field_name = None
+            if isinstance(field_expr, str):
+                # If it's a string, try to extract the field name
+                parts = field_expr.split('.')
+                if len(parts) >= 2:
+                    field_name = parts[-1]
+            
+            # Check for Django-style form errors
+            errors = None
+            if isinstance(field_expr, str) and '.' in field_expr:
+                # Try to get the form object from context
+                form_name = field_expr.split('.')[0]
+                form = context.get(form_name)
+                if form and hasattr(form, 'errors'):
+                    errors = form.errors
+                    if field_name and field_name in errors:
+                        error_messages = errors[field_name]
+                        if isinstance(error_messages, list):
+                            error_messages = error_messages[0] if error_messages else ""
+                        # Render body with message in context
+                        error_context = context.copy()
+                        error_context['message'] = str(error_messages)
+                        return "".join(node.render(error_context) for node in self.body)
+            
+            # Check for Laravel-style errors bag
+            errors_bag = context.get('errors')
+            if errors_bag and field_name:
+                if hasattr(errors_bag, 'get'):
+                    error_message = errors_bag.get(field_name)
+                    if error_message:
+                        error_context = context.copy()
+                        error_context['message'] = str(error_message)
+                        return "".join(node.render(error_context) for node in self.body)
+                elif isinstance(errors_bag, dict) and field_name in errors_bag:
+                    error_message = errors_bag[field_name]
+                    error_context = context.copy()
+                    error_context['message'] = str(error_message)
+                    return "".join(node.render(error_context) for node in self.body)
+            
+            # No errors found, return empty string
+            return ""
+            
+        except Exception as exc:
+            # If error checking fails, return empty string
+            return ""
 
 
 class AutocompleteNode(Node):

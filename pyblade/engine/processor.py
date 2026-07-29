@@ -7,6 +7,7 @@ from typing import Any, Dict
 from .cache import TemplateCache
 from .lexer import Lexer
 from .parser import Parser
+from . import loader
 
 
 class TemplateProcessor:
@@ -37,10 +38,10 @@ class TemplateProcessor:
             TemplateRenderError: If there's an error during rendering
         """
 
-        self.context = context
+        self.context = context.copy() if context else {}
 
         # Check cache first
-        cached_result = self.cache.get(template, context)
+        cached_result = self.cache.get(template, self.context)
         if cached_result is not None:
             return cached_result
 
@@ -48,6 +49,7 @@ class TemplateProcessor:
             tokens = Lexer(template).tokenize()
             nodes = Parser(tokens).parse()
 
+            # First pass: render the template to collect sections/blocks
             output = []
             for node in nodes:
                 rendered = node.render(self.context)
@@ -56,8 +58,18 @@ class TemplateProcessor:
 
             result = "".join(output)
 
+            # Check if this template extends another
+            if "__extends" in self.context:
+                layout_path = self.context["__extends"]
+                # Load and render the parent layout with the collected sections/blocks
+                layout_template = loader.load_template(layout_path)
+                # Remove the __extends key to avoid infinite recursion
+                extends_context = self.context.copy()
+                del extends_context["__extends"]
+                result = layout_template.render(extends_context)
+
             # Save cache
-            self.cache.set(template, context, result)
+            self.cache.set(template, self.context, result)
 
             return result
 
