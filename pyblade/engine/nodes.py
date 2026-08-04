@@ -1437,112 +1437,74 @@ class BlockTranslateNode(Node):
         trimmed={self.trimmed}, \
         kwargs={self.kwargs})"
 
-    def render(self, context):
-        """Render a block translation with pluralization support.
+    # A {{ variable }} placeholder, as written in the template
+    _placeholder_pattern = re.compile(r"\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}")
 
-        Converts {{ variable }} placeholders to %(variable)s for gettext,
-        then translates using ngettext for plural forms.
+    # The same placeholder once turned into what gettext expects
+    _interpolation_pattern = re.compile(r"%\((\w+)\)s")
+
+    def render(self, context):
+        """Render a block translation, with pluralization support.
+
+        The {{ variable }} placeholders of the body are turned into the %(variable)s
+        gettext expects, the message is translated as a whole, and the placeholders
+        of the translation are filled in afterwards.
         """
-        # Evaluate kwargs and add to context
-        eval_context = context.copy()
+        eval_context = dict(context)
+
         for key, value_expr in self.kwargs.items():
             try:
                 eval_context[key] = self.eval(value_expr, context)
             except Exception:
                 eval_context[key] = ""
 
-        # Evaluate count and add to context if it exists
+        count = None
         if self.count:
             try:
-                count_value = self.eval(self.count, context)
-                eval_context["count"] = count_value
+                count = self.eval(self.count, context)
             except Exception:
-                eval_context["count"] = 1
+                count = 1
+            eval_context["count"] = count
 
-        # Render the body to get the template string
-        body_parts = []
-        for node in self.body:
-            rendered = node.render(eval_context)
-            if rendered:
-                body_parts.append(rendered)
-        singular = "".join(body_parts)
+        singular = self._message(self.body, eval_context)
 
-        # Normalize whitespace if trimmed
-        if self.trimmed:
-            singular = " ".join(singular.split())
-
-        # Convert {{ variable }} placeholders to %(variable)s
-        placeholder_pattern = re.compile(r"\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}")
-        singular = placeholder_pattern.sub(r"%(\1)s", singular)
-
-        # Handle plural form
-        if self.plural_body:
-            plural_parts = []
-            for node in self.plural_body:
-                rendered = node.render(eval_context)
-                if rendered:
-                    plural_parts.append(rendered)
-            plural = "".join(plural_parts)
-
-            if self.trimmed:
-                plural = " ".join(plural.split())
-
-            # Convert placeholders in plural form
-            plural = placeholder_pattern.sub(r"%(\1)s", plural)
-
-            # Evaluate count expression
-            count_value = 1
-            if self.count:
-                try:
-                    count_value = self.eval(self.count, context)
-                    if not isinstance(count_value, (int, float)):
-                        count_value = 1
-                except Exception:
-                    count_value = 1
-
-            # Build interpolation dict from eval_context
-            # Extract all placeholder names from the template
-            placeholders = placeholder_pattern.findall(singular)
-            interp_dict = {}
-            for placeholder in placeholders:
-                if placeholder in eval_context:
-                    interp_dict[placeholder] = eval_context[placeholder]
-
-            # Translate with pluralization
-            if self.context:
-                translated = npgettext(self.context, singular, plural, count_value)
-            else:
-                translated = ngettext(singular, plural, count_value)
-
-            # Interpolate placeholders
-            try:
-                result = translated % interp_dict
-            except (KeyError, TypeError):
-                # If interpolation fails, return the translated string as-is
-                result = translated
-
-            return result
-        else:
-            # Build interpolation dict from eval_context
-            placeholders = placeholder_pattern.findall(singular)
-            interp_dict = {}
-            for placeholder in placeholders:
-                if placeholder in eval_context:
-                    interp_dict[placeholder] = eval_context[placeholder]
-
-            # Translate
+        if self.plural_body is None:
             if self.context:
                 translated = pgettext(self.context, singular)
             else:
                 translated = gettext(singular)
 
-            # Interpolate placeholders
-            try:
-                result = translated % interp_dict
-            except (KeyError, TypeError):
-                result = translated
+            return self._interpolate(translated, eval_context)
 
-            return result
+        plural = self._message(self.plural_body, eval_context)
+        count = count if isinstance(count, (int, float)) else 1
+
+        if self.context:
+            translated = npgettext(self.context, singular, plural, count)
+        else:
+            translated = ngettext(singular, plural, count)
+
+        return self._interpolate(translated, eval_context)
+
+    def _message(self, body, context):
+        """Renders a body into the message to translate, placeholders included."""
+        message = "".join(node.render(context) for node in body)
+
+        if self.trimmed:
+            message = " ".join(message.split())
+
+        return self._placeholder_pattern.sub(r"%(\1)s", message)
+
+    def _interpolate(self, translated, context):
+        """Fills the placeholders of a translated message with the values around it."""
+        values = {
+            name: context[name] for name in self._interpolation_pattern.findall(translated) if name in context
+        }
+
+        try:
+            return translated % values
+        except (KeyError, TypeError, ValueError):
+            return translated
 
 
 class WithNode(Node):

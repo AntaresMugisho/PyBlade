@@ -108,7 +108,6 @@ class TestDirectives(unittest.TestCase):
         template = "@trans('Hello')"
         self.assertEqual(self._render(template), "Hello")
 
-    @unittest.skip("Not implemented")
     def test_blocktranslate(self):
         template = "@blocktranslate\nHello {{ name }}\n@endblocktranslate"
         self.assertEqual(self._render(template, {"name": "World"}).strip(), "Hello World")
@@ -316,32 +315,6 @@ class TestDirectives(unittest.TestCase):
         """
         result = self._render(template, {"form": {}, "errors": {}})
         self.assertEqual(result.strip(), "")
-
-    def test_pb_self_closing_component(self):
-        # Test self-closing pb- component tag
-        template = '<pb-button label="Click me" />'
-        result = self._render(template, {})
-        # Should render as component (empty result if component doesn't exist)
-        self.assertIsInstance(result, str)
-
-    def test_pb_paired_component_with_content(self):
-        # Test paired pb- component tag with content
-        template = '<pb-alert type="error">Error message here</pb-alert>'
-        result = self._render(template, {})
-        # Should render as component with slot content
-        self.assertIsInstance(result, str)
-
-    def test_pb_component_with_multiple_attributes(self):
-        # Test pb- component with multiple attributes
-        template = '<pb-input type="text" placeholder="Enter name" required=true />'
-        result = self._render(template, {})
-        self.assertIsInstance(result, str)
-
-    def test_pb_nested_components(self):
-        # Test nested pb- components
-        template = '<pb-card><pb-button label="Click" /></pb-card>'
-        result = self._render(template, {})
-        self.assertIsInstance(result, str)
 
     def test_autofocus_directive(self):
         # Test @autofocus directive

@@ -802,7 +802,9 @@ class Parser:
                     value = value.strip()
 
                     # Handle special keywords
-                    if key == "count":
+                    if key == "trimmed":
+                        trimmed = value.strip().lower() in ("true", "1")
+                    elif key == "count":
                         count = value
                     elif key == "context":
                         # Remove quotes if present
