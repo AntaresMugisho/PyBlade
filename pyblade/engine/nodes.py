@@ -22,7 +22,7 @@ from pyblade.utils import validate_single_root_node, snakebab_to_pascal, pascal_
 from pyblade.live.registry import registry as live_components_registry
 
 from . import loader
-from .contexts import AttributesContext, CycleContext, LoopContext, SlotContext
+from .contexts import AttributesContext, CycleContext, LoopContext, RenderableContent, SlotContext
 from .sandbox import SafeEvaluator
 
 
@@ -109,6 +109,16 @@ class VarNode(Node):
 
         except Exception as exc:
             self._raise(exc)
+
+        # Content handed over as template nodes (slots) is rendered in the
+        # current context and never escaped, as it is template markup.
+        if isinstance(value, RenderableContent):
+            try:
+                return value.render(context)
+            except PyBladeException:
+                raise
+            except Exception as exc:
+                self._raise(exc)
 
         if value is None:
             rendered = ""
@@ -459,16 +469,31 @@ class ExtendsNode(Node):
     def __repr__(self):
         return f"ExtendsNode(layout='{self.layout}')"
 
-    def render(self, context):
-        """Mark the layout this template extends.
+    def layout_name(self, context):
+        """Evaluate the name of the layout this template extends."""
+        return self.eval(self.layout, context)
 
-        Stores the evaluated layout path in the special '__extends' key in
-        the rendering context. Actual inheritance resolution is handled by
-        the loader/framework layer.
+    def render(self, context):
+        """Render nothing.
+
+        Inheritance is resolved on the AST before rendering (see
+        `TemplateProcessor._resolve_inheritance`), so this node has no output of its own.
         """
-        layout_path = self.eval(self.layout, context)
-        layout = loader.load_template(layout_path)
-        context["__extends"] = layout_path
+        return ""
+
+
+class ParentNode(Node):
+    """Represents a @parent directive inside a child's @block.
+
+    It is a placeholder replaced by the overridden block's original content
+    when inheritance is resolved. Outside of an overriding block it renders
+    nothing.
+    """
+
+    def __repr__(self):
+        return "ParentNode()"
+
+    def render(self, context):
         return ""
 
 
@@ -516,32 +541,19 @@ class BlockNode(Node):
         return f"BlockNode(name='{self.name}', body={self.body})"
 
     def render(self, context):
-        """Render a block with optional override.
+        """Render the block's content.
 
-        If context['__blocks'][name] exists, it is returned; otherwise the
-        block's own body is rendered and stored in context['__blocks'].
-        This works like Laravel Blade's @block directive.
+        Overrides coming from a child template are resolved on the AST before
+        rendering (see `TemplateProcessor._resolve_inheritance`), so what is left here is
+        the final content of the block.
         """
-        name = self.eval(self.name, context)
-
-        # Check for override in child template
-        blocks = context.get("__blocks", {})
-        if isinstance(blocks, dict) and name in blocks:
-            return blocks[name]
-
-        # Render the block's own body
         output = []
         for node in self.body:
             rendered = node.render(context)
             if rendered:
                 output.append(rendered)
-        content = "".join(output)
 
-        # Store the block content for potential use by parent templates
-        blocks = context.setdefault("__blocks", {})
-        blocks[name] = content
-
-        return content
+        return "".join(output)
 
 
 class YieldNode(Node):

@@ -2,6 +2,7 @@ import re
 
 from pyblade.engine.exceptions import DirectiveParsingError, TemplateRenderError
 
+from .lexer import Lexer
 from .nodes import (
     AuthNode,
     AutocompleteNode,
@@ -35,6 +36,7 @@ from .nodes import (
     MethodNode,
     MultipleNode,
     NowNode,
+    ParentNode,
     PybladeScriptsNode,
     PybladeStylesNode,
     QuerystringNode,
@@ -259,6 +261,8 @@ class Parser:
                     ast.append(self._parse_querystring(directive_args_str, token))
                 elif directive_name == "block" or directive_name == "section":
                     ast.append(self._parse_block(directive_args_str, token))
+                elif directive_name == "parent":
+                    ast.append(ParentNode(line=token.line, column=token.column))
                 elif directive_name == "live":
                     ast.append(LiveBladeNode())
                 elif directive_name in [
@@ -474,6 +478,10 @@ class Parser:
                     body.append(self._parse_component(directive_args_str, token))
                 elif directive_name == "slot":
                     body.append(self._parse_slot(directive_args_str, token))
+                elif directive_name == "block":
+                    body.append(self._parse_block(directive_args_str, token))
+                elif directive_name == "parent":
+                    body.append(ParentNode(line=token.line, column=token.column))
                 elif directive_name == "error":
                     body.append(self._parse_error(directive_args_str, token))
                 elif directive_name == "with":
@@ -522,6 +530,10 @@ class Parser:
                 body.append(self._parse_variable(escaped=True))
             elif token.type == "UNESCAPED_VAR_START":
                 body.append(self._parse_variable(escaped=False))
+            elif token.type == "PB_TAG_START":
+                body.append(self._parse_pb_component(token, paired=True))
+            elif token.type == "PB_TAG_SELF_CLOSE":
+                body.append(self._parse_pb_component(token, paired=False))
             # TODO: Properly handle this case for inline comments
             # elif token.type == "COMMENT_START" or token.type == "COMMENT_END":
             #     self.advance()
@@ -1142,32 +1154,19 @@ class Parser:
             )
         
         component_name = match.group(1)
-        
+
         # Parse attributes from the tag
         attributes = self._parse_pb_attributes(tag_value)
-        
+
         # For paired tags, collect body content as plain text
         body_content = ""
         if paired:
-            # Collect content until matching closing tag
-            while self.current_token():
-                current = self.current_token()
-                
-                # Check for matching closing tag
-                if current.type == "PB_TAG_END":
-                    closing_match = re.match(r"</pb-([a-zA-Z0-9_-]+)\s*>", current.value)
-                    if closing_match and closing_match.group(1) == component_name:
-                        self.advance()  # Consume the closing tag
-                        break
-                    else:
-                        # Mismatched closing tag, treat as content
-                        body_content += current.value
-                        self.advance()
-                else:
-                    # Add all other content as plain text
-                    body_content += current.value
-                    self.advance()
-        
+            body_content = self._collect_pb_body(component_name)
+
+        # <pb-slot name="..."> is the HTML-like form of @slot('...')@endslot
+        if component_name == "slot":
+            return self._make_pb_slot(attributes, body_content, token)
+
         # Convert attributes to component data expression
         if attributes:
             # Build a Python dict expression from attributes
@@ -1190,6 +1189,43 @@ class Parser:
         
         # Create a ComponentNode with the parsed information
         return ComponentNode(f'"{component_name}"', data_expr, line=token.line, column=token.column)
+
+    def _collect_pb_body(self, component_name):
+        """Collects the raw content of a pb- tag until its matching closing tag."""
+        body_content = ""
+
+        while self.current_token():
+            current = self.current_token()
+
+            # Check for matching closing tag
+            if current.type == "PB_TAG_END":
+                closing_match = re.match(r"</pb-([a-zA-Z0-9_.-]+)\s*>", current.value)
+                if closing_match and closing_match.group(1) == component_name:
+                    self.advance()  # Consume the closing tag
+                    break
+
+            # Mismatched closing tag or any other content is part of the body
+            body_content += current.value
+            self.advance()
+
+        return body_content
+
+    def _make_pb_slot(self, attributes, body_content, token):
+        """Builds a SlotNode out of a <pb-slot name="...">...</pb-slot> tag."""
+        name = attributes.get("name")
+        if not name:
+            raise DirectiveParsingError(
+                "A <pb-slot> tag requires a 'name' attribute.",
+                line=token.line,
+                column=token.column,
+                help='Name the slot as in <pb-slot name="title">My title</pb-slot>.',
+            )
+
+        # The body is parsed so the slot keeps its template nodes instead of
+        # being handled as plain text.
+        body = Parser(Lexer(body_content).tokenize()).parse() if body_content else []
+
+        return SlotNode(name, body, line=token.line, column=token.column)
 
     def _parse_pb_attributes(self, tag_value):
         """Parse attributes from a pb- tag string.

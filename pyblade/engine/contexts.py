@@ -184,6 +184,36 @@ class AttributesContext:
         pass
 
 
+class RenderableContent:
+    """Template content kept as AST nodes and rendered lazily in the consuming context.
+
+    Values of this type are recognized by VarNode, which renders them with the
+    context at hand instead of coercing them to a string. This is what allows a
+    child template to hand over content (directives, expressions, components...)
+    to the layout it extends without flattening it to plain text first.
+    """
+
+    def __init__(self, nodes=None):
+        self._nodes = list(nodes) if nodes else []
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}(nodes={self._nodes})"
+
+    def __str__(self):
+        return self.render({})
+
+    def __bool__(self):
+        return bool(self._nodes)
+
+    def render(self, context):
+        """Render the underlying nodes within the given context."""
+        return "".join(node.render(context) for node in self._nodes)
+
+
+class SlotContent(RenderableContent):
+    """The content a child template passes to the template it extends."""
+
+
 class SlotContext:
     """Manages named and unnamed slots for template inheritance and components."""
 

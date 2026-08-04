@@ -128,8 +128,8 @@ class Lexer:
                     # An isolated '@' or '@' followed by non-keyword char. Treat as text.
                     self._add_token("TEXT", self._peek(1))
 
-            # PyBlade HTML-like component tags: <pb-component> or <pb-component />
-            elif self._peek(4) == "<pb-":
+            # PyBlade HTML-like component tags: <pb-component>, <pb-component /> or </pb-component>
+            elif self._peek(4) == "<pb-" or self._peek(5) == "</pb-":
                 # Match closing tag: </pb-component>
                 match_closing = self._match_regex_at_current_pos(r"</pb-([a-zA-Z0-9_.-]+)\s*>")
                 if match_closing:
