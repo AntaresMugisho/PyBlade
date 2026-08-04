@@ -352,6 +352,42 @@ class TestDirectives(unittest.TestCase):
         result = self._render(template, {})
         self.assertIsInstance(result, str)
 
+    def test_autofocus_directive(self):
+        # Test @autofocus directive
+        template = '<input type="text" @autofocus(should_focus)>'
+        result = self._render(template, {"should_focus": True})
+        self.assertIn("autofocus", result)
+        
+        result = self._render(template, {"should_focus": False})
+        self.assertNotIn("autofocus", result)
+
+    def test_multiple_directive(self):
+        # Test @multiple directive
+        template = '<select @multiple(allow_multiple)>'
+        result = self._render(template, {"allow_multiple": True})
+        self.assertIn("multiple", result)
+        
+        result = self._render(template, {"allow_multiple": False})
+        self.assertNotIn("multiple", result)
+
+    def test_readonly_directive(self):
+        # Test @readonly directive
+        template = '<input type="text" @readonly(is_readonly)>'
+        result = self._render(template, {"is_readonly": True})
+        self.assertIn("readonly", result)
+        
+        result = self._render(template, {"is_readonly": False})
+        self.assertNotIn("readonly", result)
+
+    def test_disabled_directive(self):
+        # Test @disabled directive
+        template = '<button @disabled(is_disabled)>Click</button>'
+        result = self._render(template, {"is_disabled": True})
+        self.assertIn("disabled", result)
+        
+        result = self._render(template, {"is_disabled": False})
+        self.assertNotIn("disabled", result)
+
 
 if __name__ == "__main__":
     unittest.main()

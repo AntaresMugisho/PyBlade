@@ -467,6 +467,7 @@ class ExtendsNode(Node):
         the loader/framework layer.
         """
         layout_path = self.eval(self.layout, context)
+        layout = loader.load_template(layout_path)
         context["__extends"] = layout_path
         return ""
 
@@ -521,7 +522,6 @@ class BlockNode(Node):
         block's own body is rendered and stored in context['__blocks'].
         This works like Laravel Blade's @block directive.
         """
-        # Resolve block name (usually a string literal)
         name = self.eval(self.name, context)
 
         # Check for override in child template
@@ -538,9 +538,8 @@ class BlockNode(Node):
         content = "".join(output)
 
         # Store the block content for potential use by parent templates
-        if "__blocks" not in context:
-            context["__blocks"] = {}
-        context["__blocks"][name] = content
+        blocks = context.setdefault("__blocks", {})
+        blocks[name] = content
 
         return content
 
@@ -620,94 +619,6 @@ class AutoescapeNode(Node):
                 output.append(node.render(context))
 
         return "".join(output)
-
-
-class ComponentNode(Node):
-    """Represents an @component('name', data)...@endcomponent block."""
-
-    def __init__(self, path_expr, data_expr=None, line=None, column=None):
-        super().__init__(line, column)
-        self.path_expr = path_expr
-        self.data_expr = data_expr
-
-    def __repr__(self):
-        return f"ComponentNode(path_expr='{self.path_expr}', data_expr='{self.data_expr}')"
-
-
-class HtmlComponentNode(Node):
-    """Represents an HTML-like <pb-component> tag that converts to a component call.
-    
-    This handles both self-closing and paired tags, where paired tag content
-    becomes the default slot for the component.
-    """
-
-    def __init__(self, component_name, attributes, slot_body=None, line=None, column=None):
-        super().__init__(line, column)
-        self.component_name = component_name
-        self.attributes = attributes
-        self.slot_body = slot_body
-
-    def __repr__(self):
-        return f"HtmlComponentNode(component_name='{self.component_name}', attributes={self.attributes}, slot_body={self.slot_body})"
-
-    def render(self, context):
-        """Render the HTML-like component by converting it to a component call."""
-        try:
-            # Build the component data from attributes
-            data = {}
-            for key, value in self.attributes.items():
-                # Evaluate the attribute value
-                try:
-                    if value.startswith('"') or value.startswith("'"):
-                        # String literal - remove quotes
-                        data[key] = value[1:-1]
-                    else:
-                        # Expression - evaluate it
-                        data[key] = self.eval(value, context)
-                except:
-                    # If evaluation fails, use as-is
-                    data[key] = value
-            
-            # If there's slot content, render it and add to data
-            if self.slot_body:
-                slot_context = context.copy()
-                slot_output = []
-                for node in self.slot_body:
-                    rendered = node.render(slot_context)
-                    if rendered:
-                        slot_output.append(str(rendered))
-                data["slot"] = "".join(slot_output)
-            
-            # Create a temporary ComponentNode to handle the actual rendering
-            component_node = ComponentNode(f'"{self.component_name}"', str(data), line=self.line, column=self.column)
-            
-            # Evaluate the data expression to get the actual data dict
-            try:
-                if isinstance(data, str):
-                    evaluated_data = self.eval(data, context)
-                else:
-                    evaluated_data = data
-            except:
-                evaluated_data = data
-            
-            # Call the component rendering logic directly
-            component_name = self.eval(f'"{self.component_name}"', context)
-            
-            # Resolve the component
-            component_info = component_node._resolve_component(component_name)
-            if not component_info:
-                return ""
-            
-            if component_info["type"] == "static":
-                return component_node._render_static_component(component_name, evaluated_data)
-            elif component_info["type"] == "live":
-                return component_node._render_live_component(component_name, evaluated_data)
-            
-            return ""
-            
-        except Exception as exc:
-            # If rendering fails, return empty string
-            return ""
 
 
 class ComponentNode(Node):
@@ -1936,6 +1847,70 @@ class AutocompleteNode(Node):
         if value is None:
             return ""
         return f' autocomplete="{value}"'
+
+
+class AutofocusNode(Node):
+    """Represents an @autofocus(condition) directive."""
+
+    def __init__(self, condition, line=None, column=None):
+        super().__init__(line, column)
+        self.condition = condition
+
+    def __repr__(self):
+        return f"AutofocusNode(condition='{self.condition}')"
+
+    def render(self, context):
+        if self.eval(self.condition, context):
+            return " autofocus"
+        return ""
+
+
+class MultipleNode(Node):
+    """Represents a @multiple(condition) directive."""
+
+    def __init__(self, condition, line=None, column=None):
+        super().__init__(line, column)
+        self.condition = condition
+
+    def __repr__(self):
+        return f"MultipleNode(condition='{self.condition}')"
+
+    def render(self, context):
+        if self.eval(self.condition, context):
+            return " multiple"
+        return ""
+
+
+class ReadonlyNode(Node):
+    """Represents a @readonly(condition) directive."""
+
+    def __init__(self, condition, line=None, column=None):
+        super().__init__(line, column)
+        self.condition = condition
+
+    def __repr__(self):
+        return f"ReadonlyNode(condition='{self.condition}')"
+
+    def render(self, context):
+        if self.eval(self.condition, context):
+            return " readonly"
+        return ""
+
+
+class DisabledNode(Node):
+    """Represents a @disabled(condition) directive."""
+
+    def __init__(self, condition, line=None, column=None):
+        super().__init__(line, column)
+        self.condition = condition
+
+    def __repr__(self):
+        return f"DisabledNode(condition='{self.condition}')"
+
+    def render(self, context):
+        if self.eval(self.condition, context):
+            return " disabled"
+        return ""
 
 
 class RatioNode(Node):

@@ -131,25 +131,30 @@ class Lexer:
             # PyBlade HTML-like component tags: <pb-component> or <pb-component />
             elif self._peek(4) == "<pb-":
                 # Match closing tag: </pb-component>
-                match_closing = self._match_regex_at_current_pos(r"</pb-([a-zA-Z0-9_-]+)\s*>")
+                match_closing = self._match_regex_at_current_pos(r"</pb-([a-zA-Z0-9_.-]+)\s*>")
                 if match_closing:
                     self._add_token("PB_TAG_END", match_closing)
                 else:
-                    # Match opening or self-closing tag: <pb-component attrs...> or <pb-component attrs... />
-                    match_tag = self._match_regex_at_current_pos(
-                        r"<pb-([a-zA-Z0-9_-]+)"  # Tag name
+                    # Match self-closing tag first: <pb-component attrs... />
+                    match_self_close = self._match_regex_at_current_pos(
+                        r"<pb-([a-zA-Z0-9_.-]+)"  # Tag name (allow dots for namespaced components)
                         r"(?:\s+[^>]*?)?"  # Optional attributes
-                        r"\s*/?>"  # Self-closing or regular closing
+                        r"\s*/>"  # Must end with />
                     )
-                    if match_tag:
-                        # Check if it's self-closing
-                        if match_tag.strip().endswith("/>"):
-                            self._add_token("PB_TAG_SELF_CLOSE", match_tag)
-                        else:
-                            self._add_token("PB_TAG_START", match_tag)
+                    if match_self_close:
+                        self._add_token("PB_TAG_SELF_CLOSE", match_self_close)
                     else:
-                        # If it doesn't match the full pattern, treat '<' as text
-                        self._add_token("TEXT", self._peek(1))
+                        # Match regular opening tag: <pb-component attrs...>
+                        match_open = self._match_regex_at_current_pos(
+                            r"<pb-([a-zA-Z0-9_.-]+)"  # Tag name (allow dots for namespaced components)
+                            r"(?:\s+[^>]*?)?"  # Optional attributes
+                            r"\s*>"  # Must end with >
+                        )
+                        if match_open:
+                            self._add_token("PB_TAG_START", match_open)
+                        else:
+                            # If it doesn't match the full pattern, treat '<' as text
+                            self._add_token("TEXT", self._peek(1))
             else:
                 # Match plain text segments. This must be the last "match anything" rule.
                 # It matches any character that is NOT the start of a special block

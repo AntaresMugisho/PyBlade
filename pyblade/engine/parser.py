@@ -5,6 +5,7 @@ from pyblade.engine.exceptions import DirectiveParsingError, TemplateRenderError
 from .nodes import (
     AuthNode,
     AutocompleteNode,
+    AutofocusNode,
     AutoescapeNode,
     BlockNode,
     BlockTranslateNode,
@@ -17,6 +18,7 @@ from .nodes import (
     CsrfNode,
     CycleNode,
     DebugNode,
+    DisabledNode,
     ErrorNode,
     ExtendsNode,
     FieldNode,
@@ -25,18 +27,19 @@ from .nodes import (
     GetMediaPrefixNode,
     GetStaticPrefixNode,
     GuestNode,
-    HtmlComponentNode,
     IfChangedNode,
     IfNode,
     IncludeNode,
     LiveBladeNode,
     LoremNode,
     MethodNode,
+    MultipleNode,
     NowNode,
     PybladeScriptsNode,
     PybladeStylesNode,
     QuerystringNode,
     RatioNode,
+    ReadonlyNode,
     RegroupNode,
     RequiredNode,
     ResetCycleNode,
@@ -234,6 +237,14 @@ class Parser:
                     ast.append(self._parse_required(directive_args_str, token))
                 elif directive_name == "checked":
                     ast.append(self._parse_checked(directive_args_str, token))
+                elif directive_name == "autofocus":
+                    ast.append(self._parse_autofocus(directive_args_str, token))
+                elif directive_name == "multiple":
+                    ast.append(self._parse_multiple(directive_args_str, token))
+                elif directive_name == "readonly":
+                    ast.append(self._parse_readonly(directive_args_str, token))
+                elif directive_name == "disabled":
+                    ast.append(self._parse_disabled(directive_args_str, token))
                 elif directive_name == "field":
                     ast.append(self._parse_field(directive_args_str, token))
                 elif directive_name == "error":
@@ -1019,6 +1030,18 @@ class Parser:
     def _parse_checked(self, args_str, token):
         return CheckedNode(args_str, line=token.line, column=token.column)
 
+    def _parse_autofocus(self, args_str, token):
+        return AutofocusNode(args_str, line=token.line, column=token.column)
+
+    def _parse_multiple(self, args_str, token):
+        return MultipleNode(args_str, line=token.line, column=token.column)
+
+    def _parse_readonly(self, args_str, token):
+        return ReadonlyNode(args_str, line=token.line, column=token.column)
+
+    def _parse_disabled(self, args_str, token):
+        return DisabledNode(args_str, line=token.line, column=token.column)
+
     def _parse_field(self, args_str, token):
         """Parses an @field(form.field, attrs...) directive.
         
@@ -1104,12 +1127,13 @@ class Parser:
         Examples:
             <pb-alert type="error">Error message</pb-alert>
             <pb-button label="Click me" />
+            <pb-ui.card title="Samsung">Card slot</pb-ui.card>
         """
         tag_value = token.value
         self.advance()  # Consume the PB_TAG_START or PB_TAG_SELF_CLOSE token
         
-        # Extract component name from tag like <pb-alert> or <pb-button>
-        match = re.match(r"<pb-([a-zA-Z0-9_-]+)", tag_value)
+        # Extract component name from tag like <pb-alert> or <pb-button> or <pb-ui.card>
+        match = re.match(r"<pb-([a-zA-Z0-9_.-]+)", tag_value)
         if not match:
             raise DirectiveParsingError(
                 f"Invalid pb- tag format: {tag_value}",
@@ -1122,11 +1146,10 @@ class Parser:
         # Parse attributes from the tag
         attributes = self._parse_pb_attributes(tag_value)
         
-        # For paired tags, collect content as slot
-        slot_body = None
+        # For paired tags, collect body content as plain text
+        body_content = ""
         if paired:
-            # Parse content until matching closing tag
-            body = []
+            # Collect content until matching closing tag
             while self.current_token():
                 current = self.current_token()
                 
@@ -1138,49 +1161,12 @@ class Parser:
                         break
                     else:
                         # Mismatched closing tag, treat as content
-                        body.append(TextNode(current.value, line=current.line, column=current.column))
-                        self.advance()
-                elif current.type == "PB_TAG_START":
-                    # Nested pb- component
-                    body.append(self._parse_pb_component(current, paired=True))
-                elif current.type == "PB_TAG_SELF_CLOSE":
-                    # Nested self-closing pb- component
-                    body.append(self._parse_pb_component(current, paired=False))
-                elif current.type == "TEXT":
-                    body.append(TextNode(current.value, line=current.line, column=current.column))
-                    self.advance()
-                elif current.type == "VAR_START":
-                    body.append(self._parse_variable(escaped=True))
-                elif current.type == "UNESCAPED_VAR_START":
-                    body.append(self._parse_variable(escaped=False))
-                elif current.type == "DIRECTIVE":
-                    # Handle directives inside component content
-                    directive_full_str = current.value
-                    match = re.match(r"@([a-zA-Z_*[a-zA-Z0-9_]*)(.*)", directive_full_str)
-                    if match:
-                        directive_name = match.group(1)
-                        directive_args_str = match.group(2).strip()
-                        self.advance()
-                        
-                        # Handle nested directives that can appear in content
-                        if directive_name == "if":
-                            body.append(self._parse_if(directive_args_str, current))
-                        elif directive_name == "for":
-                            body.append(self._parse_for(directive_args_str, current))
-                        elif directive_name == "slot":
-                            body.append(self._parse_slot(directive_args_str, current))
-                        else:
-                            # For other directives, just add text representation
-                            body.append(TextNode(current.value, line=current.line, column=current.column))
-                    else:
-                        body.append(TextNode(current.value, line=current.line, column=current.column))
+                        body_content += current.value
                         self.advance()
                 else:
-                    # Unknown token type, treat as text
-                    body.append(TextNode(current.value, line=current.line, column=current.column))
+                    # Add all other content as plain text
+                    body_content += current.value
                     self.advance()
-            
-            slot_body = body
         
         # Convert attributes to component data expression
         if attributes:
@@ -1193,11 +1179,17 @@ class Parser:
                     # Assume it's a variable/expression
                     attr_pairs.append(f'"{key}": {value}')
             data_expr = "{" + ", ".join(attr_pairs) + "}"
+            # Add body content to data if present
+            if body_content:
+                data_expr = data_expr.rstrip("}") + f', "slot": "{body_content}"' + "}"
         else:
-            data_expr = None
+            if body_content:
+                data_expr = '{"slot": "' + body_content + '"}'
+            else:
+                data_expr = None
         
-        # Create an HtmlComponentNode with the parsed information
-        return HtmlComponentNode(component_name, attributes, slot_body, line=token.line, column=token.column)
+        # Create a ComponentNode with the parsed information
+        return ComponentNode(f'"{component_name}"', data_expr, line=token.line, column=token.column)
 
     def _parse_pb_attributes(self, tag_value):
         """Parse attributes from a pb- tag string.

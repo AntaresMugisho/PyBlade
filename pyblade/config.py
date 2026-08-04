@@ -122,147 +122,147 @@ settings = Config()
 
 # The content above will be replaced with this one cause we are migrating from pyblade.json to pyblade.toml
 
-import sys
-from pathlib import Path
-from typing import Any, Dict
-from django.conf import settings
+# import sys
+# from pathlib import Path
+# from typing import Any, Dict
+# from django.conf import settings
 
-# Native TOML parser for Python 3.11+
-if sys.version_info >= (3, 11):
-    import tomllib
-else:
-    import tomli as tomllib
-
-
-# Default framework configuration in lowercase
-DEFAULT_CONFIG: Dict[str, Any] = {
-   "project": {
-        "name": "PyBlade Application",
-    },
-    "stack": {
-        "python": f"{sys.version_info.major}.{sys.version_info.minor}",
-        "web_framework": "django",
-        "web_framework_version": "5.0",
-        "css_framework": None,
-        "css_framework_version": "none",
-    },
-    "components": {
-        "directory": "components",
-        "paginator": "django.core.paginator.Paginator",
-        "verify_checksum": True,
-    },
-    "assets": {
-        "inject": False,
-    },
-    "compiler": {
-        "cache_templates": True,
-    },
-    "i18n": {
-        "locale": "en",
-        "fallback_locale": "en",
-        "directory": "locale",
-    },
-}
+# # Native TOML parser for Python 3.11+
+# if sys.version_info >= (3, 11):
+#     import tomllib
+# else:
+#     import tomli as tomllib
 
 
-class ConfigObject:
-    """
-    Wrapper class allowing attribute-style dot notation access to settings.
-    Example: config.core.inject_assets
-    """
-
-    def __init__(self, data: Dict[str, Any]) -> None:
-        for key, value in data.items():
-            key_lower = key.lower()
-            if isinstance(value, dict):
-                # Recursively wrap nested dictionaries
-                setattr(self, key_lower, ConfigObject(value))
-            else:
-                setattr(self, key_lower, value)
-
-    def __getattr__(self, name: str) -> Any:
-        # Fallback for undefined attributes
-        return None
-
-    def __repr__(self) -> str:
-        return f"<PyBladeConfig {self.__dict__}>"
-
-    def get(self, key_path: str, default: Any = None) -> Any:
-        """
-        Accesses nested dictionary keys using dot notation.
-        Example: config.get("core.inject_assets")
-        """
-        return getattr(self, key_path, default)
-
-
-def _lowercase_keys(dictionary: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Recursively converts all dictionary keys to lowercase.
-    Allows support for uppercase Django settings or ENV-like dictionaries.
-    """
-    lowercased = {}
-    for key, value in dictionary.items():
-        key_lower = key.lower()
-        if isinstance(value, dict):
-            lowercased[key_lower] = _lowercase_keys(value)
-        else:
-            lowercased[key_lower] = value
-    return lowercased
+# # Default framework configuration in lowercase
+# DEFAULT_CONFIG: Dict[str, Any] = {
+#    "project": {
+#         "name": "PyBlade Application",
+#     },
+#     "stack": {
+#         "python": f"{sys.version_info.major}.{sys.version_info.minor}",
+#         "web_framework": "django",
+#         "web_framework_version": "5.0",
+#         "css_framework": None,
+#         "css_framework_version": "none",
+#     },
+#     "components": {
+#         "directory": "components",
+#         "paginator": "django.core.paginator.Paginator",
+#         "verify_checksum": True,
+#     },
+#     "assets": {
+#         "inject": False,
+#     },
+#     "compiler": {
+#         "cache_templates": True,
+#     },
+#     "i18n": {
+#         "locale": "en",
+#         "fallback_locale": "en",
+#         "directory": "locale",
+#     },
+# }
 
 
-def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Recursively merges user overrides into the base configuration dictionary.
-    """
-    merged = base.copy()
-    for key, value in override.items():
-        if isinstance(value, dict) and key in merged and isinstance(merged[key], dict):
-            merged[key] = _deep_merge(merged[key], value)
-        else:
-            merged[key] = value
-    return merged
+# class ConfigObject:
+#     """
+#     Wrapper class allowing attribute-style dot notation access to settings.
+#     Example: config.core.inject_assets
+#     """
+
+#     def __init__(self, data: Dict[str, Any]) -> None:
+#         for key, value in data.items():
+#             key_lower = key.lower()
+#             if isinstance(value, dict):
+#                 # Recursively wrap nested dictionaries
+#                 setattr(self, key_lower, ConfigObject(value))
+#             else:
+#                 setattr(self, key_lower, value)
+
+#     def __getattr__(self, name: str) -> Any:
+#         # Fallback for undefined attributes
+#         return None
+
+#     def __repr__(self) -> str:
+#         return f"<PyBladeConfig {self.__dict__}>"
+
+#     def get(self, key_path: str, default: Any = None) -> Any:
+#         """
+#         Accesses nested dictionary keys using dot notation.
+#         Example: config.get("core.inject_assets")
+#         """
+#         return getattr(self, key_path, default)
 
 
-def _load_toml_overrides() -> Dict[str, Any]:
-    """
-    Reads configuration overrides from 'pyblade.toml' or '[tool.pyblade]' inside 'pyproject.toml'.
-    """
-    # 1. Standalone pyblade.toml
-    pyblade_toml = Path("pyblade.toml")
-    if pyblade_toml.exists():
-        with open(pyblade_toml, "rb") as f:
-            return tomllib.load(f)
-
-    # 2. Section inside pyproject.toml
-    pyproject_toml = Path("pyproject.toml")
-    if pyproject_toml.exists():
-        with open(pyproject_toml, "rb") as f:
-            data = tomllib.load(f)
-            return data.get("tool", {}).get("pyblade", {})
-
-    return {}
+# def _lowercase_keys(dictionary: Dict[str, Any]) -> Dict[str, Any]:
+#     """
+#     Recursively converts all dictionary keys to lowercase.
+#     Allows support for uppercase Django settings or ENV-like dictionaries.
+#     """
+#     lowercased = {}
+#     for key, value in dictionary.items():
+#         key_lower = key.lower()
+#         if isinstance(value, dict):
+#             lowercased[key_lower] = _lowercase_keys(value)
+#         else:
+#             lowercased[key_lower] = value
+#     return lowercased
 
 
-def build_config() -> ConfigObject:
-    """
-    Builds the final ConfigObject by merging defaults, TOML overrides,
-    and optional Django settings.
-    """
-    merged = DEFAULT_CONFIG.copy()
-
-    # Merge TOML overrides
-    toml_overrides = _load_toml_overrides()
-    if toml_overrides:
-        merged = _deep_merge(merged, _lowercase_keys(toml_overrides))
-
-    # Merge Django settings if defined (e.g., PYBLADE = {"CORE": {"INJECT_ASSETS": False}})
-    django_overrides = getattr(settings, "PYBLADE", {})
-    if django_overrides:
-        merged = _deep_merge(merged, _lowercase_keys(django_overrides))
-
-    # Convert final dictionary into dot-accessible object
-    return ConfigObject(merged)
+# def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
+#     """
+#     Recursively merges user overrides into the base configuration dictionary.
+#     """
+#     merged = base.copy()
+#     for key, value in override.items():
+#         if isinstance(value, dict) and key in merged and isinstance(merged[key], dict):
+#             merged[key] = _deep_merge(merged[key], value)
+#         else:
+#             merged[key] = value
+#     return merged
 
 
-# Global singleton instance
-config = build_config()
+# def _load_toml_overrides() -> Dict[str, Any]:
+#     """
+#     Reads configuration overrides from 'pyblade.toml' or '[tool.pyblade]' inside 'pyproject.toml'.
+#     """
+#     # 1. Standalone pyblade.toml
+#     pyblade_toml = Path("pyblade.toml")
+#     if pyblade_toml.exists():
+#         with open(pyblade_toml, "rb") as f:
+#             return tomllib.load(f)
+
+#     # 2. Section inside pyproject.toml
+#     pyproject_toml = Path("pyproject.toml")
+#     if pyproject_toml.exists():
+#         with open(pyproject_toml, "rb") as f:
+#             data = tomllib.load(f)
+#             return data.get("tool", {}).get("pyblade", {})
+
+#     return {}
+
+
+# def build_config() -> ConfigObject:
+#     """
+#     Builds the final ConfigObject by merging defaults, TOML overrides,
+#     and optional Django settings.
+#     """
+#     merged = DEFAULT_CONFIG.copy()
+
+#     # Merge TOML overrides
+#     toml_overrides = _load_toml_overrides()
+#     if toml_overrides:
+#         merged = _deep_merge(merged, _lowercase_keys(toml_overrides))
+
+#     # Merge Django settings if defined (e.g., PYBLADE = {"CORE": {"INJECT_ASSETS": False}})
+#     # django_overrides = getattr(settings, "PYBLADE", {})
+#     # if django_overrides:
+#     #     merged = _deep_merge(merged, _lowercase_keys(django_overrides))
+
+#     # Convert final dictionary into dot-accessible object
+#     return ConfigObject(merged)
+
+
+## Global singleton instance
+# config = build_config()

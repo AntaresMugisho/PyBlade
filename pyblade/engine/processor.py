@@ -62,11 +62,11 @@ class TemplateProcessor:
             if "__extends" in self.context:
                 layout_path = self.context["__extends"]
                 # Load and render the parent layout with the collected sections/blocks
-                layout_template = loader.load_template(layout_path)
-                # Remove the __extends key to avoid infinite recursion
-                extends_context = self.context.copy()
-                del extends_context["__extends"]
-                result = layout_template.render(extends_context)
+                # layout_template = loader.load_template(layout_path)
+                # # Remove the __extends key to avoid infinite recursion
+                # extends_context = self.context.copy()
+                # del extends_context["__extends"]
+                # result = layout_template.render(extends_context)
 
             # Save cache
             self.cache.set(template, self.context, result)
