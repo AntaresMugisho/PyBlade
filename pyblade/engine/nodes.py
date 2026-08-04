@@ -22,7 +22,7 @@ from pyblade.utils import validate_single_root_node, snakebab_to_pascal, pascal_
 from pyblade.live.registry import registry as live_components_registry
 
 from . import loader
-from .contexts import AttributesContext, CycleContext, LoopContext, RenderableContent, SlotContent, SlotContext
+from .contexts import AttributesContext, CycleContext, LoopContext, SafeContent, SlotContent, SlotContext
 from .sandbox import SafeEvaluator
 
 # The name under which the content of a component or of a child template is available.
@@ -177,9 +177,9 @@ class VarNode(Node):
         except Exception as exc:
             self._raise(exc)
 
-        # Content handed over as template nodes (slots) is rendered in the
-        # current context and never escaped, as it is template markup.
-        if isinstance(value, RenderableContent):
+        # Markup, such as a slot or an attributes bag, is rendered in the current
+        # context and never escaped. Everything else is data and is escaped below.
+        if isinstance(value, SafeContent):
             try:
                 return value.render(context)
             except PyBladeException:

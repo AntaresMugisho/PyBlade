@@ -2,6 +2,18 @@ from html import escape as html_escape
 from typing import Iterable
 
 
+class SafeContent:
+    """Content that is HTML markup already and must not be escaped when displayed.
+
+    Values of this type are recognized by VarNode, which renders them as they
+    are. Everything else displayed by a template is data and keeps being escaped.
+    """
+
+    def render(self, context):
+        """Render the content within the given context."""
+        return str(self)
+
+
 class LoopContext:
     """Holds context information for loops."""
 
@@ -67,7 +79,13 @@ class LoopContext:
         return self._parent.depth + 1 if self._parent else 0
 
 
-class AttributesContext:
+class AttributesContext(SafeContent):
+    """The attributes a component was passed and did not declare as properties.
+
+    Displaying it spreads them over the component's root element, which is
+    markup, not data, hence the SafeContent.
+    """
+
     def __init__(self, props: dict, attributes: dict, context: dict):
         self._props = props
         self._attributes = {**self._props, **attributes}
@@ -85,11 +103,19 @@ class AttributesContext:
         if self._exclude_keys:
             attributes = {key: value for key, value in attributes.items() if key not in self._exclude_keys}
 
-        # Format the string representation of the attributes
+        # Format the string representation of the attributes. Only the attribute
+        # syntax is markup here: the values are data and are escaped, or the
+        # component could be handed one that closes the tag and opens another.
         string = ""
         for key, value in attributes.items():
-            if key not in self._props and isinstance(value, str):
-                string += f" {key}" + (f'="{value}"' if value != "" else "")
+            if key in self._props:
+                continue
+
+            if value is True or value == "":
+                # A bare attribute, as the 'disabled' of <pb-button disabled />
+                string += f" {key}"
+            elif isinstance(value, str):
+                string += f' {key}="{html_escape(value)}"'
 
         # Empty only and exclude keys
         self._only_keys = None
@@ -198,13 +224,13 @@ class AttributesContext:
         pass
 
 
-class RenderableContent:
+class RenderableContent(SafeContent):
     """Template content kept as AST nodes and rendered lazily in the consuming context.
 
-    Values of this type are recognized by VarNode, which renders them with the
-    context at hand instead of coercing them to a string. This is what allows a
-    child template to hand over content (directives, expressions, components...)
-    to the layout it extends without flattening it to plain text first.
+    Being SafeContent, it is rendered with the context at hand instead of being
+    coerced to a string. This is what allows a template to hand over content
+    (directives, expressions, components...) to the component it calls or to the
+    layout it extends without flattening it to plain text first.
     """
 
     def __init__(self, nodes=None, context=None):

@@ -124,6 +124,26 @@ class TestComponentProps(ComponentTestCase):
 
         self.assertEqual(result, '<div class="error">Boom</div>')
 
+    def test_attributes_bag_is_not_escaped(self):
+        self._component("alert", '@props({"type": "info"})<div class="{{ type }}"{{ attributes }}>Body</div>')
+
+        result = self._render('<pb-alert type="error" id="main" />')
+
+        self.assertEqual(result, '<div class="error" id="main">Body</div>')
+
+    def test_attribute_values_are_escaped_in_the_attributes_bag(self):
+        self._component("alert", "<div{{ attributes }}>Body</div>")
+
+        result = self._render("<pb-alert id=untrusted />", {"untrusted": '"><script>'})
+
+        self.assertEqual(result, '<div id="&quot;&gt;&lt;script&gt;">Body</div>')
+
+    def test_valueless_attribute_is_spread_as_a_bare_attribute(self):
+        self._component("alert", "<div{{ attributes }}>Body</div>")
+
+        self.assertEqual(self._render("<pb-alert disabled />"), "<div disabled>Body</div>")
+        self.assertEqual(self._render("<pb-alert disabled=False />"), "<div>Body</div>")
+
     def test_props_are_left_out_of_the_attributes_bag(self):
         self._component("alert", '@props({"type": "info"})<div class="{{ type }}"{!! attributes !!}>Body</div>')
 
