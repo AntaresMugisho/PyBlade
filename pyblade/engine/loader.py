@@ -31,10 +31,9 @@ class TemplateLoader:
         Args:
             directories: List of directory paths
         """
-
         for directory in directories:
             path = Path(directory)
-            if path.is_dir() and path not in self._template_dirs:
+            if path.is_dir():
                 self._template_dirs.append(path)
 
     def load_template(self, template_name: str) -> Template:
@@ -67,12 +66,7 @@ class TemplateLoader:
             except (IOError, OSError):
                 continue
 
-        raise TemplateNotFoundError(
-            f"No template named '{template_path}{self._extension}'\n"
-            "Searched in the following directories:\n- " + "\n- ".join([str(p) for p in self._template_dirs]),
-            help="The template you are trying to include does not exist. "
-            "Make sure the path is correct and the template exists.",
-        )
+        raise TemplateNotFoundError(f"{template_name}{self._extension}")
 
     def _read_template(self, path: Path) -> str:
         """
@@ -107,7 +101,7 @@ def load_template(template_name: str, directories: Optional[List[Union[str, Path
 
     Args:
         template_name: Name of the template to load
-        directories: Optional list of template directories. If provided, only these directories will be searched.
+        directories: Optional list of template directories
 
     Returns:
         The template content
@@ -117,10 +111,5 @@ def load_template(template_name: str, directories: Optional[List[Union[str, Path
     """
 
     if directories:
-        # Create a temporary loader with only the specified directories
-        temp_loader = TemplateLoader()
-        temp_loader.add_directories(directories)
-        return temp_loader.load_template(template_name)
-    else:
-        # Use the default loader with its configured directories
-        return _default_loader.load_template(template_name)
+        _default_loader.add_directories(directories)
+    return _default_loader.load_template(template_name)
