@@ -102,12 +102,15 @@ class SafeEvaluator:
             return node.value
 
         if isinstance(node, ast.Name):
+            # The context comes first: a variable or a component property may well
+            # be named after a builtin, as in <pb-button type="primary" />
+            if node.id in context:
+                return context[node.id]
+
             if node.id in self._builtins:
                 return self._builtins[node.id]
 
-            if node.id not in context.keys():
-                raise NameError(f"Undefined variable '{node.id}'")
-            return context.get(node.id)
+            raise NameError(f"Undefined variable '{node.id}'")
 
         # ----------------------------
         # ATTRIBUTE RESOLUTION

@@ -22,11 +22,17 @@ class Lexer:
     It identifies variable blocks ({{}}), comment blocks ({##}), and directives (@...).
     """
 
-    def __init__(self, template_string):
+    def __init__(self, template_string, line=1, column=1):
+        """
+        Args:
+            template_string: The template source to tokenize
+            line: The line the source starts at, when tokenizing a fragment of a larger template
+            column: The column the source starts at, for the same reason
+        """
         self.template_string = template_string
         self.pos = 0  # Current position in the template string
-        self.line = 1  # Current line number
-        self.column = 1  # Current column number on the current line
+        self.line = line  # Current line number
+        self.column = column  # Current column number on the current line
         self.tokens = []
 
     def _update_pos(self, value_len):
@@ -131,13 +137,15 @@ class Lexer:
             # PyBlade HTML-like component tags: <pb-component>, <pb-component /> or </pb-component>
             elif self._peek(4) == "<pb-" or self._peek(5) == "</pb-":
                 # Match closing tag: </pb-component>
-                match_closing = self._match_regex_at_current_pos(r"</pb-([a-zA-Z0-9_.-]+)\s*>")
+                match_closing = self._match_regex_at_current_pos(r"</pb-([a-zA-Z0-9_.:-]+)\s*>")
                 if match_closing:
                     self._add_token("PB_TAG_END", match_closing)
                 else:
                     # Match self-closing tag first: <pb-component attrs... />
                     match_self_close = self._match_regex_at_current_pos(
-                        r"<pb-([a-zA-Z0-9_.-]+)"  # Tag name (allow dots for namespaced components)
+                        # Tag name, allowing dots for namespaced components and a colon for
+                        # the <pb-slot:name> shorthand
+                        r"<pb-([a-zA-Z0-9_.:-]+)"
                         r"(?:\s+[^>]*?)?"  # Optional attributes
                         r"\s*/>"  # Must end with />
                     )
@@ -146,7 +154,7 @@ class Lexer:
                     else:
                         # Match regular opening tag: <pb-component attrs...>
                         match_open = self._match_regex_at_current_pos(
-                            r"<pb-([a-zA-Z0-9_.-]+)"  # Tag name (allow dots for namespaced components)
+                            r"<pb-([a-zA-Z0-9_.:-]+)"  # Tag name
                             r"(?:\s+[^>]*?)?"  # Optional attributes
                             r"\s*>"  # Must end with >
                         )

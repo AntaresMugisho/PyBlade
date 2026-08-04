@@ -22,8 +22,59 @@ from pyblade.utils import validate_single_root_node, snakebab_to_pascal, pascal_
 from pyblade.live.registry import registry as live_components_registry
 
 from . import loader
-from .contexts import AttributesContext, CycleContext, LoopContext, RenderableContent, SlotContext
+from .contexts import AttributesContext, CycleContext, LoopContext, RenderableContent, SlotContent, SlotContext
 from .sandbox import SafeEvaluator
+
+# The name under which the content of a component or of a child template is available.
+DEFAULT_SLOT_NAME = "slot"
+
+
+def trim_nodes(nodes):
+    """Drop the blank text surrounding a list of nodes.
+
+    Slots are written as indented blocks and directives leave the whitespace
+    that used to separate them behind. Neither belongs to the content itself.
+    """
+    nodes = list(nodes)
+
+    def is_blank(node):
+        return isinstance(node, TextNode) and not node.content.strip()
+
+    while nodes and is_blank(nodes[0]):
+        nodes.pop(0)
+
+    while nodes and is_blank(nodes[-1]):
+        nodes.pop()
+
+    if nodes and isinstance(nodes[0], TextNode):
+        nodes[0] = TextNode(nodes[0].content.lstrip(), line=nodes[0].line, column=nodes[0].column)
+
+    if nodes and isinstance(nodes[-1], TextNode):
+        nodes[-1] = TextNode(nodes[-1].content.rstrip(), line=nodes[-1].line, column=nodes[-1].column)
+
+    return nodes
+
+
+def split_slots(nodes):
+    """Split nodes into the slots they make up.
+
+    Every slot syntax (@slot, <pb-slot name="...">, <pb-slot:name>) is parsed
+    into a SlotNode, so they all come out of here the same way: a dictionary of
+    slot names to SlotContent. Whatever is not part of a named slot makes up the
+    default slot, which is always present, even empty.
+    """
+    slots = {}
+    default = []
+
+    for node in nodes:
+        if isinstance(node, SlotNode):
+            slots[node.slot_name()] = SlotContent(trim_nodes(node.body))
+        else:
+            default.append(node)
+
+    slots.setdefault(DEFAULT_SLOT_NAME, SlotContent(trim_nodes(default)))
+
+    return slots
 
 
 class Node:
@@ -63,6 +114,22 @@ class Node:
     def eval(self, expression, context):
         """Evaluate a Python-like expression string within the given context."""
         return self._evaluator.evaluate(expression, context)
+
+    def static_name(self, expression, default=None):
+        """Evaluate a name expression without any context.
+
+        Block and slot names are matched while the tree is being built, before
+        there is a context to evaluate them in. Names are usually literals, but
+        an expression that cannot be evaluated statically still matches its
+        counterpart in the other template, as both are written the same way.
+        """
+        if not expression:
+            return default
+
+        try:
+            return self.eval(expression, {})
+        except Exception:
+            return expression
 
     def render(self, context):
         """Render this node to a string using the provided context."""
@@ -540,6 +607,10 @@ class BlockNode(Node):
     def __repr__(self):
         return f"BlockNode(name='{self.name}', body={self.body})"
 
+    def block_name(self):
+        """The name this block is matched on when a child template overrides it."""
+        return self.static_name(self.name)
+
     def render(self, context):
         """Render the block's content.
 
@@ -634,33 +705,46 @@ class AutoescapeNode(Node):
 
 
 class ComponentNode(Node):
-    """Represents an @component('name', data)...@endcomponent block."""
+    """Represents a component invocation.
 
-    def __init__(self, path_expr, data_expr=None, line=None, column=None):
+    Both syntaxes below are parsed into this same node:
+
+        @component('nav.link', {"href": "/"})
+        <pb-nav.link href="/" />
+
+    The directive passes its properties as a single dictionary expression, a
+    tag passes them as attributes; either way they are evaluated in the context
+    of the template that calls the component. The content of a paired tag is
+    handed over as slots, kept as nodes so it is rendered later, in the context
+    it was written in.
+    """
+
+    def __init__(self, name_expr, data_expr=None, attributes=None, slots=None, line=None, column=None):
         super().__init__(line, column)
-        self.path_expr = path_expr
+        self.name_expr = name_expr
         self.data_expr = data_expr
+        self.attributes = attributes or {}  # Property name -> expression, from the tag attributes
+        self.slots = slots or {}  # Slot name -> SlotContent
 
     def __repr__(self):
-        return f"ComponentNode(path_expr='{self.path_expr}', data_expr='{self.data_expr}')"
+        return (
+            f"ComponentNode(name_expr='{self.name_expr}', data_expr='{self.data_expr}', "
+            f"attributes={self.attributes}, slots={self.slots})"
+        )
 
-    def _parse_props(self, component: str) -> tuple:
-        """
-        Parse the @props directive in the component
-        """
-        pattern = re.compile(r"@props\s*\((?P<dictionary>.*?)\s*\)", re.DOTALL)
-        match = pattern.search(component)
-
+    def _resolve_props(self, context):
+        """Evaluate the properties passed to the component in the caller's context."""
         props = {}
-        if match:
-            component = re.sub(pattern, "", component)
-            dictionary = match.group("dictionary")
-            try:
-                props = self.eval(dictionary, {})
-            except (SyntaxError, ValueError) as e:
-                raise e
 
-        return component, props
+        if self.data_expr:
+            data = self.eval(self.data_expr, context)
+            if isinstance(data, dict):
+                props.update(data)
+
+        for name, expression in self.attributes.items():
+            props[name] = self.eval(expression, context)
+
+        return props
 
     def _resolve_component(self, name: str):
         """
@@ -682,11 +766,15 @@ class ComponentNode(Node):
         components_dir = settings.components_dir
         parent = components_dir.joinpath(*parts[:-1])
 
+        # The name the component is known by once normalized, e.g. 'user-profile' -> 'user_profile'
+        normalized = ".".join(parts)
+
         # Static component
         html_file = parent / f"{component_name}.html"
         if html_file.is_file():
             return {
                 "type": "static",
+                "name": normalized,
                 "html": html_file,
                 "python": None,
             }
@@ -696,6 +784,7 @@ class ComponentNode(Node):
         if python_file.is_file():
             return {
                 "type": "live",
+                "name": normalized,
                 "html": None,
                 "python": python_file,
             }
@@ -708,35 +797,42 @@ class ComponentNode(Node):
         if python_file.is_file():
             return {
                 "type": "live",
+                "name": f"{normalized}.{component_name}",
                 "html": html_file if html_file.is_file() else None,
                 "python": python_file,
             }
 
         return None
 
-    def _render_static_component(self, name, data):
+    def _render_static_component(self, name, props, context):
+        """Render an HTML component with the properties and the slots it was given.
 
+        The component is rendered in a context of its own, made of the properties
+        it received: it does not see the variables of the template that calls it.
+        The slots do, as they were written there, hence the binding.
+        """
         template = loader.load_template(name, [settings.components_dir])
-        original_content = template.content  # This is what may be displayed if an Exception occures
 
-        if not validate_single_root_node(original_content):
+        if not validate_single_root_node(template.content):
             raise TemplateRenderError(
-                "Component files should have single root node",
+                "Component files should have a single root node",
                 help="Enclose all HTML tags into a single parent tag such as <div>...</div>",
                 template=template,
                 line=self.line,
             )
 
-        new_content, props = self._parse_props(original_content)
-        template.content = new_content
+        component_context = dict(props)
 
-        data["attributes"] = AttributesContext(props=props, attributes={}, context=data)
+        # Defaults declared with @props are filled in by PropsNode, as the component
+        # template is rendered, and taken out of the attributes bag at the same time.
+        component_context["attributes"] = AttributesContext(props={}, attributes=props, context=props)
 
-        try:
-            return template.render(props | data)
-        except Exception:
-            template.content = original_content
-            raise
+        for slot_name, slot in self.slots.items():
+            component_context[slot_name] = slot.bind(context)
+
+        component_context.setdefault(DEFAULT_SLOT_NAME, SlotContent())
+
+        return template.render(component_context)
 
     def _render_live_component(self, python_file : Path, data):
 
@@ -755,78 +851,109 @@ class ComponentNode(Node):
             raise
 
     def render(self, context):
-        """Render a component, similar to TemplateProcessor.render_component."""
+        """Resolve the component and render it with its properties and slots."""
 
         try:
-            name = self.eval(self.path_expr, context)
+            name = self.eval(self.name_expr, context)
 
             component = self._resolve_component(name)
 
             if component is None:
                 raise ComponentNotFoundError(line=self.line, column=self.column, help="")
 
-            data = {}
-            if self.data_expr:
-                data = self.eval(self.data_expr, context)
-                if not isinstance(data, dict):
-                    data = {}
+            props = self._resolve_props(context)
 
             if component["type"] == "static":
-                return self._render_static_component(name, data)
+                return self._render_static_component(component["name"], props, context)
 
             elif component["type"] == "live":
-                return self._render_live_component(component["python"], data)
+                return self._render_live_component(component["python"], props)
 
         except TemplateRenderError:
             # To avoid the error being cathed by the following except clauses
             raise
-
-        # except ComponentNotFoundError:
-        #     raise
-
-        # except TemplateNotFoundError as exc:
-        #     setattr(exc, "line", self.line)
-        #     setattr(exc, "column", self.column)
-        #     raise
-
-        # except PyBladeException as exc:
-        #     setattr(exc, "template", template)
-        #     raise
 
         except Exception as exc:
             self._raise(exc)
 
 
 class SlotNode(Node):
-    """Represents an @slot('name')...@endslot block."""
+    """Represents a slot definition.
 
-    def __init__(self, name, body, line=None, column=None):
+    The three syntaxes below are parsed into this same node:
+
+        @slot('title') ... @endslot
+        <pb-slot name="title"> ... </pb-slot>
+        <pb-slot:title> ... </pb-slot:title>
+
+    The name is optional and defaults to 'slot', the default slot. Slots are
+    collected by whoever they are written for (a component invocation or the
+    layout a template extends), which is why rendering one on its own only
+    registers its content in the SlotContext.
+    """
+
+    def __init__(self, name=None, body=None, line=None, column=None):
         super().__init__(line, column)
         self.name = name
-        self.body = body
+        self.body = body if body is not None else []
 
     def __repr__(self):
         return f"SlotNode(name='{self.name}', body={self.body})"
 
-    def render(self, context):
-        """Render and register a named slot in the SlotContext."""
-        output = []
-        for node in self.body:
-            rendered = node.render(context)
-            if rendered:
-                output.append(rendered)
-        content = "".join(output)
+    def slot_name(self):
+        """The name this slot fills, 'slot' when it is left out."""
+        return self.static_name(self.name, DEFAULT_SLOT_NAME)
 
-        name = self.eval(self.name, context)
-        
-        # Get or create SlotContext from context
+    def render(self, context):
+        """Register a slot that is not consumed by a component or a layout."""
+        content = "".join(node.render(context) for node in self.body)
+
         slot_context = context.get("__slots")
         if slot_context is None:
             slot_context = SlotContext()
             context["__slots"] = slot_context
-        
-        # Store the slot content
-        slot_context.set_slot(name, content)
+
+        slot_context.set_slot(self.slot_name(), content)
+        return ""
+
+
+class PropsNode(Node):
+    """Represents an @props({...}) directive declaring the properties of a component.
+
+    The dictionary holds the properties the component accepts, mapped to their
+    default value. Properties the caller did not pass fall back to that default,
+    and declared properties are taken out of the attributes bag, so only the
+    extra attributes are spread over the component's root element.
+    """
+
+    def __init__(self, expression, line=None, column=None):
+        super().__init__(line, column)
+        self.expression = expression
+
+    def __repr__(self):
+        return f"PropsNode(expression='{self.expression}')"
+
+    def render(self, context):
+        try:
+            props = self.eval(self.expression, context)
+        except Exception as exc:
+            self._raise(exc)
+
+        if not isinstance(props, dict):
+            raise TemplateRenderError(
+                f"@props expects a dictionary but got a {type(props).__name__}.",
+                line=self.line,
+                column=self.column,
+                help='Declare the properties of the component as in @props({"type": "primary"}).',
+            )
+
+        attributes = context.get("attributes")
+        if isinstance(attributes, AttributesContext):
+            attributes.declare(props)
+
+        for name, default in props.items():
+            context.setdefault(name, default)
+
         return ""
 
 

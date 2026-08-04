@@ -37,6 +37,7 @@ from .nodes import (
     MultipleNode,
     NowNode,
     ParentNode,
+    PropsNode,
     PybladeScriptsNode,
     PybladeStylesNode,
     QuerystringNode,
@@ -60,6 +61,7 @@ from .nodes import (
     VerbatimNode,
     WithNode,
     YieldNode,
+    split_slots,
 )
 
 
@@ -185,6 +187,8 @@ class Parser:
                     ast.append(self._parse_yield(directive_args_str, token))
                 elif directive_name == "component":
                     ast.append(self._parse_component(directive_args_str, token))
+                elif directive_name == "props":
+                    ast.append(self._parse_props(directive_args_str, token))
                 elif directive_name == "slot":
                     ast.append(self._parse_slot(directive_args_str, token))
                 elif directive_name == "with":
@@ -476,6 +480,8 @@ class Parser:
                     body.append(self._parse_ifchanged(directive_args_str, token))
                 elif directive_name == "component":
                     body.append(self._parse_component(directive_args_str, token))
+                elif directive_name == "props":
+                    body.append(self._parse_props(directive_args_str, token))
                 elif directive_name == "slot":
                     body.append(self._parse_slot(directive_args_str, token))
                 elif directive_name == "block":
@@ -730,11 +736,19 @@ class Parser:
         return ComponentNode(path_expr, data_expr, line=token.line, column=token.column)
 
     def _parse_slot(self, args_str, token):
-        """Parses an @slot('name')...@endslot block."""
-        name = self._extract_expression_from_args(args_str, "@slot")
+        """Parses an @slot('name')...@endslot block.
+
+        The name is optional: @slot...@endslot fills the default slot.
+        """
+        name = self._extract_expression_from_args(args_str, "@slot") if args_str.strip() else None
         body = self._parse_until_directives(["@endslot"])
         self.expect("DIRECTIVE", value_prefix="@endslot")
         return SlotNode(name, body, line=token.line, column=token.column)
+
+    def _parse_props(self, args_str, token):
+        """Parses an @props({...}) directive."""
+        expression = self._extract_expression_from_args(args_str, "@props")
+        return PropsNode(expression, line=token.line, column=token.column)
 
     def _parse_verbatim(self, args_str, token=None):
         """Parses an @verbatim...@endverbatim block."""
@@ -1133,136 +1147,147 @@ class Parser:
         self.expect("DIRECTIVE", value_prefix="@enderror")
         return ErrorNode(field_expr, body, line=token.line, column=token.column)
 
+    _pb_tag_name_pattern = re.compile(r"</?pb-([a-zA-Z0-9_.:-]+)")
+
+    _pb_attribute_pattern = re.compile(
+        r"(?P<name>[a-zA-Z_][a-zA-Z0-9_.:-]*)"  # Attribute name
+        r"(?:\s*=\s*(?:"  # Its value is optional
+        r'"(?P<double>[^"]*)"'  # Double quoted, a string
+        r"|'(?P<single>[^']*)'"  # Single quoted, a string too
+        r"|(?P<unquoted>[^\s>]+)"  # Unquoted, an expression
+        r"))?"
+    )
+
     def _parse_pb_component(self, token, paired=True):
-        """Parses HTML-like pb- component tags and converts them to ComponentNode.
-        
+        """Parses an HTML-like pb- tag into a ComponentNode or, for pb-slot, a SlotNode.
+
         Examples:
             <pb-alert type="error">Error message</pb-alert>
             <pb-button label="Click me" />
             <pb-ui.card title="Samsung">Card slot</pb-ui.card>
+            <pb-slot:title>My title</pb-slot:title>
         """
         tag_value = token.value
         self.advance()  # Consume the PB_TAG_START or PB_TAG_SELF_CLOSE token
-        
-        # Extract component name from tag like <pb-alert> or <pb-button> or <pb-ui.card>
-        match = re.match(r"<pb-([a-zA-Z0-9_.-]+)", tag_value)
-        if not match:
+
+        tag_name = self._pb_tag_name(tag_value)
+        if not tag_name:
             raise DirectiveParsingError(
                 f"Invalid pb- tag format: {tag_value}",
                 line=token.line,
                 column=token.column,
             )
-        
-        component_name = match.group(1)
 
-        # Parse attributes from the tag
         attributes = self._parse_pb_attributes(tag_value)
 
-        # For paired tags, collect body content as plain text
-        body_content = ""
-        if paired:
-            body_content = self._collect_pb_body(component_name)
+        # The content of a paired tag is parsed, so that the component is handed
+        # template nodes rather than text it would have to parse again.
+        body = self._parse_pb_body(tag_name, token) if paired else []
 
-        # <pb-slot name="..."> is the HTML-like form of @slot('...')@endslot
-        if component_name == "slot":
-            return self._make_pb_slot(attributes, body_content, token)
+        # <pb-slot name="title"> and <pb-slot:title> are the tag forms of @slot('title')
+        if tag_name == "slot" or tag_name.startswith("slot:"):
+            return self._make_pb_slot(tag_name, attributes, body, token)
 
-        # Convert attributes to component data expression
-        if attributes:
-            # Build a Python dict expression from attributes
-            attr_pairs = []
-            for key, value in attributes.items():
-                if value.startswith('"') or value.startswith("'"):
-                    attr_pairs.append(f'"{key}": {value}')
-                else:
-                    # Assume it's a variable/expression
-                    attr_pairs.append(f'"{key}": {value}')
-            data_expr = "{" + ", ".join(attr_pairs) + "}"
-            # Add body content to data if present
-            if body_content:
-                data_expr = data_expr.rstrip("}") + f', "slot": "{body_content}"' + "}"
-        else:
-            if body_content:
-                data_expr = '{"slot": "' + body_content + '"}'
-            else:
-                data_expr = None
-        
-        # Create a ComponentNode with the parsed information
-        return ComponentNode(f'"{component_name}"', data_expr, line=token.line, column=token.column)
+        return ComponentNode(
+            f'"{tag_name}"',
+            attributes=attributes,
+            slots=split_slots(body),
+            line=token.line,
+            column=token.column,
+        )
 
-    def _collect_pb_body(self, component_name):
-        """Collects the raw content of a pb- tag until its matching closing tag."""
-        body_content = ""
+    def _pb_tag_name(self, tag_value):
+        """Extracts the name of a pb- tag, without its 'pb-' prefix."""
+        match = self._pb_tag_name_pattern.match(tag_value)
+        return match.group(1) if match else None
+
+    def _parse_pb_body(self, tag_name, token):
+        """Parses the content of a paired pb- tag, up to its matching closing tag.
+
+        Tags of the same name may be nested, so the depth is tracked. The
+        <pb-slot:title> shorthand accepts both </pb-slot:title> and </pb-slot>
+        as its closing tag.
+        """
+        base_name = tag_name.split(":")[0]
+        depth = 1
+        parts = []
+        start = None
 
         while self.current_token():
             current = self.current_token()
 
-            # Check for matching closing tag
-            if current.type == "PB_TAG_END":
-                closing_match = re.match(r"</pb-([a-zA-Z0-9_.-]+)\s*>", current.value)
-                if closing_match and closing_match.group(1) == component_name:
+            if current.type == "PB_TAG_START" and self._pb_tag_name(current.value).split(":")[0] == base_name:
+                depth += 1
+            elif current.type == "PB_TAG_END" and self._pb_tag_name(current.value) in (tag_name, base_name):
+                depth -= 1
+                if depth == 0:
                     self.advance()  # Consume the closing tag
                     break
 
-            # Mismatched closing tag or any other content is part of the body
-            body_content += current.value
+            start = start or current
+            parts.append(current.value)
             self.advance()
-
-        return body_content
-
-    def _make_pb_slot(self, attributes, body_content, token):
-        """Builds a SlotNode out of a <pb-slot name="...">...</pb-slot> tag."""
-        name = attributes.get("name")
-        if not name:
+        else:
             raise DirectiveParsingError(
-                "A <pb-slot> tag requires a 'name' attribute.",
+                f"Unclosed <pb-{tag_name}> tag.",
                 line=token.line,
                 column=token.column,
-                help='Name the slot as in <pb-slot name="title">My title</pb-slot>.',
+                help=f"Close the tag with </pb-{tag_name}> or make it self-closing with '/>'.",
             )
 
-        # The body is parsed so the slot keeps its template nodes instead of
-        # being handled as plain text.
-        body = Parser(Lexer(body_content).tokenize()).parse() if body_content else []
+        if not parts:
+            return []
+
+        # The content is tokenized again, from the position it was found at so that
+        # what it holds keeps reporting the line it is written on.
+        return Parser(Lexer("".join(parts), line=start.line, column=start.column).tokenize()).parse()
+
+    def _make_pb_slot(self, tag_name, attributes, body, token):
+        """Builds a SlotNode out of a <pb-slot name="..."> or <pb-slot:name> tag."""
+        if ":" in tag_name:
+            name = f'"{tag_name.split(":", 1)[1]}"'
+        else:
+            # Left out on <pb-slot>, which then fills the default slot
+            name = attributes.get("name")
 
         return SlotNode(name, body, line=token.line, column=token.column)
 
     def _parse_pb_attributes(self, tag_value):
         """Parse attributes from a pb- tag string.
-        
-        Example: <pb-alert type="error" dismissible=true>
-        Returns: {'type': '"error"', 'dismissible': 'true'}
+
+        Quoted values are strings, unquoted ones are expressions evaluated in the
+        context of the caller, and an attribute without a value is True.
+
+        Example: <pb-alert type="error" count=total dismissible>
+        Returns: {'type': '"error"', 'count': 'total', 'dismissible': 'True'}
         """
         attributes = {}
-        
+
         # Remove the opening tag part
-        match = re.match(r"<pb-[a-zA-Z0-9_-]+\s*(.*)>", tag_value)
+        match = re.match(r"<pb-[a-zA-Z0-9_.:-]+\s*(.*)>", tag_value, re.DOTALL)
         if not match:
             return attributes
-        
-        attrs_str = match.group(1).strip()
-        if not attrs_str or attrs_str.endswith("/"):
+
+        attrs_str = match.group(1).strip().rstrip("/").strip()
+        if not attrs_str:
             return attributes
-        
-        # Remove trailing slash if present
-        attrs_str = attrs_str.rstrip("/").strip()
-        
-        # Parse attributes using regex
-        attr_pattern = r'([a-zA-Z0-9_-]+)=(?:"([^"]*)"|\'([^\']*)\'|([^\s>]+))'
-        for match in re.finditer(attr_pattern, attrs_str):
-            attr_name = match.group(1)
-            # Value could be in group 2 (double quotes), group 3 (single quotes), or group 4 (unquoted)
-            attr_value = match.group(2) or match.group(3) or match.group(4)
-            
-            if attr_value is not None:
-                # If quoted, preserve quotes for evaluation
-                if match.group(2):  # Double quoted
-                    attributes[attr_name] = f'"{attr_value}"'
-                elif match.group(3):  # Single quoted
-                    attributes[attr_name] = f"'{attr_value}'"
-                else:  # Unquoted - treat as expression
-                    attributes[attr_name] = attr_value
-        
+
+        # Attributes are matched in a single pass, so that what is inside a quoted
+        # value is never mistaken for an attribute of its own.
+        for attribute in self._pb_attribute_pattern.finditer(attrs_str):
+            name = attribute.group("name")
+            double_quoted, single_quoted, unquoted = attribute.group("double", "single", "unquoted")
+
+            if double_quoted is not None:
+                attributes[name] = repr(double_quoted)
+            elif single_quoted is not None:
+                attributes[name] = repr(single_quoted)
+            elif unquoted is not None:
+                attributes[name] = unquoted
+            else:
+                # An attribute with no value at all, as the 'disabled' of <pb-button disabled />
+                attributes[name] = "True"
+
         return attributes
 
     def _parse_autocomplete(self, args_str):

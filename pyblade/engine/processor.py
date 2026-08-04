@@ -6,10 +6,9 @@ from typing import Any, Dict
 
 from . import loader
 from .cache import TemplateCache
-from .contexts import SlotContent
 from .exceptions import TemplateRenderError
 from .lexer import Lexer
-from .nodes import BlockNode, ExtendsNode, ParentNode, SlotNode, TextNode
+from .nodes import BlockNode, ExtendsNode, ParentNode, split_slots
 from .parser import Parser
 
 
@@ -134,7 +133,7 @@ class TemplateProcessor:
                 help="Make sure the templates in the @extends chain do not extend each other.",
             )
 
-        overrides, named_slots, slot_nodes = self._split_child_nodes(nodes)
+        overrides, slots = self._split_child_nodes(nodes)
 
         layout = loader.load_template(layout_name)
         layout_nodes = Parser(Lexer(layout.content or "").tokenize()).parse()
@@ -147,8 +146,7 @@ class TemplateProcessor:
             raise
 
         context_updates = dict(inherited)
-        context_updates.update(named_slots)
-        context_updates["slot"] = SlotContent(self._trim(slot_nodes))
+        context_updates.update(slots)
 
         return self._apply_overrides(layout_nodes, overrides), context_updates
 
@@ -180,37 +178,23 @@ class TemplateProcessor:
         """
         Split the top level of an extending template.
 
-        Returns a tuple (overrides, named_slots, slot_nodes): the blocks it overrides, the named
-        slots it defines and the nodes making up its default slot.
+        Returns a tuple (overrides, slots): the blocks the template overrides, and the slots it
+        hands over to its layout. The slots are the very same ones a component receives, the
+        content left outside of any block making up the default slot.
         """
         overrides = {}
-        named_slots = {}
-        slot_nodes = []
+        remaining = []
 
         for node in nodes:
             if isinstance(node, ExtendsNode):
                 continue
 
             if isinstance(node, BlockNode):
-                overrides[self._name_of(node)] = node.body
-            elif isinstance(node, SlotNode):
-                named_slots[self._name_of(node)] = SlotContent(self._trim(node.body))
+                overrides[node.block_name()] = node.body
             else:
-                slot_nodes.append(node)
+                remaining.append(node)
 
-        return overrides, named_slots, slot_nodes
-
-    def _name_of(self, node):
-        """
-        The name a block or a slot is matched on.
-
-        Names are usually literals, but an expression that cannot be evaluated without a context
-        still matches its counterpart in the other template, as both are written the same way.
-        """
-        try:
-            return node.eval(node.name, {})
-        except Exception:
-            return node.name
+        return overrides, split_slots(remaining)
 
     def _apply_overrides(self, nodes, overrides):
         """Replace, in the given nodes, the body of every block the child template overrides."""
@@ -227,7 +211,7 @@ class TemplateProcessor:
 
     def _override_block(self, block, overrides):
         """Return the block with its content replaced by the child's, if it defines one."""
-        name = self._name_of(block)
+        name = block.block_name()
 
         if name not in overrides:
             block.body = self._apply_overrides(block.body, overrides)
@@ -268,33 +252,6 @@ class TemplateProcessor:
             pairs = getattr(node, attr, None)
             if isinstance(pairs, list):
                 setattr(node, attr, [(expression, transform(children)) for expression, children in pairs])
-
-    def _trim(self, nodes):
-        """
-        Drop the blank text surrounding a slot's content.
-
-        Removing directives from the child's top level leaves the whitespace that used to separate
-        them behind, which would otherwise end up in the slot.
-        """
-        nodes = list(nodes)
-
-        while nodes and self._is_blank(nodes[0]):
-            nodes.pop(0)
-
-        while nodes and self._is_blank(nodes[-1]):
-            nodes.pop()
-
-        if nodes and isinstance(nodes[0], TextNode):
-            nodes[0] = TextNode(nodes[0].content.lstrip(), line=nodes[0].line, column=nodes[0].column)
-
-        if nodes and isinstance(nodes[-1], TextNode):
-            nodes[-1] = TextNode(nodes[-1].content.rstrip(), line=nodes[-1].line, column=nodes[-1].column)
-
-        return nodes
-
-    def _is_blank(self, node):
-        """Whether a node is plain text made of whitespace only."""
-        return isinstance(node, TextNode) and not node.content.strip()
 
     # CACHING
     # ------------------------------------------------------------------------------------------------------------

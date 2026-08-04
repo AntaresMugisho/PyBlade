@@ -97,6 +97,20 @@ class AttributesContext:
 
         return string
 
+    def declare(self, props: dict):
+        """
+        Mark attributes as component properties.
+
+        Declared properties belong to the component itself, so they are consumed
+        rather than spread over its root element, and their default value is kept
+        for the attributes the caller did not pass.
+        :param props: the properties declared with @props, mapped to their default
+        :return: self
+        """
+        self._props = {**self._props, **props}
+        self._attributes = {**props, **self._attributes}
+        return self
+
     def get(self, attr, default: str = ""):
         """
         Get the value of the given attribute
@@ -193,8 +207,9 @@ class RenderableContent:
     to the layout it extends without flattening it to plain text first.
     """
 
-    def __init__(self, nodes=None):
+    def __init__(self, nodes=None, context=None):
         self._nodes = list(nodes) if nodes else []
+        self._context = context
 
     def __repr__(self):
         return f"{self.__class__.__name__}(nodes={self._nodes})"
@@ -205,8 +220,24 @@ class RenderableContent:
     def __bool__(self):
         return bool(self._nodes)
 
+    @property
+    def nodes(self):
+        return self._nodes
+
+    def bind(self, context):
+        """Return the same content tied to the context it was written in.
+
+        A component renders its template with its own props, but the content it
+        was handed belongs to the template that wrote it and must keep seeing
+        that template's variables.
+        """
+        return self.__class__(self._nodes, context)
+
     def render(self, context):
         """Render the underlying nodes within the given context."""
+        if self._context is not None:
+            context = {**context, **self._context}
+
         return "".join(node.render(context) for node in self._nodes)
 
 
