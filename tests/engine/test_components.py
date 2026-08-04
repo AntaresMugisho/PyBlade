@@ -156,6 +156,25 @@ class TestComponentProps(ComponentTestCase):
 
         self.assertEqual(self._render("<pb-alert />"), "<div>info</div>")
 
+    def test_undeclared_variable_is_reported_against_the_component_file(self):
+        component = self._component("card", "<div>\n    {{ missing }}\n</div>")
+
+        with self.assertRaises(TemplateRenderError) as raised:
+            self._render("<h1>Home</h1>\n<pb-card />")
+
+        self.assertEqual(raised.exception.template.path, component)
+        self.assertEqual(raised.exception.line, 2)
+
+    def test_error_in_slot_content_is_reported_against_the_calling_file(self):
+        self._component("card", "<div>{{ slot }}</div>")
+
+        with self.assertRaises(TemplateRenderError) as raised:
+            self._render("<h1>Home</h1>\n<pb-card>{{ missing }}</pb-card>")
+
+        # No template means the one being rendered, which is where the slot is written
+        self.assertIsNone(raised.exception.template)
+        self.assertEqual(raised.exception.line, 2)
+
     def test_props_directive_requires_a_dictionary(self):
         self._component("alert", '@props("info")<div>Body</div>')
 

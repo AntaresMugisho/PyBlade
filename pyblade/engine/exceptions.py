@@ -18,6 +18,10 @@ class PyBladeException(Exception):
         self.column = column
         self.help = help
 
+        # Whether the reported line belongs to the template that wrote the content
+        # rather than to the one rendering it, as happens for the content of a slot.
+        self.belongs_to_caller = False
+
 
 class TemplateNotFoundError(PyBladeException):
     """Raised when a template file cannot be found."""

@@ -832,7 +832,14 @@ class ComponentNode(Node):
 
         component_context.setdefault(DEFAULT_SLOT_NAME, SlotContent())
 
-        return template.render(component_context)
+        try:
+            return template.render(component_context)
+        except PyBladeException as exc:
+            # The line the error carries is a line of the component, unless it comes
+            # from a slot, whose content belongs to the template that wrote it.
+            if exc.template is None and not exc.belongs_to_caller:
+                exc.template = template
+            raise
 
     def _render_live_component(self, python_file : Path, data):
 

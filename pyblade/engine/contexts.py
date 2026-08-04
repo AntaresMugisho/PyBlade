@@ -1,6 +1,8 @@
 from html import escape as html_escape
 from typing import Iterable
 
+from .exceptions import PyBladeException
+
 
 class SafeContent:
     """Content that is HTML markup already and must not be escaped when displayed.
@@ -264,7 +266,13 @@ class RenderableContent(SafeContent):
         if self._context is not None:
             context = {**context, **self._context}
 
-        return "".join(node.render(context) for node in self._nodes)
+        try:
+            return "".join(node.render(context) for node in self._nodes)
+        except PyBladeException as exc:
+            # These nodes were written in the template that handed them over, so
+            # whoever renders them must not report the error against its own file.
+            exc.belongs_to_caller = True
+            raise
 
 
 class SlotContent(RenderableContent):
