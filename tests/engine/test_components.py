@@ -175,6 +175,14 @@ class TestComponentProps(ComponentTestCase):
         self.assertIsNone(raised.exception.template)
         self.assertEqual(raised.exception.line, 2)
 
+    def test_props_can_be_declared_over_several_lines(self):
+        self._component(
+            "alert",
+            '@props({\n    "type": "info",\n    "message": "Nothing"\n})\n<div class="{{ type }}">{{ message }}</div>',
+        )
+
+        self.assertEqual(self._render("<pb-alert />").strip(), '<div class="info">Nothing</div>')
+
     def test_props_directive_requires_a_dictionary(self):
         self._component("alert", '@props("info")<div>Body</div>')
 

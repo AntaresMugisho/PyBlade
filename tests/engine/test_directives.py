@@ -3,6 +3,7 @@ import sys
 import unittest
 from unittest.mock import MagicMock
 
+from pyblade.engine.exceptions import DirectiveParsingError
 from pyblade.engine.processor import TemplateProcessor
 
 sys.modules["questionary"] = MagicMock()
@@ -387,6 +388,74 @@ class TestDirectives(unittest.TestCase):
         
         result = self._render(template, {"is_disabled": False})
         self.assertNotIn("disabled", result)
+
+
+class TestAttributeDirectives(unittest.TestCase):
+    """@checked, @selected, @disabled and the like, which render an HTML attribute."""
+
+    ATTRIBUTES = ("checked", "selected", "disabled", "readonly", "required", "multiple", "autofocus")
+
+    def setUp(self):
+        self.processor = TemplateProcessor()
+
+    def _render(self, template, context=None):
+        return self.processor.render(template, context or {})
+
+    def test_without_parentheses_the_attribute_is_rendered(self):
+        for attribute in self.ATTRIBUTES:
+            with self.subTest(attribute=attribute):
+                self.assertEqual(self._render(f"<input@{attribute}>"), f"<input {attribute}>")
+
+    def test_with_an_expression_the_attribute_follows_it(self):
+        for attribute in self.ATTRIBUTES:
+            with self.subTest(attribute=attribute):
+                template = f"<input@{attribute}(condition)>"
+
+                self.assertEqual(self._render(template, {"condition": True}), f"<input {attribute}>")
+                self.assertEqual(self._render(template, {"condition": False}), "<input>")
+
+    def test_inside_a_loop(self):
+        template = "@for(option in options)<option@selected(option == current)>{{ option }}</option>@endfor"
+
+        result = self._render(template, {"options": ["a", "b"], "current": "b"})
+
+        self.assertEqual(result, "<option>a</option><option selected>b</option>")
+
+    def test_inside_a_condition(self):
+        template = "@if(show)<input@disabled(locked)>@endif"
+
+        self.assertEqual(self._render(template, {"show": True, "locked": True}), "<input disabled>")
+        self.assertEqual(self._render(template, {"show": True, "locked": False}), "<input>")
+
+    def test_inside_a_condition_without_parentheses(self):
+        self.assertEqual(self._render("@if(show)<input@checked>@endif", {"show": True}), "<input checked>")
+
+
+class TestDirectivesInsideBlocks(unittest.TestCase):
+    """Directives must be parsed the same way wherever they appear."""
+
+    def setUp(self):
+        self.processor = TemplateProcessor()
+
+    def _render(self, template, context=None):
+        return self.processor.render(template, context or {})
+
+    def test_directive_taking_arguments_inside_a_loop(self):
+        template = "@for(item in items)@now('%Y') {{ item }}@endfor"
+
+        result = self._render(template, {"items": ["a"]})
+
+        self.assertIn("a", result)
+        self.assertNotIn("@now", result)
+
+    def test_unknown_directive_inside_a_loop_is_left_as_text(self):
+        template = "@for(item in items)@unknown {{ item }}@endfor"
+
+        self.assertEqual(self._render(template, {"items": ["a"]}), "@unknown a")
+
+    def test_misplaced_closing_directive_inside_a_loop_is_reported(self):
+        with self.assertRaises(DirectiveParsingError):
+            self._render("@for(item in items)@endif@endfor", {"items": ["a"]})
 
 
 if __name__ == "__main__":

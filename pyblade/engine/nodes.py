@@ -1761,52 +1761,35 @@ class SpacelessNode(Node):
         return self._between_tags_re.sub("><", content)
 
 
-class SelectedNode(Node):
-    """Represents a @selected(condition) directive."""
+class AttributeNode(Node):
+    """Represents a directive rendering the HTML attribute it is named after.
 
-    def __init__(self, condition, line=None, column=None):
+        <input@checked>                 always renders the attribute
+        <input@checked(is_active)>      renders it only if the condition holds
+
+    @checked, @selected, @disabled, @readonly, @required, @multiple and
+    @autofocus all work this way. The attribute comes with its own leading
+    space, so it is written right after the tag or the attribute before it.
+    """
+
+    def __init__(self, attribute, condition=None, line=None, column=None):
         super().__init__(line, column)
+        self.attribute = attribute
         self.condition = condition
 
     def __repr__(self):
-        return f"SelectedNode(condition='{self.condition}')"
+        return f"AttributeNode(attribute='{self.attribute}', condition='{self.condition}')"
 
     def render(self, context):
-        if self.eval(self.condition, context):
-            return " selected"
-        return ""
+        if self.condition is None:
+            return f" {self.attribute}"
 
+        try:
+            held = self.eval(self.condition, context)
+        except Exception as exc:
+            self._raise(exc)
 
-class RequiredNode(Node):
-    """Represents a @required(condition) directive."""
-
-    def __init__(self, condition, line=None, column=None):
-        super().__init__(line, column)
-        self.condition = condition
-
-    def __repr__(self):
-        return f"RequiredNode(condition='{self.condition}')"
-
-    def render(self, context):
-        if self.eval(self.condition, context):
-            return " required"
-        return ""
-
-
-class CheckedNode(Node):
-    """Represents a @checked(condition) directive."""
-
-    def __init__(self, condition, line=None, column=None):
-        super().__init__(line, column)
-        self.condition = condition
-
-    def __repr__(self):
-        return f"CheckedNode(condition='{self.condition}')"
-
-    def render(self, context):
-        if self.eval(self.condition, context):
-            return " checked"
-        return ""
+        return f" {self.attribute}" if held else ""
 
 
 class FieldNode(Node):
