@@ -1,9 +1,5 @@
-import sys
 import unittest
-from unittest.mock import MagicMock, patch
-
-# Mock questionary if needed (though we are testing engine)
-sys.modules["questionary"] = MagicMock()
+from unittest.mock import patch
 
 from pyblade.engine.processor import TemplateProcessor
 

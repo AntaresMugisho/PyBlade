@@ -1,20 +1,9 @@
 import datetime
-import sys
 import unittest
-from unittest.mock import MagicMock
 
 from pyblade.engine.exceptions import DirectiveParsingError
 from pyblade.engine.processor import TemplateProcessor
 
-sys.modules["questionary"] = MagicMock()
-sys.modules["django.conf"] = MagicMock()
-sys.modules["django.conf"].settings.STATIC_URL = "/static/"
-sys.modules["django.conf"].settings.MEDIA_URL = "/media/"
-sys.modules["django.urls"] = MagicMock()
-sys.modules["django.utils"] = MagicMock()
-sys.modules["django.utils.translation"] = MagicMock()
-sys.modules["django.utils.translation"].gettext_lazy = lambda x: x
-sys.modules["django.utils.translation"].pgettext = lambda c, m: m
 
 
 class TestDirectives(unittest.TestCase):
@@ -167,6 +156,7 @@ class TestDirectives(unittest.TestCase):
         <input @selected(is_selected)>
         <input @required(is_required)>
         <input @checked(is_checked)>
+        <input @autocomplete(auto_val)>
         """
         context = {"is_selected": True, "is_required": False, "is_checked": True, "auto_val": "off"}
         output = self._render(template, context)

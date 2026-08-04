@@ -1793,109 +1793,121 @@ class AttributeNode(Node):
 
 
 class FieldNode(Node):
-    """Represents a @field(form.field, attrs...) directive for rendering form fields with extra attributes.
-    
-    Works like django-widget-tweaks' {% render_field %} tag to add/modify HTML attributes.
-    Usage: @field(form.username, type="text", class="form-control", placeholder="Username")
+    """Represents an @field(form.field, attributes...) directive rendering a form field.
+
+    Attributes are added to the ones the field's widget already carries, an
+    attribute whose name ends with '+' appending to what is there rather than
+    replacing it:
+
+        @field(form.name, class="form-control" placeholder="Your name" required)
+        @field(form.name, class+="is-invalid")
     """
+
+    # A tag and the attributes it holds, quoted values included
+    _tag_pattern = re.compile(r"<(?P<tag>[a-zA-Z][\w-]*)(?P<attributes>(?:\"[^\"]*\"|'[^']*'|[^>\"'])*?)(?P<void>/?)>")
+
+    _html_attribute_pattern = re.compile(
+        r"(?P<name>[a-zA-Z_:][\w:.-]*)"
+        r"(?:\s*=\s*(?:\"(?P<double>[^\"]*)\"|'(?P<single>[^']*)'|(?P<unquoted>[^\s>]+)))?"
+    )
 
     def __init__(self, field_expr, attributes=None, line=None, column=None):
         super().__init__(line, column)
         self.field_expr = field_expr
-        self.attributes = attributes or {}
+        self.attributes = attributes or {}  # Attribute name -> expression
 
     def __repr__(self):
         return f"FieldNode(field_expr='{self.field_expr}', attributes={self.attributes})"
 
     def render(self, context):
-        """Render the form field with additional attributes.
-        
-        The field expression should evaluate to a Django form field or similar object
-        that can be rendered as HTML. The attributes dict contains HTML attributes to add/modify.
-        """
         try:
-            # Get the field object from context
             field = self.eval(self.field_expr, context)
-            
-            # If field is None or not renderable, return empty string
-            if field is None:
-                return ""
-            
-            # Try to render the field (Django form field)
-            field_html = str(field)
-            
-            # Parse the field HTML and add/modify attributes
-            from html.parser import HTMLParser
-            
-            class FieldAttributeParser(HTMLParser):
-                def __init__(self, extra_attrs):
-                    super().__init__()
-                    self.extra_attrs = extra_attrs
-                    self.result = ""
-                    self.in_field_tag = False
-                    self.current_tag = ""
-                    self.current_attrs = {}
-                    
-                def handle_starttag(self, tag, attrs):
-                    self.current_tag = tag
-                    self.current_attrs = dict(attrs)
-                    self.in_field_tag = True
-                    
-                def handle_endtag(self, tag):
-                    if self.in_field_tag and tag == self.current_tag:
-                        # Merge attributes
-                        for attr_name, attr_value in self.extra_attrs.items():
-                            # Handle append syntax (class+="value")
-                            if attr_name.endswith('+'):
-                                base_name = attr_name[:-1]
-                                existing = self.current_attrs.get(base_name, '')
-                                self.current_attrs[base_name] = f"{existing} {attr_value}".strip()
-                            else:
-                                self.current_attrs[attr_name] = attr_value
-                        
-                        # Rebuild the tag with merged attributes
-                        attrs_str = " ".join(f'{k}="{v}"' for k, v in self.current_attrs.items())
-                        if attrs_str:
-                            self.result += f"<{self.current_tag} {attrs_str}>"
-                        else:
-                            self.result += f"<{self.current_tag}>"
-                        self.in_field_tag = False
-                    else:
-                        self.result += f"</{tag}>"
-                        
-                def handle_data(self, data):
-                    if not self.in_field_tag:
-                        self.result += data
-                        
-                def handle_entityref(self, name):
-                    if not self.in_field_tag:
-                        self.result += f"&{name};"
-                        
-                def handle_charref(self, name):
-                    if not self.in_field_tag:
-                        self.result += f"&#{name};"
-            
-            parser = FieldAttributeParser(self.attributes)
-            parser.feed(field_html)
-            
-            return parser.result
-            
         except Exception as exc:
-            # If rendering fails, return the field as-is or empty string
+            self._raise(exc)
+
+        if field is None:
+            return ""
+
+        attributes = {}
+        for name, expression in self.attributes.items():
             try:
-                field = self.eval(self.field_expr, context)
-                return str(field) if field else ""
-            except:
-                return ""
+                attributes[name] = self.eval(expression, context)
+            except Exception as exc:
+                self._raise(exc)
+
+        # A bound field renders its own widget, which is where its attributes belong
+        if hasattr(field, "as_widget"):
+            try:
+                return str(field.as_widget(attrs=self._merge(self._widget_attributes(field), attributes)))
+            except Exception as exc:
+                self._raise(exc)
+
+        return self._merge_into_html(str(field), attributes)
+
+    @staticmethod
+    def _widget_attributes(field):
+        """The attributes the widget of a bound field already carries."""
+        widget = getattr(getattr(field, "field", None), "widget", None)
+        return dict(getattr(widget, "attrs", None) or {})
+
+    @staticmethod
+    def _merge(attributes, added):
+        """Adds attributes to the ones already there, honouring the 'name+' append form."""
+        merged = dict(attributes)
+
+        for name, value in added.items():
+            if name.endswith("+"):
+                name = name[:-1]
+                value = f"{merged.get(name, '')} {value}".strip()
+
+            if value is False or value is None:
+                merged.pop(name, None)
+            else:
+                merged[name] = value
+
+        return merged
+
+    def _merge_into_html(self, html, attributes):
+        """Adds the attributes to the first tag of an already rendered field."""
+        match = self._tag_pattern.search(html)
+        if not match:
+            return html
+
+        # Values found in the HTML are already escaped and are kept as they are,
+        # only the ones coming from the directive have to be escaped.
+        existing = {}
+        for attribute in self._html_attribute_pattern.finditer(match.group("attributes")):
+            double_quoted, single_quoted, unquoted = attribute.group("double", "single", "unquoted")
+            value = double_quoted if double_quoted is not None else single_quoted
+            value = value if value is not None else unquoted
+            existing[attribute.group("name")] = True if value is None else value
+
+        merged = self._merge(existing, {name: self._escape(value) for name, value in attributes.items()})
+
+        rendered = "".join(
+            f" {name}" if value is True else f' {name}="{value}"'
+            for name, value in merged.items()
+            if value is not False
+        )
+
+        return f"{html[:match.start()]}<{match.group('tag')}{rendered}{match.group('void')}>{html[match.end():]}"
+
+    @staticmethod
+    def _escape(value):
+        return value if isinstance(value, bool) or value is None else html_escape(str(value))
 
 
 class ErrorNode(Node):
-    """Represents an @error(form.field)...@enderror block for displaying form validation errors.
-    
-    Usage:
+    """Represents an @error(form.field)...@enderror block, shown when a field has errors.
+
         @error(form.email)
-            <small class="text-red-500">{{ message }}</small>
+            <small style="color:red;">{{ message }}</small>
         @enderror
+
+    The body is rendered with `message`, the first error of the field, and
+    `messages`, all of them. The errors are read from the field itself when it
+    knows them, as a Django bound field does, and looked up by name in the form
+    or in an `errors` bag otherwise.
     """
 
     def __init__(self, field_expr, body, line=None, column=None):
@@ -1907,75 +1919,89 @@ class ErrorNode(Node):
         return f"ErrorNode(field_expr='{self.field_expr}', body={self.body})"
 
     def render(self, context):
-        """Render the error block if the field has validation errors.
-        
-        Checks for errors in Django form style (form.errors) or Laravel style (errors bag).
-        """
+        messages = self._messages(context)
+        if not messages:
+            return ""
+
+        body_context = dict(context)
+        body_context["message"] = messages[0]
+        body_context["messages"] = messages
+
+        return "".join(node.render(body_context) for node in self.body)
+
+    def _messages(self, context):
+        """The error messages of the field, from wherever they are held."""
+        parts = [part.strip() for part in self.field_expr.split(".")]
+        name = parts[-1].strip("\"'")
+
         try:
-            field_expr = self.eval(self.field_expr, context)
-            
-            # Extract field name from expression like "form.email"
-            field_name = None
-            if isinstance(field_expr, str):
-                # If it's a string, try to extract the field name
-                parts = field_expr.split('.')
-                if len(parts) >= 2:
-                    field_name = parts[-1]
-            
-            # Check for Django-style form errors
-            errors = None
-            if isinstance(field_expr, str) and '.' in field_expr:
-                # Try to get the form object from context
-                form_name = field_expr.split('.')[0]
-                form = context.get(form_name)
-                if form and hasattr(form, 'errors'):
-                    errors = form.errors
-                    if field_name and field_name in errors:
-                        error_messages = errors[field_name]
-                        if isinstance(error_messages, list):
-                            error_messages = error_messages[0] if error_messages else ""
-                        # Render body with message in context
-                        error_context = context.copy()
-                        error_context['message'] = str(error_messages)
-                        return "".join(node.render(error_context) for node in self.body)
-            
-            # Check for Laravel-style errors bag
-            errors_bag = context.get('errors')
-            if errors_bag and field_name:
-                if hasattr(errors_bag, 'get'):
-                    error_message = errors_bag.get(field_name)
-                    if error_message:
-                        error_context = context.copy()
-                        error_context['message'] = str(error_message)
-                        return "".join(node.render(error_context) for node in self.body)
-                elif isinstance(errors_bag, dict) and field_name in errors_bag:
-                    error_message = errors_bag[field_name]
-                    error_context = context.copy()
-                    error_context['message'] = str(error_message)
-                    return "".join(node.render(error_context) for node in self.body)
-            
-            # No errors found, return empty string
-            return ""
-            
-        except Exception as exc:
-            # If error checking fails, return empty string
-            return ""
+            field = self.eval(self.field_expr, context)
+        except Exception:
+            field = None
+
+        # @error('email'), naming the field rather than pointing at it
+        if isinstance(field, str):
+            name = field
+
+        # A bound field carries its own errors
+        messages = self._as_messages(getattr(field, "errors", None))
+        if messages:
+            return messages
+
+        # Otherwise they are held by the form the field belongs to, or by an errors bag
+        holders = [context.get(parts[0])] if len(parts) > 1 else []
+        holders.append(context.get("errors"))
+
+        for holder in holders:
+            errors = getattr(holder, "errors", holder)
+            messages = self._as_messages(self._lookup(errors, name))
+            if messages:
+                return messages
+
+        return []
+
+    @staticmethod
+    def _lookup(errors, name):
+        try:
+            return errors[name]
+        except (TypeError, LookupError):
+            return None
+
+    @staticmethod
+    def _as_messages(errors):
+        """Normalizes whatever holds the errors of a single field into a list of messages."""
+        if not errors or isinstance(errors, dict):
+            return []
+
+        if isinstance(errors, str):
+            return [errors]
+
+        try:
+            return [str(error) for error in errors]
+        except TypeError:
+            return [str(errors)]
 
 
 class AutocompleteNode(Node):
-    """Represents a @autocomplete(value) directive."""
+    """Represents an @autocomplete(value) directive rendering an autocomplete attribute."""
 
-    def __init__(self, value):
+    def __init__(self, value, line=None, column=None):
+        super().__init__(line, column)
         self.value = value
 
     def __repr__(self):
         return f"AutocompleteNode(value='{self.value}')"
 
     def render(self, context):
-        value = self.eval(self.value, context) if isinstance(self.value, str) else self.value
+        try:
+            value = self.eval(self.value, context)
+        except Exception as exc:
+            self._raise(exc)
+
         if value is None:
             return ""
-        return f' autocomplete="{value}"'
+
+        return f' autocomplete="{html_escape(str(value))}"'
 
 
 class AutofocusNode(Node):

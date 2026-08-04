@@ -135,6 +135,13 @@ class SafeEvaluator:
             try:
                 value = getattr(owner, attr_name)
             except AttributeError as exc:
+                # Objects exposing their items rather than attributes, as a Django form
+                # does with its fields: form.email is the bound field form["email"]
+                try:
+                    return owner[attr_name]
+                except (TypeError, LookupError):
+                    pass
+
                 # Fallback to filter (no-arg filter)
                 if self._filters.has(attr_name):
                     filter_func = self._filters.get(attr_name)

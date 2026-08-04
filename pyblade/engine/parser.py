@@ -279,6 +279,8 @@ class Parser:
             return self._parse_autoescape(args, token)
         elif name in self._attribute_directives:
             return self._parse_attribute(name, args, token)
+        elif name == "autocomplete":
+            return self._parse_autocomplete(args, token)
         elif name == "field":
             return self._parse_field(args, token)
         elif name == "error":
@@ -979,76 +981,30 @@ class Parser:
         return AttributeNode(name, condition or None, line=token.line, column=token.column)
 
     def _parse_field(self, args_str, token):
-        """Parses an @field(form.field, attrs...) directive.
-        
-        Usage: @field(form.username, type="text", class="form-control")
+        """Parses an @field(form.field, attributes...) directive.
+
+        The first argument is the form field, the rest are the HTML attributes to
+        render it with, written as in a tag:
+
+            @field(form.name, class="form-control" placeholder="Your name" required)
         """
-        # Remove outer parentheses if present
-        match = re.match(r"^\s*\((.*)\)\s*$", args_str)
-        if match:
-            args_str = match.group(1).strip()
-        
-        # Split by comma, but respect nested structures and quotes
-        parts = []
-        current_part = ""
-        bracket_count = 0
-        brace_count = 0
-        quote_char = None
-        
-        for char in args_str:
-            if quote_char:
-                current_part += char
-                if char == quote_char:
-                    quote_char = None
-            elif char in ('"', "'"):
-                quote_char = char
-                current_part += char
-            elif char in ("[", "("):
-                bracket_count += 1
-                current_part += char
-            elif char in ("]", ")"):
-                bracket_count -= 1
-                current_part += char
-            elif char == "{":
-                brace_count += 1
-                current_part += char
-            elif char == "}":
-                brace_count -= 1
-                current_part += char
-            elif char == "," and bracket_count == 0 and brace_count == 0:
-                parts.append(current_part.strip())
-                current_part = ""
-            else:
-                current_part += char
-        
-        if current_part.strip():
-            parts.append(current_part.strip())
-        
-        if not parts:
+        inner = self._extract_expression_from_args(args_str, "@field")
+        field_expr, _, attrs_str = inner.partition(",")
+
+        if not field_expr.strip():
             raise DirectiveParsingError(
                 "@field requires at least a field expression",
                 line=token.line,
                 column=token.column,
+                help="Pass the field to render, as in @field(form.name).",
             )
-        
-        # First part is the field expression
-        field_expr = parts[0]
-        
-        # Remaining parts are attributes
-        attributes = {}
-        for part in parts[1:]:
-            # Parse attribute as key="value" or key=value
-            attr_match = re.match(r'^(\w+)(?:\+?)=(.*)$', part.strip())
-            if attr_match:
-                attr_name = attr_match.group(1)
-                attr_value = attr_match.group(2).strip()
-                # Remove quotes if present
-                if (attr_value.startswith('"') and attr_value.endswith('"')) or \
-                   (attr_value.startswith("'") and attr_value.endswith("'")):
-                    attr_value = attr_value[1:-1]
-                attributes[attr_name] = attr_value
-        
-        return FieldNode(field_expr, attributes, line=token.line, column=token.column)
+
+        return FieldNode(
+            field_expr.strip(),
+            self._parse_attributes(attrs_str),
+            line=token.line,
+            column=token.column,
+        )
 
     def _parse_error(self, args_str, token):
         """Parses an @error(form.field)...@enderror block."""
@@ -1059,12 +1015,13 @@ class Parser:
 
     _pb_tag_name_pattern = re.compile(r"</?pb-([a-zA-Z0-9_.:-]+)")
 
-    _pb_attribute_pattern = re.compile(
+    _attribute_pattern = re.compile(
         r"(?P<name>[a-zA-Z_][a-zA-Z0-9_.:-]*)"  # Attribute name
+        r"(?P<append>\+)?"  # Appending to the value already there, as in class+="..."
         r"(?:\s*=\s*(?:"  # Its value is optional
         r'"(?P<double>[^"]*)"'  # Double quoted, a string
         r"|'(?P<single>[^']*)'"  # Single quoted, a string too
-        r"|(?P<unquoted>[^\s>]+)"  # Unquoted, an expression
+        r"|(?P<unquoted>[^\s,>]+)"  # Unquoted, an expression
         r"))?"
     )
 
@@ -1178,14 +1135,24 @@ class Parser:
         if not match:
             return attributes
 
-        attrs_str = match.group(1).strip().rstrip("/").strip()
-        if not attrs_str:
-            return attributes
+        return self._parse_attributes(match.group(1).strip().rstrip("/"))
+
+    def _parse_attributes(self, attrs_str):
+        """Parses a list of HTML-like attributes into a name to expression mapping.
+
+        Quoted values are strings, unquoted ones are expressions evaluated where the
+        attribute is written, and an attribute with no value is True. A name ending
+        with '+' appends to the value the attribute already holds.
+
+        Example: type="error" count=total dismissible class+="mt-2"
+        Returns: {'type': "'error'", 'count': 'total', 'dismissible': 'True', 'class+': "'mt-2'"}
+        """
+        attributes = {}
 
         # Attributes are matched in a single pass, so that what is inside a quoted
         # value is never mistaken for an attribute of its own.
-        for attribute in self._pb_attribute_pattern.finditer(attrs_str):
-            name = attribute.group("name")
+        for attribute in self._attribute_pattern.finditer(attrs_str.strip()):
+            name = attribute.group("name") + (attribute.group("append") or "")
             double_quoted, single_quoted, unquoted = attribute.group("double", "single", "unquoted")
 
             if double_quoted is not None:
@@ -1200,8 +1167,9 @@ class Parser:
 
         return attributes
 
-    def _parse_autocomplete(self, args_str):
-        return AutocompleteNode(args_str)
+    def _parse_autocomplete(self, args_str, token):
+        value = self._extract_expression_from_args(args_str, "@autocomplete")
+        return AutocompleteNode(value, line=token.line, column=token.column)
 
     def _parse_ratio(self, args_str, token):
         """Parse @ratio(value, max_value, max_width) or @ratio(value, max_value, max_width as variable_name)"""
