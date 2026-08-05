@@ -12,6 +12,7 @@ from django.conf import settings
 if not settings.configured:
     settings.configure(
         DEBUG=True,
+        SECRET_KEY="pyblade-test-secret-key",
         USE_I18N=False,
         USE_TZ=False,
         INSTALLED_APPS=["django.forms"],

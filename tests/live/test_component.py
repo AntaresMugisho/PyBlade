@@ -1,0 +1,300 @@
+import shutil
+import sys
+import tempfile
+import textwrap
+import unittest
+from pathlib import Path
+
+from pyblade.config import settings
+from pyblade.live import Component
+
+
+class Counter(Component):
+    """A component as a developer writes one."""
+
+    count = 0
+    label = "clicks"
+
+    def increment(self, step=1):
+        self.count += step
+
+    def _secret(self):
+        raise AssertionError("a private method must not be reachable")
+
+    def render(self):
+        return self.render_inline("<div>{{ count }}</div>", context={})
+
+
+class TestComponentSurface(unittest.TestCase):
+    """What of a component the client gets to see and to call."""
+
+    def setUp(self):
+        self.component = Counter("pb-test")
+
+    def test_state_holds_the_properties_of_the_component(self):
+        state = self.component._get_state()
+
+        self.assertEqual(state["count"], 0)
+        self.assertEqual(state["label"], "clicks")
+
+    def test_state_leaves_out_the_machinery_of_the_base_class(self):
+        state = self.component._get_state()
+
+        for name in ("template_name", "_id", "_rendered"):
+            self.assertNotIn(name, state)
+
+    def test_state_leaves_out_private_properties(self):
+        self.component._token = "secret"
+
+        self.assertNotIn("_token", self.component._get_state())
+
+    def test_state_leaves_out_methods(self):
+        state = self.component._get_state()
+
+        self.assertNotIn("increment", state)
+        self.assertNotIn("render", state)
+
+    def test_methods_hold_what_the_component_defines(self):
+        self.assertIn("increment", self.component._get_methods())
+
+    def test_methods_leave_out_the_machinery_of_the_base_class(self):
+        methods = self.component._get_methods()
+
+        for name in (
+            "serialize",
+            "deserialize",
+            "render",
+            "render_template",
+            "render_inline",
+            "get_template_name",
+            "mount",
+            "boot",
+            "hydrate",
+            "redirect",
+            "navigate",
+            "emit",
+            "dispatch",
+            "reset",
+            "refresh",
+            "set",
+            "toggle",
+        ):
+            self.assertNotIn(name, methods)
+
+    def test_methods_leave_out_private_methods(self):
+        self.assertNotIn("_secret", self.component._get_methods())
+
+    def test_the_snapshot_carries_nothing_but_the_state(self):
+        snapshot = self.component.serialize()
+
+        self.assertEqual(set(snapshot), {"id", "class", "state", "checksum"})
+        self.assertEqual(snapshot["state"], {"count": 0, "label": "clicks"})
+
+
+class TestClientActions(unittest.TestCase):
+    """What the client is allowed to ask the component to do."""
+
+    def _update(self, action, params=()):
+        return Counter.update_component({"count": 0, "label": "clicks", "_id": "pb-test"}, action, list(params))
+
+    def test_calling_a_method_of_the_component(self):
+        result = self._update("increment")
+
+        self.assertEqual(result["snapshot"]["state"]["count"], 1)
+
+    def test_calling_a_method_with_parameters(self):
+        result = self._update("increment", [5])
+
+        self.assertEqual(result["snapshot"]["state"]["count"], 5)
+
+    def test_calling_a_method_of_the_base_class_is_refused(self):
+        for name in ("serialize", "render_template", "get_template_name", "redirect", "deserialize"):
+            with self.subTest(method=name):
+                with self.assertRaises(AttributeError):
+                    self._update(name)
+
+    def test_calling_a_private_method_is_refused(self):
+        with self.assertRaises(AttributeError):
+            self._update("_secret")
+
+    def test_calling_an_unknown_method_is_refused(self):
+        with self.assertRaises(NameError):
+            self._update("nowhere")
+
+    def test_setting_a_property_of_the_component(self):
+        result = self._update("$set", ["count", 7])
+
+        self.assertEqual(result["snapshot"]["state"]["count"], 7)
+
+    def test_setting_a_property_of_the_base_class_is_refused(self):
+        for name in ("template_name", "_id", "_rendered"):
+            with self.subTest(property=name):
+                with self.assertRaises(AttributeError):
+                    self._update("$set", [name, "anything"])
+
+    def test_refreshing_re_renders_without_calling_anything(self):
+        result = self._update("$refresh")
+
+        self.assertEqual(result["html"], "<div pb:id=\"pb-test\">0</div>")
+
+
+class TestInitialRendering(unittest.TestCase):
+    """The first rendering of a component, on the server."""
+
+    def _component(self, **body):
+        body.setdefault("render", lambda self: self.render_inline("<div>{{ count }}</div>", context={}))
+        return type("Greeter", (Component,), {"count": 0, **body})
+
+    def test_class_defaults_make_up_the_initial_state(self):
+        cls = self._component()
+
+        cls.render_initial({}, {}, {}, "", None)
+
+        self.assertEqual(cls("pb-test")._get_state(), {"count": 0})
+
+    def test_properties_passed_to_the_component_reach_its_state(self):
+        cls = self._component()
+
+        html = cls.render_initial({"count": 5}, {}, {}, "", None)
+
+        self.assertIn("<div pb:id=", html)
+        self.assertIn(">5<", html)
+
+    def test_mount_receives_the_properties_it_declares(self):
+        received = {}
+
+        def mount(self, count=0, **kwargs):
+            received.update({"count": count, "kwargs": kwargs})
+            self.count = count * 2
+
+        cls = self._component(mount=mount)
+
+        html = cls.render_initial({"count": 3}, {}, {}, "", None)
+
+        self.assertEqual(received, {"count": 3, "kwargs": {}})
+        self.assertIn(">6<", html)
+
+    def test_mount_without_parameters_is_called_all_the_same(self):
+        called = []
+
+        cls = self._component(mount=lambda self: called.append(True))
+
+        cls.render_initial({"count": 1}, {}, {}, "", None)
+
+        self.assertEqual(called, [True])
+
+    def test_a_property_mount_does_not_declare_is_not_forced_on_it(self):
+        """An unknown property still becomes state, it just is not a mount argument."""
+
+        def mount(self, count=0):
+            self.count = count
+
+        cls = self._component(mount=mount)
+
+        html = cls.render_initial({"count": 2, "extra": "kept"}, {}, {}, "", None)
+
+        self.assertIn('"extra": "kept"', html)
+
+    def test_a_property_mount_consumes_is_not_state_of_its_own(self):
+        """mount() turns what it is given into the state it decides on."""
+
+        def mount(self, start=0):
+            self.count = start
+
+        cls = self._component(mount=mount)
+
+        html = cls.render_initial({"start": 5}, {}, {}, "", None)
+
+        self.assertIn('"count": 5', html)
+        self.assertNotIn('"start"', html)
+
+    def test_properties_are_state_when_the_component_has_no_mount(self):
+        """The base mount() takes **kwargs, which must not swallow the properties."""
+        cls = self._component()
+
+        html = cls.render_initial({"count": 5, "extra": "kept"}, {}, {}, "", None)
+
+        self.assertIn('"count": 5', html)
+        self.assertIn('"extra": "kept"', html)
+
+    def test_the_key_names_the_component_instead_of_a_generated_id(self):
+        cls = self._component()
+
+        html = cls.render_initial({"key": "counter-1"}, {}, {}, "", None)
+
+        self.assertIn('pb:id="counter-1"', html)
+
+    def test_the_key_is_not_part_of_the_state(self):
+        cls = self._component()
+
+        html = cls.render_initial({"key": "counter-1"}, {}, {}, "", None)
+
+        self.assertNotIn('"key"', html)
+
+
+class TestTemplateName(unittest.TestCase):
+    """The template of a component is found from where its class lives."""
+
+    def setUp(self):
+        self.components_dir = Path(tempfile.mkdtemp())
+        (self.components_dir / "live").mkdir()
+
+        self._saved_components_dir = settings._data.get("components_dir")
+        settings._data["components_dir"] = str(self.components_dir)
+
+        sys.path.insert(0, str(self.components_dir.parent))
+        self.package = self.components_dir.name
+
+    def tearDown(self):
+        sys.path.remove(str(self.components_dir.parent))
+        for name in [name for name in sys.modules if name.startswith(self.package)]:
+            del sys.modules[name]
+
+        if self._saved_components_dir is None:
+            settings._data.pop("components_dir", None)
+        else:
+            settings._data["components_dir"] = self._saved_components_dir
+        shutil.rmtree(self.components_dir, ignore_errors=True)
+
+    def _write_component(self):
+        (self.components_dir / "__init__.py").write_text("")
+        (self.components_dir / "live" / "__init__.py").write_text("")
+        (self.components_dir / "live" / "counter.py").write_text(
+            textwrap.dedent(
+                """
+                from pyblade import live
+
+                class Counter(live.Component):
+                    count = 0
+                """
+            )
+        )
+        (self.components_dir / "live" / "counter.html").write_text("<div>{{ count }}</div>")
+
+        import importlib
+
+        module = importlib.import_module(f"{self.package}.live.counter")
+        return module.Counter
+
+    def test_derived_from_the_module_of_the_class(self):
+        cls = self._write_component()
+
+        self.assertEqual(cls("pb-test").get_template_name(), "live.counter")
+
+    def test_an_explicit_template_name_wins(self):
+        cls = self._write_component()
+        cls.template_name = "live.other"
+
+        self.assertEqual(cls("pb-test").get_template_name(), "live.other")
+
+    def test_survives_a_round_trip_without_travelling_to_the_client(self):
+        """The client never sends the template name back, so it must be found again."""
+        cls = self._write_component()
+
+        self.assertNotIn("template_name", cls("pb-test").serialize()["state"])
+        self.assertEqual(cls.update_component({"count": 2, "_id": "pb-test"}, "$refresh")["html"],
+                         '<div pb:id="pb-test">2</div>')
+
+
+if __name__ == "__main__":
+    unittest.main()

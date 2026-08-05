@@ -1,4 +1,6 @@
 import re
+import sys
+from pathlib import Path
 from typing import Any, Dict, Pattern
 from uuid import uuid4
 import json
@@ -18,6 +20,11 @@ _OPENING_TAG_PATTERN: Pattern = re.compile(r"<(?P<tag>\w+)\s*(?P<attributes>.*?)
 
 class Component:
     _rendered = ""
+
+    #: Where the template of the component is, when it is not the one its class
+    #: name points at. Reserved like everything else the base class declares, so
+    #: it never travels to the client.
+    template_name = None
 
     def __init__(self, pb_id: str = None):
         self._id = pb_id
@@ -52,9 +59,13 @@ class Component:
         if not context:
             context = {}
 
+        # An inline component has no template file, so the name is only what
+        # errors are reported against and never has to be resolved.
+        name = self.template_name or self._locate() or type(self).__qualname__
+
         template = Template(
-            template_name=self.get_template_name(),
-            template_path=f"{self.get_template_name().removesuffix('.html')}.py",
+            template_name=name,
+            template_path=f"{name.removesuffix('.html')}.py",
             template_string=template_string,
         )
 
@@ -143,26 +154,108 @@ class Component:
             specific(value)
 
     def get_template_name(self):
-        """Get the HTML template name of the component"""
-        return self.template_name
+        """Get the HTML template name of the component.
+
+        A component keeps its template next to its class, so the name of the
+        template is where the class lives, read from the components directory.
+        It is worked out again on every request rather than carried around: the
+        client is never told where the code of a component is.
+        """
+        name = self.template_name or self._locate()
+
+        if name is None:
+            raise TemplateNotFoundError(
+                f"Could not tell which template the {type(self).__name__} component renders. "
+                f"Components are looked for in {Path(settings.components_dir).resolve()}."
+            )
+
+        return name
+
+    def _locate(self):
+        """Where the class of the component lives, read from the components directory."""
+        module = sys.modules.get(type(self).__module__)
+        module_file = getattr(module, "__file__", None)
+
+        if module_file is None:
+            return None
+
+        try:
+            relative = (
+                Path(module_file).resolve().with_suffix("").relative_to(Path(settings.components_dir).resolve())
+            )
+        except ValueError:
+            return None
+
+        return ".".join(relative.parts)
 
     # SYSTEM METHODS
+    @classmethod
+    def _is_reserved(cls, name: str) -> bool:
+        """Whether a name belongs to the machinery of a component.
+
+        Everything the base class declares drives components, it is not what a
+        component is made of. Reserved names are kept out of the state sent to
+        the client and out of reach of the actions coming back from it, so that
+        no browser can read where a component lives or ask it to serialize
+        itself, render a template of its choosing or follow a redirect.
+        """
+        return name.startswith("_") or name in _RESERVED_NAMES
+
+    @classmethod
+    def _declares(cls, name: str) -> bool:
+        """Whether the component writes a hook of its own rather than inheriting it."""
+        for klass in cls.__mro__:
+            if klass is Component:
+                return False
+            if name in vars(klass):
+                return True
+
+        return False
+
+    @classmethod
+    def _own_attributes(cls):
+        """The attributes a component declares, the ones of the base class left out."""
+        attributes = {}
+
+        for klass in reversed(cls.__mro__):
+            if klass is Component or not issubclass(klass, Component):
+                continue
+
+            for name, value in vars(klass).items():
+                if cls._is_reserved(name) or isinstance(value, property):
+                    continue
+                attributes[name] = value
+
+        return attributes
+
     def _get_state(self):
         """Get public properties of the component"""
-        return {
-            k: v
-            for k, v in self.__dict__.items()
-            if not (k.startswith("_") and not callable(v))
-        }
-    
+        state = {}
+
+        for name in self._own_attributes():
+            value = getattr(self, name)
+            if not callable(value):
+                state[name] = value
+
+        # Properties set while the component is alive, in mount() or in an action
+        for name, value in self.__dict__.items():
+            if not self._is_reserved(name) and not callable(value):
+                state[name] = value
+
+        return state
+
     def _get_methods(self):
-        """Get public methods of the component"""
-        return {
-            k: v
-            for k, v in self.__dict__.items()
-            if not (k.startswith("_") and callable(v))
-        }
-    
+        """Get public methods of the component, the ones the client may call"""
+        methods = {}
+
+        for name in self._own_attributes():
+            value = getattr(self, name)
+            if callable(value):
+                methods[name] = value
+
+        return methods
+
+
     def _get_events(self):
         """Get server-to-client events"""
         return []
@@ -214,46 +307,64 @@ class Component:
     @classmethod
     def deserialize(cls, state):
         """Recreate a component's instance from a JSON state from client"""
-        instance = cls()
+        instance = cls(state.get("_id"))
+
         for key, value in state.items():
+            # The state comes from the client. Whatever it holds beyond the
+            # properties of the component is not for it to decide.
+            if cls._is_reserved(key):
+                continue
             setattr(instance, key, value)
+
         return instance
 
 
     # LIFECYCLE CALLERS (SSR and AJAX HANDLING)
+    @staticmethod
+    def _mount_arguments(mount, properties):
+        """The properties mount() asks for, among the ones the component was given.
+
+        A component declares what it expects as the parameters of its mount(),
+        so only those are passed to it. One that takes **kwargs is handed
+        everything, and one that takes nothing is called with nothing.
+        """
+        parameters = inspect.signature(mount).parameters
+
+        if any(parameter.kind is parameter.VAR_KEYWORD for parameter in parameters.values()):
+            return dict(properties)
+
+        return {name: properties[name] for name in parameters if name in properties}
+
     @classmethod
     def render_initial(cls, props, attributes, slots, template_html, render_engine):
         """
         Gère le cycle de vie du PREMIER rendu (Server-Side Rendering).
         """
-        # 1. Préparation de l'état initial par défaut
-        initial_state = dict(props)
-        class_defaults = {k: v for k, v in cls.__dict__.items() if not k.startswith('_') and not callable(v)}
-        initial_state.update(class_defaults)
+        # 1. What the component was given, be it as a dictionary or as tag attributes
+        properties = {**(attributes or {}), **(props or {})}
 
-        # Get Component ID from attributes
-        pb_id = attributes.get("key", f"pb-{uuid4().hex[:8]}")
+        # The key names the component, it is not one of its properties
+        pb_id = properties.pop("key", None) or f"pb-{uuid4().hex[:8]}"
 
-        # 2. Initial instanciation with coponent_id
+        # 2. Initial instanciation with component_id
         instance = cls(pb_id)
-        for key, value in initial_state.items():
+
+        # 3. Résolution des arguments de mount(), among the properties given.
+        # A component that does not write its own mount() takes none of them:
+        # the mount() of the base class accepts anything and would swallow them all.
+        arguments = cls._mount_arguments(instance.mount, properties) if cls._declares("mount") else {}
+
+        # 4. The properties override the defaults declared on the class, which
+        # are read from there and do not have to be copied over. The ones mount()
+        # asks for are its own; the state they lead to is for it to decide.
+        for key, value in properties.items():
+            if cls._is_reserved(key) or key in arguments:
+                continue
             setattr(instance, key, value)
 
-        # 3. Résolution et appel de mount()
-        mount = getattr(instance, "mount", None)
+        # 5. Appel de mount()
+        instance.mount(**arguments)
 
-        sig = inspect.signature(mount)
-        params = sig.parameters
-
-        if len(params) == 0:
-            mount()
-        else:
-            mount(**params)
-
-        # 4. Supercharge with HTML attributes
-        for key, value in attributes.items():
-            setattr(instance, key, value)
-        
         # Hook: boot()
         instance.boot()
 
@@ -289,32 +400,43 @@ class Component:
         # 2. Hook : hydrate()
         instance.hydrate()
 
-        # 3. If the action consists on updating a property (e.g., pb:model)
-        if action_name == "$set":
-            prop_name, new_value = action_args[0], action_args[1]
-            if prop_name.startswith("_"):
-                raise AttributeError("Mutating private properties on PyBlade Live components is prohibited")
+        # 3. A refresh asks for nothing but a new rendering
+        if action_name == "$refresh":
+            pass
 
-            
-            # Hooks : updating() and updated() 
+        # 4. If the action consists on updating a property (e.g., pb:model)
+        elif action_name == "$set":
+            prop_name, new_value = action_args[0], action_args[1]
+            if instance._is_reserved(prop_name):
+                raise AttributeError(
+                    f"'{prop_name}' is not a property of the {cls.__name__} component "
+                    "and cannot be set from the client."
+                )
+
+            # Hooks : updating() and updated()
             instance.updating(prop_name, new_value)
             instance._call_property_hook('updating', prop_name, new_value)
-            
+
             setattr(instance, prop_name, new_value)
 
             instance.updated(prop_name, new_value)
             instance._call_property_hook('updated', prop_name, new_value)
 
-        # 4. If it's a method calling
+        # 5. If it's a method calling
         else:
-            if action_name.startswith("_"):
-                raise AttributeError("Calling private methods on PyBlade Live components is prohibited")
+            # Only the methods the component itself declares are within reach of
+            # the client, never the ones it inherits, which drive it.
+            methods = instance._get_methods()
 
-            method = getattr(instance, action_name, None)
-            if method and callable(method):
-                method(*action_args)
-            else:
+            if action_name not in methods:
+                if instance._is_reserved(action_name) or hasattr(instance, action_name):
+                    raise AttributeError(
+                        f"'{action_name}' is not an action of the {cls.__name__} component "
+                        "and cannot be called from the client."
+                    )
                 raise NameError(f"Method '{action_name}' is not defined")
+
+            methods[action_name](*action_args)
 
         # 5. Hook : rendering()
         instance.rendering()
@@ -399,6 +521,12 @@ class Component:
 
     def navigate(self, href):
         return {"navigate": True, "href": href}
+
+
+#: Every name the base class declares. What a component adds to it is its own,
+#: and is the only thing the client ever sees or reaches. Read once the class is
+#: built, so that a method added to Component is covered without being listed.
+_RESERVED_NAMES = frozenset(vars(Component))
 
 
 # Decorators

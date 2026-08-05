@@ -862,10 +862,7 @@ class ComponentNode(Node):
 
             cls = live_components_registry.get(f'{module_path}.{class_name}')
 
-            template_name = getattr(cls, "template_name", ".".join(module_path.split(".")[1:]))
-            setattr(cls, "template_name", template_name)
-            template = cls.render_initial({}, {}, {}, "", None)
-            return template
+            return cls.render_initial(data, {}, {}, "", None)
         except Exception:
             raise
 
