@@ -1243,7 +1243,14 @@ class PybladeScriptsNode(Node):
         return "PybladeScriptsNode()"
 
     def render(self, context):
-       return f'<script type="module" src="/pyblade/live/assets/js/" data-csrf={context.get("csrf_token", "")} defer></script>'
+        # The token is quoted, or an empty one would leave the attribute open
+        # and swallow the word after it
+        token = html_escape(str(context.get("csrf_token", "")))
+
+        return (
+            f'<script type="module" src="/pyblade/live/assets/js/" data-csrf="{token}" defer></script>'
+        )
+
 
 class PybladeStylesNode(Node):
     """Represents an @pbstyles directive that renders the pyblade css assets"""
@@ -1252,7 +1259,7 @@ class PybladeStylesNode(Node):
         return "PybladeStylesNode()"
 
     def render(self, context):
-        return f'<script src="/pyblade/live/assets/css/"></script>'
+        return '<link rel="stylesheet" href="/pyblade/live/assets/css/">'
 
 
 class MethodNode(Node):

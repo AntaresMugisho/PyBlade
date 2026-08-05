@@ -5,6 +5,8 @@ Template file loading functionality.
 from pathlib import Path
 from typing import List, Optional, Union
 
+from pyblade.config import settings
+
 from .exceptions import TemplateNotFoundError
 from .template import Template
 
@@ -36,6 +38,23 @@ class TemplateLoader:
             if path.is_dir():
                 self._template_dirs.append(path)
 
+    def _search_dirs(self) -> List[Path]:
+        """The directories a template is looked for in, in order.
+
+        The ones that were configured come first, then the templates directory
+        the project declares. A template may well be rendered before any backend
+        has been built and told the loader where to look, as one is when a live
+        component is rendered as a page of its own, and pyblade.json says where
+        the templates of the project are.
+        """
+        directories = list(self._template_dirs)
+
+        declared = Path(settings.templates_dir)
+        if declared not in directories and declared.is_dir():
+            directories.append(declared)
+
+        return directories
+
     def load_template(self, template_name: str) -> Template:
         """
         Load a template file by name.
@@ -57,7 +76,7 @@ class TemplateLoader:
         template_path = template_name.replace(".", "/")
 
         # Search in all template directories
-        for directory in self._template_dirs:
+        for directory in self._search_dirs():
             full_path = directory / f"{template_path}{self._extension}"
             try:
                 content = self._read_template(full_path)

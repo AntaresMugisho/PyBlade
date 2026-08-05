@@ -1,3 +1,72 @@
+/*
+ * Everything here is driven by custom properties, so a project restyles the
+ * bar by setting them rather than by overriding the rules:
+ *
+ *   :root {
+ *       --pb-progress-color: #e11d48;
+ *       --pb-progress-height: 4px;
+ *       --pb-progress-shadow: 0 0 12px var(--pb-progress-color);
+ *   }
+ *
+ * Replacing it altogether is a matter of styling .pb-progress from scratch:
+ * the element carries that class from the moment a navigation starts, gains
+ * .pb-progress-running on the frame after, and .pb-progress-done once the page
+ * has arrived. It is removed when its transition ends.
+ */
+:root {
+    --pb-progress-color: #3498db;
+    --pb-progress-height: 3px;
+    --pb-progress-shadow: 0 0 8px rgba(52, 152, 219, 0.6);
+    --pb-progress-z-index: 9999;
+
+    /* How long the bar takes to creep towards the end while waiting */
+    --pb-progress-duration: 8s;
+
+    /* And to run the rest of the way once the page is there */
+    --pb-progress-settle: 200ms;
+}
+
+/* Navigation progress bar */
+.pb-progress {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: var(--pb-progress-height);
+    z-index: var(--pb-progress-z-index);
+    background: var(--pb-progress-color);
+    box-shadow: var(--pb-progress-shadow);
+    transform: scaleX(0);
+    transform-origin: 0 50%;
+    pointer-events: none;
+}
+
+/*
+ * Creeping rather than counting: how long a page takes is not known when the
+ * bar starts, so it eases towards the end without ever arriving there.
+ */
+.pb-progress-running {
+    transform: scaleX(0.9);
+    transition: transform var(--pb-progress-duration) cubic-bezier(0.1, 0.9, 0.2, 1);
+}
+
+.pb-progress-done {
+    transform: scaleX(1);
+    opacity: 0;
+    transition:
+        transform var(--pb-progress-settle) ease-out,
+        opacity var(--pb-progress-settle) ease-out var(--pb-progress-settle);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .pb-progress,
+    .pb-progress-running,
+    .pb-progress-done {
+        transition: none;
+        transform: scaleX(1);
+    }
+}
+
 .pb-loading {
     position: relative;
     pointer-events: none;

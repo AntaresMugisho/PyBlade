@@ -8,7 +8,7 @@ from . import loader
 from .cache import TemplateCache
 from .exceptions import TemplateRenderError
 from .lexer import Lexer
-from .nodes import BlockNode, ExtendsNode, ParentNode, split_slots
+from .nodes import DEFAULT_SLOT_NAME, BlockNode, ExtendsNode, ParentNode, split_slots
 from .parser import Parser
 
 
@@ -29,7 +29,12 @@ class TemplateProcessor:
         self.context = {}
 
     def render(
-        self, template: str, context: Dict[str, Any], template_name: str = None, template_path: str = None
+        self,
+        template: str,
+        context: Dict[str, Any],
+        template_name: str = None,
+        template_path: str = None,
+        inherit: bool = True,
     ) -> str:
         """
         Render a template with the given context.
@@ -52,8 +57,14 @@ class TemplateProcessor:
         # add entries to the context (slots, variables set by directives...).
         cache_context = self.context.copy()
 
+        # A template renders differently depending on whether the layout it
+        # extends is rendered around it, so the two are cached apart. The key is
+        # the template itself, marked rather than the context, which is the
+        # caller's and is looked up with as it was given.
+        cache_key = template if inherit else f"\0own\0{template}"
+
         # Check cache first
-        cached_result = self.cache.get(template, cache_context)
+        cached_result = self.cache.get(cache_key, cache_context)
         if cached_result is not None:
             return cached_result
 
@@ -61,10 +72,15 @@ class TemplateProcessor:
             tokens = Lexer(template).tokenize()
             nodes = Parser(tokens).parse()
 
-            # If the template extends another one, render the resulting tree
-            # instead, with the slots the template passes to its layout.
-            nodes, inherited_context = self._resolve_inheritance(nodes, self.context)
-            self.context.update(inherited_context)
+            if inherit:
+                # If the template extends another one, render the resulting tree
+                # instead, with the slots the template passes to its layout.
+                nodes, inherited_context = self._resolve_inheritance(nodes, self.context)
+                self.context.update(inherited_context)
+            else:
+                # Rendering the template for itself: what it extends says what
+                # surrounds it, and nothing surrounds it here.
+                nodes = self._own_nodes(nodes)
 
             output = []
             for node in nodes:
@@ -75,12 +91,29 @@ class TemplateProcessor:
             result = "".join(output)
 
             # Save cache
-            self.cache.set(template, cache_context, result)
+            self.cache.set(cache_key, cache_context, result)
 
             return result
 
         except Exception as e:
             raise e
+
+    def _own_nodes(self, nodes):
+        """The content of a template, without the layout it extends.
+
+        What a template extends says what surrounds it on a page. Rendered for
+        itself rather than as a page, as a live component is when it answers an
+        action, it is that content alone that is wanted: the layout is already
+        on the page, around the very element the answer is morphed into.
+        """
+        if not any(isinstance(node, ExtendsNode) for node in nodes):
+            return nodes
+
+        # The same split inheritance makes, keeping the part that would have
+        # become the layout's default slot
+        _, slots = self._split_child_nodes(nodes)
+
+        return slots[DEFAULT_SLOT_NAME].nodes
 
     # TEMPLATE INHERITANCE
     # ------------------------------------------------------------------------------------------------------------

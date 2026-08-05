@@ -425,3 +425,34 @@ class TestInheritanceSlots(ComponentTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class TestAssetDirectives(ComponentTestCase):
+    """@pbscripts and @pbstyles, which bring the live assets onto a page."""
+
+    def test_styles_are_linked_as_a_stylesheet(self):
+        result = self._render("@pbstyles")
+
+        self.assertEqual(result, '<link rel="stylesheet" href="/pyblade/live/assets/css/">')
+
+    def test_scripts_are_loaded_as_a_module(self):
+        result = self._render("@pbscripts", {"csrf_token": "abc123"})
+
+        self.assertIn('src="/pyblade/live/assets/js/"', result)
+        self.assertIn('type="module"', result)
+        self.assertIn("defer", result)
+
+    def test_the_csrf_token_is_quoted(self):
+        result = self._render("@pbscripts", {"csrf_token": "abc123"})
+
+        self.assertIn('data-csrf="abc123"', result)
+
+    def test_a_missing_csrf_token_does_not_swallow_the_next_attribute(self):
+        result = self._render("@pbscripts")
+
+        self.assertIn('data-csrf=""', result)
+        self.assertIn("defer", result)
+
+    def test_the_csrf_token_is_escaped(self):
+        result = self._render("@pbscripts", {"csrf_token": '"><script>x</script>'})
+
+        self.assertNotIn("<script>x</script>", result)

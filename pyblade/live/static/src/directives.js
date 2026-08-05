@@ -201,15 +201,10 @@ export const Directives = {
             }, signal);
         },
 
-        navigate({ el, component, signal }) {
-            el.addEventListener('click', (e) => {
-                e.preventDefault();
-                const href = el.getAttribute('href');
-                if (href) {
-                    component.navigate(href);
-                }
-            }, { signal });
-        },
+        // pb:navigate is answered on the document rather than here, so that a
+        // link outside any component is followed as well as one inside. This is
+        // left as a directive so that a plugin can still take it over.
+        navigate() {},
 
         current({ el, expression, component }) {
             const currentPath = window.location.pathname;

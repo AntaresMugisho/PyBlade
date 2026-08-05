@@ -36,6 +36,11 @@ class Component:
         self._skip_render = False
         self._request = None
 
+        # Whether the layout the template extends is rendered around it. It is
+        # on the first rendering, which is a whole page; it is not when an action
+        # answers with the component to be put back where it already is.
+        self._inherit = True
+
         # A list or a dictionary declared on the class is one object, shared by
         # every component of that class. Each takes a copy of its own, so that
         # appending to one does not change what the next one starts from.
@@ -61,9 +66,9 @@ class Component:
             template.content = self._inject_component_id(template.content)
 
         # Update the context
-        context |= self._get_state()
+        context |= self._context()
 
-        self._rendered = template.render(context)
+        self._rendered = template.render(context, inherit=self._inherit)
 
         return self._rendered
 
@@ -88,9 +93,9 @@ class Component:
             template.content = self._inject_component_id(template.content)
 
         # Update context
-        context |= self._get_state()
+        context |= self._context()
 
-        self._rendered = template.render(context)
+        self._rendered = template.render(context, inherit=self._inherit)
 
         return self._rendered
 
@@ -272,6 +277,30 @@ class Component:
 
         self._call_property_hook("updated", name, value)
 
+    def _context(self):
+        """What the template of the component is rendered with.
+
+        Its state, and what belongs to the request it is answering: a page
+        rendered by as_view() never goes through the template backend of the
+        framework, so nothing else would put them there, and a form with no
+        token in it is a form whose every submission is refused.
+        """
+        context = self._get_state()
+
+        if self._request is None:
+            return context
+
+        context.setdefault("request", self._request)
+
+        try:
+            from django.middleware.csrf import get_token
+        except ImportError:
+            return context
+
+        context.setdefault("csrf_token", get_token(self._request))
+
+        return context
+
     def _get_state(self):
         """Get public properties of the component"""
         state = {}
@@ -423,14 +452,35 @@ class Component:
 
         snapshot = instance.serialize()
 
-        initial_scripts = f"""
-<script pb:_snapshots_ >
-    window.__PB_SNAPSHOTS__ = window.__PB_SNAPSHOTS__ || {{}};
-    window.__PB_SNAPSHOTS__['{pb_id}'] = {json.dumps(snapshot)};
-</script>
-"""
+        return cls._with_snapshot(instance._rendered, cls._snapshot_script(pb_id, snapshot))
 
-        return instance._rendered + initial_scripts
+    @staticmethod
+    def _with_snapshot(rendered, script):
+        """Put the snapshot in the markup, inside the body when there is one.
+
+        A component that is a page renders a whole document, and anything after
+        </html> is only in the page because the browser puts it back.
+        """
+        closing = rendered.rfind("</body>")
+
+        if closing == -1:
+            return rendered + script
+
+        return rendered[:closing] + script + rendered[closing:]
+
+    @staticmethod
+    def _snapshot_script(pb_id, snapshot):
+        """The snapshot the client boots the component from, written as data.
+
+        Data rather than a statement to run: navigating morphs the markup of the
+        next page in, and a <script> that is morphed into a document is never
+        run by the browser. Read as the text of the tag, it works the same on
+        the first load and on every page that follows.
+        """
+        # '</script>' anywhere in the state would close the tag around it
+        payload = json.dumps(snapshot).replace("</", "<\\/")
+
+        return f'<script type="application/json" pb:snapshot="{pb_id}">{payload}</script>'
 
     @classmethod
     def update_component(cls, state, action_name, action_args = [], request=None):
@@ -440,6 +490,7 @@ class Component:
         # 1. Recréer l'instance
         instance = cls.deserialize(state)
         instance._request = request
+        instance._inherit = False
 
         # 2. Hook : hydrate()
         instance.hydrate()

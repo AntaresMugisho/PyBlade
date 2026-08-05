@@ -46,7 +46,9 @@ class Template:
         """Return the template content."""
         return self.content or ""
 
-    def render(self, context: Optional[Dict[str, Any]] = None, request: Optional[Any] = None) -> str:
+    def render(
+        self, context: Optional[Dict[str, Any]] = None, request: Optional[Any] = None, inherit: bool = True
+    ) -> str:
         """
         Render the template with the given context.
 
@@ -76,9 +78,9 @@ class Template:
 
         if not self.engine:
             self._processor = TemplateProcessor()
-            return self._processor.render(self.content, context, template_path=self.path)
+            return self._processor.render(self.content, context, template_path=self.path, inherit=inherit)
 
-        return self.engine.render(self.content, context, template_path=self.path)
+        return self.engine.render(self.content, context, template_path=self.path, inherit=inherit)
 
     def get_relative_path(self, base_dir: Optional[Union[str, Path]] = None) -> str:
         """

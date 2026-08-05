@@ -166,8 +166,7 @@ export class Component {
     }
 
     navigate(url) {
-        window.history.pushState({}, '', url);
-        window.dispatchEvent(new PopStateEvent('popstate'));
+        return window.PyBlade.navigate(url);
     }
 
     async refresh() {

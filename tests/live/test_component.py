@@ -587,7 +587,7 @@ class TestAsView(LiveProjectTestCase):
 
         response = view(self._request())
 
-        self.assertIn(b"__PB_SNAPSHOTS__", response.content)
+        self.assertIn(b'<script type="application/json" pb:snapshot="pb-', response.content)
         self.assertIn(b'"class": "components.live.counter.Counter"', response.content)
 
     def test_the_layout_the_template_extends_wraps_the_page(self):
@@ -602,6 +602,52 @@ class TestAsView(LiveProjectTestCase):
         self.assertIn(b"<nav>Menu</nav>", response.content)
         self.assertIn(b'<div pb:root><div pb:id="pb-', response.content)
         self.assertIn(b">3<", response.content)
+
+    def test_the_snapshot_sits_inside_the_page(self):
+        """After </html> a browser has to put it back, and a parser may drop it."""
+        self.write_template("layouts.app", "<!DOCTYPE html><html><body><div pb:root>{{ slot }}</div></body></html>")
+        self.write_component("count = 1", '@extends("layouts.app")\n<div>{{ count }}</div>')
+
+        content = self.load_component().as_view()(self._request()).content.decode()
+
+        self.assertLess(content.index("pb:snapshot"), content.index("</body>"))
+
+    def test_a_page_is_given_a_csrf_token(self):
+        """Without one, every action the page sends back is refused."""
+        self.write_template(
+            "layouts.app", "<!DOCTYPE html><html><body>@pbscripts<div pb:root>{{ slot }}</div></body></html>"
+        )
+        self.write_component("count = 1", '@extends("layouts.app")\n<div>{{ count }}</div>')
+
+        content = self.load_component().as_view()(self._request()).content.decode()
+
+        self.assertNotIn('data-csrf=""', content)
+        self.assertRegex(content, r'data-csrf="[a-zA-Z0-9]{16,}"')
+
+    def test_a_page_may_render_the_request_it_answers(self):
+        self.write_component("count = 1", "<div>{{ request.path }}</div>")
+
+        content = self.load_component().as_view()(self._request("/posts/")).content.decode()
+
+        self.assertIn(">/posts/<", content)
+
+    def test_an_action_answers_with_the_component_and_not_the_page(self):
+        """The client morphs the answer into the component, not into the document."""
+        self.write_template("layouts.app", "<!DOCTYPE html><html><body><div pb:root>{{ slot }}</div></body></html>")
+        self.write_component(
+            """
+            count = 0
+
+            def increment(self):
+                self.count += 1
+            """,
+            '@extends("layouts.app")\n<div>{{ count }}</div>',
+        )
+
+        result = self.load_component().update_component({"count": 0, "_id": "pb-test"}, "increment")
+
+        self.assertEqual(result["html"], '<div pb:id="pb-test">1</div>')
+        self.assertNotIn("<html>", result["html"])
 
     def test_the_url_arguments_reach_mount(self):
         self.write_component(
@@ -638,7 +684,21 @@ class TestAsView(LiveProjectTestCase):
 
         response = view(self._request())
 
-        self.assertNotIn(b"request", response.content.split(b"__PB_SNAPSHOTS__")[1])
+        self.assertNotIn(b"request", response.content.split(b"pb:snapshot")[1])
+
+    def test_the_snapshot_is_data_rather_than_a_script_to_run(self):
+        """Navigation morphs new markup in, and a <script> that is morphed in never runs."""
+        response = self.load_component().as_view()(self._request())
+
+        self.assertIn(b'type="application/json"', response.content)
+        self.assertNotIn(b"window.__PB_SNAPSHOTS__", response.content)
+
+    def test_a_closing_script_tag_in_the_state_cannot_break_out(self):
+        self.write_component("note = '</script><b>x</b>'", "<div>{{ note }}</div>")
+
+        response = self.load_component().as_view()(self._request())
+
+        self.assertNotIn(b"</script><b>x</b>", response.content)
 
     def test_the_view_carries_the_component_it_renders(self):
         """So that a project can tell which component a route is for."""
