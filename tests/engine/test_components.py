@@ -5,7 +5,7 @@ from pathlib import Path
 
 from pyblade.config import settings
 from pyblade.engine import loader
-from pyblade.engine.exceptions import TemplateRenderError
+from pyblade.engine.exceptions import DirectiveParsingError, TemplateRenderError
 from pyblade.engine.lexer import Lexer
 from pyblade.engine.parser import Parser
 from pyblade.engine.processor import TemplateProcessor
@@ -105,6 +105,67 @@ class TestComponentTags(ComponentTestCase):
             self._render("<pb-broken />")
 
         self.assertIn("single root node", raised.exception.message)
+
+
+class TestBoundAttributes(ComponentTestCase):
+    """:name="expression" passes the value the expression evaluates to."""
+
+    def test_a_quoted_value_is_a_string(self):
+        # A quoted value stays the text it was written as, so adding it to itself joins it
+        self._component("badge", "<span>{{ count + count }}</span>")
+
+        self.assertEqual(self._render('<pb-badge count="5" />'), "<span>55</span>")
+
+    def test_a_bound_value_is_an_expression(self):
+        self._component("badge", "<span>{{ count + count }}</span>")
+
+        self.assertEqual(self._render('<pb-badge :count="5" />'), "<span>10</span>")
+
+    def test_a_bound_value_is_evaluated_in_the_context_of_the_caller(self):
+        self._component("badge", "<span>{{ count }}</span>")
+
+        self.assertEqual(self._render('<pb-badge :count="a + b" />', {"a": 2, "b": 3}), "<span>5</span>")
+
+    def test_a_bound_value_may_be_single_quoted(self):
+        self._component("badge", "<span>{{ count }}</span>")
+
+        self.assertEqual(self._render("<pb-badge :count='2 * 3' />"), "<span>6</span>")
+
+    def test_a_bound_value_may_be_a_list_or_a_dictionary(self):
+        self._component("badge", "<span>{{ items[1] }}</span>")
+
+        self.assertEqual(self._render("<pb-badge :items=\"['a', 'b']\" />"), "<span>b</span>")
+
+    def test_a_bound_value_may_be_a_boolean(self):
+        # Quoted, 'False' is a non-empty string and holds; bound, it is the boolean
+        self._component("badge", "<span>@if(active)on@endif</span>")
+
+        self.assertEqual(self._render('<pb-badge active="False" />'), "<span>on</span>")
+        self.assertEqual(self._render('<pb-badge :active="False" />'), "<span></span>")
+
+    def test_a_bound_attribute_reaches_the_attributes_bag(self):
+        self._component("badge", "<span{{ attributes }}>Badge</span>")
+
+        self.assertEqual(self._render('<pb-badge :hidden="True" />'), "<span hidden>Badge</span>")
+
+    def test_a_bound_attribute_left_out_of_the_bag_when_it_is_declared(self):
+        self._component("badge", '@props({"count": 0})<span{{ attributes }}>{{ count }}</span>')
+
+        self.assertEqual(self._render('<pb-badge :count="7" />'), "<span>7</span>")
+
+    def test_a_directive_attribute_is_not_taken_for_a_binding(self):
+        """pb:click holds a colon of its own and is not a bound attribute."""
+        self._component("badge", "<span{{ attributes }}>Badge</span>")
+
+        result = self._render('<pb-badge pb:click="increment" />')
+
+        self.assertEqual(result, '<span pb:click="increment">Badge</span>')
+
+    def test_a_bound_attribute_without_a_value_is_refused(self):
+        self._component("badge", "<span>Badge</span>")
+
+        with self.assertRaises(DirectiveParsingError):
+            self._render("<pb-badge :count />")
 
 
 class TestComponentProps(ComponentTestCase):

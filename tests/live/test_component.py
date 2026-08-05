@@ -1,3 +1,4 @@
+import os
 import shutil
 import sys
 import tempfile
@@ -230,6 +231,91 @@ class TestInitialRendering(unittest.TestCase):
         html = cls.render_initial({"key": "counter-1"}, {})
 
         self.assertNotIn('"key"', html)
+
+
+class TestLiveComponentTag(unittest.TestCase):
+    """Rendering a live component from the tag that calls it."""
+
+    def setUp(self):
+        from pyblade.engine import loader
+
+        self.project_dir = Path(tempfile.mkdtemp())
+        self.components_dir = self.project_dir / "components"
+        (self.components_dir / "live").mkdir(parents=True)
+
+        (self.components_dir / "__init__.py").write_text("")
+        (self.components_dir / "live" / "__init__.py").write_text("")
+        (self.components_dir / "live" / "counter.py").write_text(
+            textwrap.dedent(
+                """
+                from pyblade import live
+
+                class Counter(live.Component):
+                    count = 0
+                """
+            )
+        )
+        (self.components_dir / "live" / "counter.html").write_text("<div>{{ count }}</div>")
+
+        # The module of a component is read from where it lives, relative to the
+        # working directory, so the project has to be the one we render from.
+        self._saved_cwd = os.getcwd()
+        os.chdir(self.project_dir)
+        sys.path.insert(0, str(self.project_dir))
+
+        self._saved_components_dir = settings._data.get("components_dir")
+        settings._data["components_dir"] = "components"
+
+        self._saved_dirs = list(loader._default_loader._template_dirs)
+        loader._default_loader.add_directories([self.project_dir])
+
+    def tearDown(self):
+        from pyblade.engine import loader
+        from pyblade.live.registry import registry
+
+        loader._default_loader._template_dirs = self._saved_dirs
+        os.chdir(self._saved_cwd)
+        sys.path.remove(str(self.project_dir))
+
+        # Both caches key on the module path, which the next test reuses for a
+        # component of its own, in a directory of its own
+        registry._components.clear()
+        for name in [name for name in sys.modules if name.startswith("components")]:
+            del sys.modules[name]
+
+        if self._saved_components_dir is None:
+            settings._data.pop("components_dir", None)
+        else:
+            settings._data["components_dir"] = self._saved_components_dir
+        shutil.rmtree(self.project_dir, ignore_errors=True)
+
+    def _render(self, template):
+        from pyblade.engine.processor import TemplateProcessor
+
+        return TemplateProcessor().render(template, {})
+
+    def test_the_component_renders_with_its_defaults(self):
+        html = self._render('<pb-live.counter key="c1" />')
+
+        self.assertIn('<div pb:id="c1">0</div>', html)
+
+    def test_a_bound_attribute_reaches_the_component_as_a_value(self):
+        html = self._render('<pb-live.counter :count="2 + 3" key="c1" />')
+
+        self.assertIn('<div pb:id="c1">5</div>', html)
+        self.assertIn('"count": 5', html)
+
+    def test_a_quoted_attribute_reaches_the_component_as_text(self):
+        html = self._render('<pb-live.counter count="5" key="c1" />')
+
+        self.assertIn('"count": "5"', html)
+
+    def test_a_bound_attribute_is_evaluated_in_the_context_of_the_caller(self):
+        from pyblade.engine.processor import TemplateProcessor
+
+        html = TemplateProcessor().render('<pb-live.counter :count="total" key="c1" />', {"total": 42})
+
+        self.assertIn('"count": 42', html)
 
 
 class TestTemplateName(unittest.TestCase):

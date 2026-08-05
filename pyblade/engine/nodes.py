@@ -861,7 +861,10 @@ class ComponentNode(Node):
         try:
             cls = live_components_registry.get(f'{module_path}.{class_name}')
 
-            return cls.render_initial(data, {})
+            # What the tag was written with is passed as attributes, not as props:
+            # props hold the defaults a component declares, and the attributes of
+            # the call override them.
+            return cls.render_initial({}, data)
         except Exception:
             raise
 

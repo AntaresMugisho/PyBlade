@@ -1003,7 +1003,7 @@ class Parser:
 
         return FieldNode(
             field_expr.strip(),
-            self._parse_attributes(attrs_str),
+            self._parse_attributes(attrs_str, token),
             line=token.line,
             column=token.column,
         )
@@ -1018,6 +1018,7 @@ class Parser:
     _pb_tag_name_pattern = re.compile(r"</?pb-([a-zA-Z0-9_.:-]+)")
 
     _attribute_pattern = re.compile(
+        r"(?P<bind>:)?"  # Binding the value as an expression, as in :count="1 + 1"
         r"(?P<name>[a-zA-Z_][a-zA-Z0-9_.:-]*)"  # Attribute name
         r"(?P<append>\+)?"  # Appending to the value already there, as in class+="..."
         r"(?:\s*=\s*(?:"  # Its value is optional
@@ -1047,7 +1048,7 @@ class Parser:
                 column=token.column,
             )
 
-        attributes = self._parse_pb_attributes(tag_value)
+        attributes = self._parse_pb_attributes(tag_value, token)
 
         # The content of a paired tag is parsed, so that the component is handed
         # template nodes rather than text it would have to parse again.
@@ -1121,14 +1122,15 @@ class Parser:
 
         return SlotNode(name, body, line=token.line, column=token.column)
 
-    def _parse_pb_attributes(self, tag_value):
+    def _parse_pb_attributes(self, tag_value, token=None):
         """Parse attributes from a pb- tag string.
 
         Quoted values are strings, unquoted ones are expressions evaluated in the
-        context of the caller, and an attribute without a value is True.
+        context of the caller, an attribute without a value is True, and a name
+        prefixed with ':' has its value read as an expression.
 
-        Example: <pb-alert type="error" count=total dismissible>
-        Returns: {'type': '"error"', 'count': 'total', 'dismissible': 'True'}
+        Example: <pb-alert type="error" :count="total + 1" dismissible>
+        Returns: {'type': "'error'", 'count': 'total + 1', 'dismissible': 'True'}
         """
         attributes = {}
 
@@ -1137,17 +1139,19 @@ class Parser:
         if not match:
             return attributes
 
-        return self._parse_attributes(match.group(1).strip().rstrip("/"))
+        return self._parse_attributes(match.group(1).strip().rstrip("/"), token)
 
-    def _parse_attributes(self, attrs_str):
+    def _parse_attributes(self, attrs_str, token=None):
         """Parses a list of HTML-like attributes into a name to expression mapping.
 
         Quoted values are strings, unquoted ones are expressions evaluated where the
         attribute is written, and an attribute with no value is True. A name ending
-        with '+' appends to the value the attribute already holds.
+        with '+' appends to the value the attribute already holds. A name prefixed
+        with ':' binds its value, which is then read as an expression even quoted,
+        so that a component may be passed something other than a string.
 
-        Example: type="error" count=total dismissible class+="mt-2"
-        Returns: {'type': "'error'", 'count': 'total', 'dismissible': 'True', 'class+': "'mt-2'"}
+        Example: type="error" :count="1 + 1" dismissible class+="mt-2"
+        Returns: {'type': "'error'", 'count': '1 + 1', 'dismissible': 'True', 'class+': "'mt-2'"}
         """
         attributes = {}
 
@@ -1157,7 +1161,23 @@ class Parser:
             name = attribute.group("name") + (attribute.group("append") or "")
             double_quoted, single_quoted, unquoted = attribute.group("double", "single", "unquoted")
 
-            if double_quoted is not None:
+            if attribute.group("bind"):
+                value = double_quoted if double_quoted is not None else single_quoted
+                value = value if value is not None else unquoted
+
+                if value is None or not value.strip():
+                    raise DirectiveParsingError(
+                        f"The bound attribute ':{attribute.group('name')}' has no value.",
+                        line=getattr(token, "line", None),
+                        column=getattr(token, "column", None),
+                        help='Give it the expression to evaluate, as in :count="1 + 1", '
+                        f"or drop the colon to pass the name on its own.",
+                    )
+
+                # Quoted or not, a bound value is the expression it holds
+                attributes[name] = value
+
+            elif double_quoted is not None:
                 attributes[name] = repr(double_quoted)
             elif single_quoted is not None:
                 attributes[name] = repr(single_quoted)

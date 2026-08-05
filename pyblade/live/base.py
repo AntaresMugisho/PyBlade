@@ -1,5 +1,4 @@
 import re
-import sys
 from pathlib import Path
 from typing import Any, Dict, Pattern
 from uuid import uuid4
@@ -173,10 +172,11 @@ class Component:
 
     def _locate(self):
         """Where the class of the component lives, read from the components directory."""
-        module = sys.modules.get(type(self).__module__)
-        module_file = getattr(module, "__file__", None)
-
-        if module_file is None:
+        try:
+            # Asked of the class rather than of sys.modules, which a component
+            # outliving the import of its own module would no longer be found in
+            module_file = inspect.getfile(type(self))
+        except TypeError:
             return None
 
         try:
