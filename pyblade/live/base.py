@@ -34,6 +34,7 @@ class Component:
         self._id = pb_id
         self._events = []
         self._skip_render = False
+        self._request = None
 
         # A list or a dictionary declared on the class is one object, shared by
         # every component of that class. Each takes a copy of its own, so that
@@ -382,7 +383,7 @@ class Component:
         return {name: properties[name] for name in parameters if name in properties}
 
     @classmethod
-    def render_initial(cls, attributes=None):
+    def render_initial(cls, attributes=None, request=None):
         """
         Manage the FIRST lifecycle of Server-Side Rendering.
 
@@ -398,6 +399,7 @@ class Component:
 
         # 2. Initial instanciation with component_id
         instance = cls(pb_id)
+        instance._request = request
 
         # 3. Résolution of mount() arguments, among the properties given.
         # A component that does not write its own mount() takes none of them:
@@ -431,12 +433,13 @@ class Component:
         return instance._rendered + initial_scripts
 
     @classmethod
-    def update_component(cls, state, action_name, action_args = []):
+    def update_component(cls, state, action_name, action_args = [], request=None):
         """
         Manage the livfecycle on every AJAX request.
         """
         # 1. Recréer l'instance
         instance = cls.deserialize(state)
+        instance._request = request
 
         # 2. Hook : hydrate()
         instance.hydrate()
@@ -553,6 +556,11 @@ class Component:
 
     # MAGIC PROPERTIES
     @property
+    def request(self):
+        """The request the component is answering, on the first rendering and on every action."""
+        return self._request
+
+    @property
     def event(self):
         pass
 
@@ -567,10 +575,27 @@ class Component:
     def stop_propagation(self):
         pass
 
-    @staticmethod
-    def as_view():
-        """Render the component as a Django Template View"""
-        pass
+    @classmethod
+    def as_view(cls, **properties):
+        """Render the component as a page of its own.
+
+            path("posts/<int:post_id>/", Posts.as_view())
+
+        The arguments captured by the route are handed to the component the way
+        the attributes of a tag would be, so mount() receives the ones it asks
+        for. What surrounds the component on the page is what its template
+        extends: a component that is a page writes @extends("layouts.app") and
+        its content fills the layout in, as any template does.
+        """
+        from django.http import HttpResponse
+
+        def view(request, *args, **kwargs):
+            return HttpResponse(cls.render_initial({**properties, **kwargs}, request=request))
+
+        # So that a project can tell which component a route renders
+        view.component = cls
+
+        return view
 
     def skip_render(self):
         """Call an action without calling the render method.

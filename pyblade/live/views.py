@@ -32,42 +32,6 @@ def serve_assets(request, asset_type: str):
     return Http404(f"Pyblade {asset_type} assets not found.")
 
 
-
-# def update_component(request):
-#     data = json.loads(request.body)
-
-#     component_id = data.get('id')
-#     snapshot = data.get('state')
-#     action = data.get('action')
-
-#     if snapshot is None:
-#         snapshot = {}
-
-#     new_state = Component.handle_ajax_action(component_id, snapshot, action)
-
-#     # Sign data for integrity
-#     serialized = json.dumps(new_state)
-
-#     # Generate HMAC signature using Django's SECRET_KEY
-#     signature = hmac.new(
-#         dj_settings.SECRET_KEY.encode(), 
-#         serialized.encode(), 
-#         hashlib.sha256
-#     ).hexdigest()
-    
-#     new_data = {
-#         'state': new_state,
-#         'checksum': signature
-#     }
-
-#     from pprint import pprint
-#     print("\n __STATE__")
-#     pprint(new_data)
-
-#     return JsonResponse(dict(new_data))
-
-
-
 @require_POST
 def update_component(request: HttpRequest) -> JsonResponse:
     """
@@ -98,7 +62,7 @@ def update_component(request: HttpRequest) -> JsonResponse:
 
     try:
         ComponentClass = registry.get(class_path)
-        response_data = ComponentClass.update_component(state, action, params)
+        response_data = ComponentClass.update_component(state, action, params, request=request)
     except ValueError as err:
         return JsonResponse({"error": str(err)}, status=404)
 

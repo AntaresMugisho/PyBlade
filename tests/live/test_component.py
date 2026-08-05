@@ -441,8 +441,13 @@ class TestInitialRendering(unittest.TestCase):
         self.assertNotIn('"key"', html)
 
 
-class TestLiveComponentTag(unittest.TestCase):
-    """Rendering a live component from the tag that calls it."""
+class LiveProjectTestCase(unittest.TestCase):
+    """A project on disk, with a components directory the engine can read.
+
+    The module of a component is worked out from where its file lives, relative
+    to the working directory, so the tests that render one have to run from a
+    project of their own rather than from the repository.
+    """
 
     def setUp(self):
         from pyblade.engine import loader
@@ -453,20 +458,7 @@ class TestLiveComponentTag(unittest.TestCase):
 
         (self.components_dir / "__init__.py").write_text("")
         (self.components_dir / "live" / "__init__.py").write_text("")
-        (self.components_dir / "live" / "counter.py").write_text(
-            textwrap.dedent(
-                """
-                from pyblade import live
 
-                class Counter(live.Component):
-                    count = 0
-                """
-            )
-        )
-        (self.components_dir / "live" / "counter.html").write_text("<div>{{ count }}</div>")
-
-        # The module of a component is read from where it lives, relative to the
-        # working directory, so the project has to be the one we render from.
         self._saved_cwd = os.getcwd()
         os.chdir(self.project_dir)
         sys.path.insert(0, str(self.project_dir))
@@ -476,6 +468,8 @@ class TestLiveComponentTag(unittest.TestCase):
 
         self._saved_dirs = list(loader._default_loader._template_dirs)
         loader._default_loader.add_directories([self.project_dir])
+
+        self.write_component("count = 0", "<div>{{ count }}</div>")
 
     def tearDown(self):
         from pyblade.engine import loader
@@ -496,6 +490,34 @@ class TestLiveComponentTag(unittest.TestCase):
         else:
             settings._data["components_dir"] = self._saved_components_dir
         shutil.rmtree(self.project_dir, ignore_errors=True)
+
+    def write_component(self, body, template=None, name="counter"):
+        """Write a live component, its class and the template it renders."""
+        (self.components_dir / "live" / f"{name}.py").write_text(
+            "from pyblade import live\n\n"
+            f"class {name.title().replace('_', '')}(live.Component):\n"
+            + textwrap.indent(textwrap.dedent(body).strip(), "    ")
+            + "\n"
+        )
+
+        if template is not None:
+            (self.components_dir / "live" / f"{name}.html").write_text(template)
+
+    def write_template(self, name, content):
+        """Write an ordinary template, 'name' using dot notation for the folders."""
+        path = self.project_dir.joinpath(*name.split(".")).with_suffix(".html")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content)
+
+    def load_component(self, name="counter"):
+        import importlib
+
+        module = importlib.import_module(f"components.live.{name}")
+        return getattr(module, name.title().replace("_", ""))
+
+
+class TestLiveComponentTag(LiveProjectTestCase):
+    """Rendering a live component from the tag that calls it."""
 
     def _render(self, template):
         from pyblade.engine.processor import TemplateProcessor
@@ -541,6 +563,105 @@ class TestLiveComponentTag(unittest.TestCase):
         html = TemplateProcessor().render('<pb-live.counter :count="total" key="c1" />', {"total": 42})
 
         self.assertIn('"count": 42', html)
+
+
+class TestAsView(LiveProjectTestCase):
+    """Rendering a live component as a page of its own."""
+
+    def _request(self, path="/posts/"):
+        from django.test import RequestFactory
+
+        return RequestFactory().get(path)
+
+    def test_the_view_answers_with_the_rendered_component(self):
+        view = self.load_component().as_view()
+
+        response = view(self._request())
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'<div pb:id="pb-', response.content)
+        self.assertIn(b">0<", response.content)
+
+    def test_the_page_carries_the_snapshot_the_client_boots_from(self):
+        view = self.load_component().as_view()
+
+        response = view(self._request())
+
+        self.assertIn(b"__PB_SNAPSHOTS__", response.content)
+        self.assertIn(b'"class": "components.live.counter.Counter"', response.content)
+
+    def test_the_layout_the_template_extends_wraps_the_page(self):
+        self.write_template(
+            "layouts.app",
+            "<!DOCTYPE html><html><body><nav>Menu</nav><div pb:root>{{ slot }}</div></body></html>",
+        )
+        self.write_component("count = 3", '@extends("layouts.app")\n<div>{{ count }}</div>')
+
+        response = self.load_component().as_view()(self._request())
+
+        self.assertIn(b"<nav>Menu</nav>", response.content)
+        self.assertIn(b'<div pb:root><div pb:id="pb-', response.content)
+        self.assertIn(b">3<", response.content)
+
+    def test_the_url_arguments_reach_mount(self):
+        self.write_component(
+            """
+            post_id = None
+
+            def mount(self, post_id=None):
+                self.post_id = post_id
+            """,
+            "<div>{{ post_id }}</div>",
+        )
+
+        response = self.load_component().as_view()(self._request(), post_id=7)
+
+        self.assertIn(b">7<", response.content)
+
+    def test_the_component_is_given_the_request(self):
+        self.write_component(
+            """
+            path = ""
+
+            def mount(self):
+                self.path = self.request.path
+            """,
+            "<div>{{ path }}</div>",
+        )
+
+        response = self.load_component().as_view()(self._request("/posts/"))
+
+        self.assertIn(b">/posts/<", response.content)
+
+    def test_the_request_does_not_travel_to_the_client(self):
+        view = self.load_component().as_view()
+
+        response = view(self._request())
+
+        self.assertNotIn(b"request", response.content.split(b"__PB_SNAPSHOTS__")[1])
+
+    def test_the_view_carries_the_component_it_renders(self):
+        """So that a project can tell which component a route is for."""
+        cls = self.load_component()
+
+        self.assertIs(cls.as_view().component, cls)
+
+    def test_an_action_is_given_the_request_too(self):
+        self.write_component(
+            """
+            path = ""
+
+            def look(self):
+                self.path = self.request.path
+            """,
+            "<div>{{ path }}</div>",
+        )
+
+        result = self.load_component().update_component(
+            {"path": "", "_id": "pb-test"}, "look", request=self._request("/here/")
+        )
+
+        self.assertEqual(result["snapshot"]["state"]["path"], "/here/")
 
 
 class TestTemplateName(unittest.TestCase):
