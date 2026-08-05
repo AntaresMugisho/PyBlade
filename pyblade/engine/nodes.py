@@ -731,19 +731,28 @@ class ComponentNode(Node):
             f"attributes={self.attributes}, slots={self.slots})"
         )
 
-    def _resolve_props(self, context):
-        """Evaluate the properties passed to the component in the caller's context."""
-        props = {}
+    def _resolve_attributes(self, context):
+        """Evaluate the attributes the component is called with, in the caller's context.
+
+        These are the arguments of this particular call, whether they were written
+        as tag attributes or as the dictionary of an @component directive. They are
+        evaluated here because this is the only place the context they are written
+        in is still at hand: a component renders in a context of its own.
+
+        Not to be confused with the @props a component template declares, which are
+        the defaults of any call and are resolved by PropsNode as it renders.
+        """
+        attributes = {}
 
         if self.data_expr:
             data = self.eval(self.data_expr, context)
             if isinstance(data, dict):
-                props.update(data)
+                attributes.update(data)
 
         for name, expression in self.attributes.items():
-            props[name] = self.eval(expression, context)
+            attributes[name] = self.eval(expression, context)
 
-        return props
+        return attributes
 
     def _resolve_component(self, name: str):
         """
@@ -849,7 +858,7 @@ class ComponentNode(Node):
                 exc.template = template
             raise
 
-    def _render_live_component(self, python_file : Path, data):
+    def _render_live_component(self, python_file : Path, attributes):
         # The live package is imported here rather than at the top of the module:
         # a live component builds on the engine, so the engine cannot depend on it
         # while it is still being imported itself.
@@ -861,10 +870,7 @@ class ComponentNode(Node):
         try:
             cls = live_components_registry.get(f'{module_path}.{class_name}')
 
-            # What the tag was written with is passed as attributes, not as props:
-            # props hold the defaults a component declares, and the attributes of
-            # the call override them.
-            return cls.render_initial({}, data)
+            return cls.render_initial(attributes)
         except Exception:
             raise
 
@@ -879,13 +885,13 @@ class ComponentNode(Node):
             if component is None:
                 raise ComponentNotFoundError(line=self.line, column=self.column, help="")
 
-            props = self._resolve_props(context)
+            attributes = self._resolve_attributes(context)
 
             if component["type"] == "static":
-                return self._render_static_component(component["name"], props, context)
+                return self._render_static_component(component["name"], attributes, context)
 
             elif component["type"] == "live":
-                return self._render_live_component(component["python"], props)
+                return self._render_live_component(component["python"], attributes)
 
         except TemplateRenderError:
             # To avoid the error being cathed by the following except clauses

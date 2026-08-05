@@ -149,14 +149,14 @@ class TestInitialRendering(unittest.TestCase):
     def test_class_defaults_make_up_the_initial_state(self):
         cls = self._component()
 
-        cls.render_initial({}, {})
+        cls.render_initial()
 
         self.assertEqual(cls("pb-test")._get_state(), {"count": 0})
 
     def test_properties_passed_to_the_component_reach_its_state(self):
         cls = self._component()
 
-        html = cls.render_initial({"count": 5}, {})
+        html = cls.render_initial({"count": 5})
 
         self.assertIn("<div pb:id=", html)
         self.assertIn(">5<", html)
@@ -170,7 +170,7 @@ class TestInitialRendering(unittest.TestCase):
 
         cls = self._component(mount=mount)
 
-        html = cls.render_initial({"count": 3}, {})
+        html = cls.render_initial({"count": 3})
 
         self.assertEqual(received, {"count": 3, "kwargs": {}})
         self.assertIn(">6<", html)
@@ -180,7 +180,7 @@ class TestInitialRendering(unittest.TestCase):
 
         cls = self._component(mount=lambda self: called.append(True))
 
-        cls.render_initial({"count": 1}, {})
+        cls.render_initial({"count": 1})
 
         self.assertEqual(called, [True])
 
@@ -192,7 +192,7 @@ class TestInitialRendering(unittest.TestCase):
 
         cls = self._component(mount=mount)
 
-        html = cls.render_initial({"count": 2, "extra": "kept"}, {})
+        html = cls.render_initial({"count": 2, "extra": "kept"})
 
         self.assertIn('"extra": "kept"', html)
 
@@ -204,7 +204,7 @@ class TestInitialRendering(unittest.TestCase):
 
         cls = self._component(mount=mount)
 
-        html = cls.render_initial({"start": 5}, {})
+        html = cls.render_initial({"start": 5})
 
         self.assertIn('"count": 5', html)
         self.assertNotIn('"start"', html)
@@ -213,7 +213,7 @@ class TestInitialRendering(unittest.TestCase):
         """The base mount() takes **kwargs, which must not swallow the properties."""
         cls = self._component()
 
-        html = cls.render_initial({"count": 5, "extra": "kept"}, {})
+        html = cls.render_initial({"count": 5, "extra": "kept"})
 
         self.assertIn('"count": 5', html)
         self.assertIn('"extra": "kept"', html)
@@ -221,14 +221,14 @@ class TestInitialRendering(unittest.TestCase):
     def test_the_key_names_the_component_instead_of_a_generated_id(self):
         cls = self._component()
 
-        html = cls.render_initial({"key": "counter-1"}, {})
+        html = cls.render_initial({"key": "counter-1"})
 
         self.assertIn('pb:id="counter-1"', html)
 
     def test_the_key_is_not_part_of_the_state(self):
         cls = self._component()
 
-        html = cls.render_initial({"key": "counter-1"}, {})
+        html = cls.render_initial({"key": "counter-1"})
 
         self.assertNotIn('"key"', html)
 
@@ -309,6 +309,23 @@ class TestLiveComponentTag(unittest.TestCase):
         html = self._render('<pb-live.counter count="5" key="c1" />')
 
         self.assertIn('"count": "5"', html)
+
+    def test_the_state_of_a_live_component_is_declared_on_its_class(self):
+        """@props declares the props of a static component, not the state of a live one.
+
+        A live component holds what its class declares. @props written in its
+        template still fills the context in, as it does anywhere, but what it
+        declares is not state: it is not serialized and does not come back.
+        """
+        (self.components_dir / "live" / "counter.html").write_text(
+            '@props({"label": "clicks", "count": 99})<div>{{ count }} {{ label }}</div>'
+        )
+
+        html = self._render('<pb-live.counter key="c1" />')
+
+        # The class default wins over the one @props declares, and holds the state
+        self.assertIn('<div pb:id="c1">0 clicks</div>', html)
+        self.assertIn('"state": {"count": 0}', html)
 
     def test_a_bound_attribute_is_evaluated_in_the_context_of_the_caller(self):
         from pyblade.engine.processor import TemplateProcessor

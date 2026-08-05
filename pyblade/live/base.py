@@ -336,12 +336,16 @@ class Component:
         return {name: properties[name] for name in parameters if name in properties}
 
     @classmethod
-    def render_initial(cls, props, attributes):
+    def render_initial(cls, attributes=None):
         """
         Manage the FIRST lifecycle of Server-Side Rendering.
+
+        A live component declares what it holds as the attributes of its class,
+        which is where the defaults come from. What is left to be given is the
+        attributes of the call, and they override those defaults.
         """
         # 1. What the component was given, be it as a dictionary or as tag attributes
-        properties = {**(props or {}), **(attributes or {})}
+        properties = dict(attributes or {})
 
         # The key names the component, it is not one of its properties
         pb_id = properties.pop("key", None) or f"pb-{uuid4().hex[:8]}"
