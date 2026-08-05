@@ -1,4 +1,5 @@
 import re
+from copy import deepcopy
 from pathlib import Path
 from typing import Any, Dict, Pattern
 from uuid import uuid4
@@ -16,6 +17,9 @@ from .security import generate_checksum
 
 _OPENING_TAG_PATTERN: Pattern = re.compile(r"<(?P<tag>\w+)\s*(?P<attributes>.*?)>")
 
+#: Values a component may share with its class without either changing under the other
+_IMMUTABLE = (str, bytes, int, float, bool, complex, tuple, frozenset, type(None))
+
 
 class Component:
     _rendered = ""
@@ -27,6 +31,13 @@ class Component:
 
     def __init__(self, pb_id: str = None):
         self._id = pb_id
+
+        # A list or a dictionary declared on the class is one object, shared by
+        # every component of that class. Each takes a copy of its own, so that
+        # appending to one does not change what the next one starts from.
+        for name, value in type(self)._declared_state().items():
+            if not isinstance(value, _IMMUTABLE):
+                setattr(self, name, deepcopy(value))
 
 
     def render_template(self, context: Dict[str, Any] = None):
@@ -228,6 +239,35 @@ class Component:
 
         return attributes
 
+    @classmethod
+    def _declared_state(cls):
+        """The properties a component declares, with the values it declares them with.
+
+        These are the initial values of the component, the ones reset() takes it
+        back to. Read from the class rather than from the instance, which by then
+        holds whatever the component has been through.
+        """
+        return {name: value for name, value in cls._own_attributes().items() if not callable(value)}
+
+    def _set_property(self, name: str, value):
+        """Set a property of the component, running the hooks that watch it.
+
+        Both set() and the '$set' the client sends come through here, so that a
+        property changes the same way whichever side asked for it.
+        """
+        if self._is_reserved(name):
+            raise AttributeError(
+                f"'{name}' is not a property of the {type(self).__name__} component and cannot be set."
+            )
+
+        # _call_property_hook calls the generic hook as well as the one named
+        # after the property, so updating() is not to be called on top of it
+        self._call_property_hook("updating", name, value)
+
+        setattr(self, name, value)
+
+        self._call_property_hook("updated", name, value)
+
     def _get_state(self):
         """Get public properties of the component"""
         state = {}
@@ -401,21 +441,7 @@ class Component:
 
         # 4. If the action consists on updating a property (e.g., pb:model)
         elif action_name == "$set":
-            prop_name, new_value = action_args[0], action_args[1]
-            if instance._is_reserved(prop_name):
-                raise AttributeError(
-                    f"'{prop_name}' is not a property of the {cls.__name__} component "
-                    "and cannot be set from the client."
-                )
-
-            # Hooks : updating() and updated()
-            instance.updating(prop_name, new_value)
-            instance._call_property_hook('updating', prop_name, new_value)
-
-            setattr(instance, prop_name, new_value)
-
-            instance.updated(prop_name, new_value)
-            instance._call_property_hook('updated', prop_name, new_value)
+            instance._set_property(action_args[0], action_args[1])
 
         # 5. If it's a method calling
         else:
@@ -446,25 +472,48 @@ class Component:
         }
 
     # MAGIC ACTIONS
-    def reset(self, *args):
-        """Reset properties to their initial values"""
-        pass
+    def reset(self, *properties: str):
+        """Reset properties to their initial values.
+
+        A live component declares what it holds on its class, so that is where
+        the initial values are read from. Called with no name at all, it takes
+        the component back to the state it was declared with.
+        """
+        declared = type(self)._declared_state()
+        names = properties or tuple(declared)
+
+        for name in names:
+            if name not in declared:
+                raise AttributeError(
+                    f"'{name}' is not a property the {type(self).__name__} component declares "
+                    "and cannot be reset."
+                )
+
+            # A copy, so that a list or a dictionary declared on the class is
+            # never handed out twice and changed from under the other holder
+            setattr(self, name, deepcopy(declared[name]))
 
     def pull(self, property: str):
         """Retrieve the value of a property then reset it to the initial value"""
-        pass
+        value = getattr(self, property)
+        self.reset(property)
+        return value
 
     def refresh(self):
-        """Make a server-roundtrip and re-render the component without calling any methods"""
-        pass
+        """Make a server-roundtrip and re-render the component without calling any methods.
 
-    def toggle(self, property: bool):
+        There is nothing to do on this side: every action is followed by a
+        rendering, so asking for one and for nothing else is asking for nothing.
+        The client sends it as the '$refresh' action.
+        """
+
+    def toggle(self, property: str):
         """Toggle boolean properties"""
-        pass
+        self.set(property, not getattr(self, property))
 
     def set(self, prop: str, value: Any):
         """Update a property value"""
-        pass
+        self._set_property(prop, value)
 
     def dispatch(self, event: str):
         """Dispatch an event. Same as emit()"""

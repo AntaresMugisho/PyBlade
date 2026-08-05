@@ -139,6 +139,120 @@ class TestClientActions(unittest.TestCase):
         self.assertEqual(result["html"], "<div pb:id=\"pb-test\">0</div>")
 
 
+class TestMagicActions(unittest.TestCase):
+    """The actions a component calls on itself: reset, pull, toggle, set."""
+
+    def _component(self, **body):
+        body.setdefault("render", lambda self: self.render_inline("<div>{{ count }}</div>", context={}))
+        return type("Magic", (Component,), {"count": 0, "label": "clicks", "tags": ["a"], **body})("pb-test")
+
+    def test_reset_restores_a_property_to_what_the_class_declares(self):
+        component = self._component()
+        component.count = 12
+
+        component.reset("count")
+
+        self.assertEqual(component.count, 0)
+
+    def test_reset_restores_every_property_when_given_no_name(self):
+        component = self._component()
+        component.count = 12
+        component.label = "taps"
+
+        component.reset()
+
+        self.assertEqual(component._get_state(), {"count": 0, "label": "clicks", "tags": ["a"]})
+
+    def test_reset_gives_back_a_value_of_its_own(self):
+        """A declared list must not be shared between a component and its class."""
+        component = self._component()
+        component.tags.append("b")
+
+        component.reset("tags")
+        component.tags.append("c")
+
+        self.assertEqual(component.tags, ["a", "c"])
+        self.assertEqual(self._component().tags, ["a"])
+
+    def test_reset_refuses_a_property_the_component_does_not_declare(self):
+        component = self._component()
+
+        with self.assertRaises(AttributeError):
+            component.reset("nowhere")
+
+    def test_reset_refuses_a_property_of_the_base_class(self):
+        component = self._component()
+
+        with self.assertRaises(AttributeError):
+            component.reset("template_name")
+
+    def test_pull_gives_the_value_back_and_resets_it(self):
+        component = self._component()
+        component.count = 9
+
+        self.assertEqual(component.pull("count"), 9)
+        self.assertEqual(component.count, 0)
+
+    def test_toggle_turns_a_property_around(self):
+        component = self._component(active=False)
+
+        component.toggle("active")
+        self.assertIs(component.active, True)
+
+        component.toggle("active")
+        self.assertIs(component.active, False)
+
+    def test_set_updates_a_property(self):
+        component = self._component()
+
+        component.set("count", 4)
+
+        self.assertEqual(component.count, 4)
+
+    def test_set_runs_the_update_hooks(self):
+        seen = []
+
+        cls = type(
+            "Hooked",
+            (Component,),
+            {
+                "count": 0,
+                "render": lambda self: self.render_inline("<div>{{ count }}</div>", context={}),
+                "updating": lambda self, prop, value: seen.append(("updating", prop, value)),
+                "updated": lambda self, prop, value: seen.append(("updated", prop, value)),
+                "updated_count": lambda self, value: seen.append(("updated_count", value)),
+            },
+        )
+
+        cls("pb-test").set("count", 3)
+
+        self.assertEqual(
+            seen,
+            [("updating", "count", 3), ("updated", "count", 3), ("updated_count", 3)],
+        )
+
+    def test_set_refuses_a_property_of_the_base_class(self):
+        component = self._component()
+
+        with self.assertRaises(AttributeError):
+            component.set("template_name", "elsewhere")
+
+    def test_an_action_may_reset_the_component_from_the_client(self):
+        cls = type(
+            "Resettable",
+            (Component,),
+            {
+                "count": 0,
+                "render": lambda self: self.render_inline("<div>{{ count }}</div>", context={}),
+                "clear": lambda self: self.reset("count"),
+            },
+        )
+
+        result = cls.update_component({"count": 8, "_id": "pb-test"}, "clear")
+
+        self.assertEqual(result["snapshot"]["state"]["count"], 0)
+
+
 class TestInitialRendering(unittest.TestCase):
     """The first rendering of a component, on the server."""
 
