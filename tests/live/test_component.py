@@ -148,14 +148,14 @@ class TestInitialRendering(unittest.TestCase):
     def test_class_defaults_make_up_the_initial_state(self):
         cls = self._component()
 
-        cls.render_initial({}, {}, {}, "", None)
+        cls.render_initial({}, {})
 
         self.assertEqual(cls("pb-test")._get_state(), {"count": 0})
 
     def test_properties_passed_to_the_component_reach_its_state(self):
         cls = self._component()
 
-        html = cls.render_initial({"count": 5}, {}, {}, "", None)
+        html = cls.render_initial({"count": 5}, {})
 
         self.assertIn("<div pb:id=", html)
         self.assertIn(">5<", html)
@@ -169,7 +169,7 @@ class TestInitialRendering(unittest.TestCase):
 
         cls = self._component(mount=mount)
 
-        html = cls.render_initial({"count": 3}, {}, {}, "", None)
+        html = cls.render_initial({"count": 3}, {})
 
         self.assertEqual(received, {"count": 3, "kwargs": {}})
         self.assertIn(">6<", html)
@@ -179,7 +179,7 @@ class TestInitialRendering(unittest.TestCase):
 
         cls = self._component(mount=lambda self: called.append(True))
 
-        cls.render_initial({"count": 1}, {}, {}, "", None)
+        cls.render_initial({"count": 1}, {})
 
         self.assertEqual(called, [True])
 
@@ -191,7 +191,7 @@ class TestInitialRendering(unittest.TestCase):
 
         cls = self._component(mount=mount)
 
-        html = cls.render_initial({"count": 2, "extra": "kept"}, {}, {}, "", None)
+        html = cls.render_initial({"count": 2, "extra": "kept"}, {})
 
         self.assertIn('"extra": "kept"', html)
 
@@ -203,7 +203,7 @@ class TestInitialRendering(unittest.TestCase):
 
         cls = self._component(mount=mount)
 
-        html = cls.render_initial({"start": 5}, {}, {}, "", None)
+        html = cls.render_initial({"start": 5}, {})
 
         self.assertIn('"count": 5', html)
         self.assertNotIn('"start"', html)
@@ -212,7 +212,7 @@ class TestInitialRendering(unittest.TestCase):
         """The base mount() takes **kwargs, which must not swallow the properties."""
         cls = self._component()
 
-        html = cls.render_initial({"count": 5, "extra": "kept"}, {}, {}, "", None)
+        html = cls.render_initial({"count": 5, "extra": "kept"}, {})
 
         self.assertIn('"count": 5', html)
         self.assertIn('"extra": "kept"', html)
@@ -220,14 +220,14 @@ class TestInitialRendering(unittest.TestCase):
     def test_the_key_names_the_component_instead_of_a_generated_id(self):
         cls = self._component()
 
-        html = cls.render_initial({"key": "counter-1"}, {}, {}, "", None)
+        html = cls.render_initial({"key": "counter-1"}, {})
 
         self.assertIn('pb:id="counter-1"', html)
 
     def test_the_key_is_not_part_of_the_state(self):
         cls = self._component()
 
-        html = cls.render_initial({"key": "counter-1"}, {}, {}, "", None)
+        html = cls.render_initial({"key": "counter-1"}, {})
 
         self.assertNotIn('"key"', html)
 

@@ -336,12 +336,12 @@ class Component:
         return {name: properties[name] for name in parameters if name in properties}
 
     @classmethod
-    def render_initial(cls, props, attributes, slots, template_html, render_engine):
+    def render_initial(cls, props, attributes):
         """
-        Gère le cycle de vie du PREMIER rendu (Server-Side Rendering).
+        Manage the FIRST lifecycle of Server-Side Rendering.
         """
         # 1. What the component was given, be it as a dictionary or as tag attributes
-        properties = {**(attributes or {}), **(props or {})}
+        properties = {**(props or {}), **(attributes or {})}
 
         # The key names the component, it is not one of its properties
         pb_id = properties.pop("key", None) or f"pb-{uuid4().hex[:8]}"
@@ -349,7 +349,7 @@ class Component:
         # 2. Initial instanciation with component_id
         instance = cls(pb_id)
 
-        # 3. Résolution des arguments de mount(), among the properties given.
+        # 3. Résolution of mount() arguments, among the properties given.
         # A component that does not write its own mount() takes none of them:
         # the mount() of the base class accepts anything and would swallow them all.
         arguments = cls._mount_arguments(instance.mount, properties) if cls._declares("mount") else {}
@@ -362,22 +362,13 @@ class Component:
                 continue
             setattr(instance, key, value)
 
-        # 5. Appel de mount()
+        # 5. Call hooks
         instance.mount(**arguments)
-
-        # Hook: boot()
         instance.boot()
-
-        # 5. Hook : rendering()
         instance.rendering()
-
-        # 6. Hook: render()
         instance.render()
-
-        # 7. Hook : rendered()
         instance.rendered(instance._rendered)
 
-        # 8. State serialization for JS
         snapshot = instance.serialize()
 
         initial_scripts = f"""
@@ -392,7 +383,7 @@ class Component:
     @classmethod
     def update_component(cls, state, action_name, action_args = []):
         """
-        Gère le cycle de vie lors d'une mise à jour dynamique (Requête AJAX).
+        Manage the livfecycle on every AJAX request.
         """
         # 1. Recréer l'instance
         instance = cls.deserialize(state)
@@ -438,16 +429,12 @@ class Component:
 
             methods[action_name](*action_args)
 
-        # 5. Hook : rendering()
+        # 6. Hooks
         instance.rendering()
-
-        # 6. Hook: render()
         instance.render()
-
-        # # 7. Hook : rendered()
         instance.rendered(instance._rendered)
 
-        # 8. Renvoie le nouveau HTML et le nouvel état sérialisé pour le frontend
+        # 7. Return the new HTML and the new serialized state for the frontend
         return {
             "html": instance._rendered,
             "snapshot": instance.serialize(),
@@ -533,3 +520,14 @@ _RESERVED_NAMES = frozenset(vars(Component))
 def renderless(fn):
     """Call an action without calling the render method"""
     pass
+
+def validate(fn):
+    pass
+
+def on(fn, event_name):
+    pass
+
+def lazy(fn):
+    pass
+
+

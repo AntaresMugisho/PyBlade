@@ -10,14 +10,20 @@ export class Component {
         // Store snapshot directly in JS Memory
         this.store.set(this.id, snapshot);
 
-        // Callback registries for directives
-        this.loadingStartCallbacks = [];
-        this.loadingEndCallbacks = [];
-        this.dirtyCallbacks = [];
-        this.cleanCallbacks = [];
-        this.stateChangeCallbacks = [];
-        this.streamUpdateCallbacks = [];
-        this.destroyCallbacks = [];
+        // Callback registries for directives. Sets, because a directive gives up
+        // its callbacks when its binding is dropped, and an update drops as many
+        // bindings as it renews.
+        this.loadingStartCallbacks = new Set();
+        this.loadingEndCallbacks = new Set();
+        this.dirtyCallbacks = new Set();
+        this.cleanCallbacks = new Set();
+        this.stateChangeCallbacks = new Set();
+        this.streamUpdateCallbacks = new Set();
+        this.destroyCallbacks = new Set();
+
+        // Directive bindings, kept per element so that an update only binds
+        // what morphing has actually added or changed
+        this._bindings = new Map();
 
         // Form state registry (react-hook-form inspired)
         this.formState = {
@@ -103,33 +109,48 @@ export class Component {
         this.stateChangeCallbacks.forEach(cb => cb());
     }
 
-    // Callback registration methods for directives
-    onLoadingStart(callback) {
-        this.loadingStartCallbacks.push(callback);
+    // Callback registration methods for directives.
+    //
+    // A directive passes the signal of its binding along: the callback is then
+    // forgotten as soon as that binding is renewed or dropped, instead of
+    // piling up on every update and running against elements long gone.
+    _register(registry, callback, signal) {
+        if (signal?.aborted) return () => {};
+
+        registry.add(callback);
+
+        const forget = () => registry.delete(callback);
+        signal?.addEventListener('abort', forget, { once: true });
+
+        return forget;
     }
 
-    onLoadingEnd(callback) {
-        this.loadingEndCallbacks.push(callback);
+    onLoadingStart(callback, signal) {
+        return this._register(this.loadingStartCallbacks, callback, signal);
     }
 
-    onDirty(callback) {
-        this.dirtyCallbacks.push(callback);
+    onLoadingEnd(callback, signal) {
+        return this._register(this.loadingEndCallbacks, callback, signal);
     }
 
-    onClean(callback) {
-        this.cleanCallbacks.push(callback);
+    onDirty(callback, signal) {
+        return this._register(this.dirtyCallbacks, callback, signal);
     }
 
-    onStateChange(callback) {
-        this.stateChangeCallbacks.push(callback);
+    onClean(callback, signal) {
+        return this._register(this.cleanCallbacks, callback, signal);
     }
 
-    onStreamUpdate(callback) {
-        this.streamUpdateCallbacks.push(callback);
+    onStateChange(callback, signal) {
+        return this._register(this.stateChangeCallbacks, callback, signal);
     }
 
-    onDestroy(callback) {
-        this.destroyCallbacks.push(callback);
+    onStreamUpdate(callback, signal) {
+        return this._register(this.streamUpdateCallbacks, callback, signal);
+    }
+
+    onDestroy(callback, signal) {
+        return this._register(this.destroyCallbacks, callback, signal);
     }
 
     // Utility methods for directives
@@ -148,5 +169,6 @@ export class Component {
 
     destroy() {
         this.destroyCallbacks.forEach(cb => cb());
+        Directives.release(this);
     }
 }

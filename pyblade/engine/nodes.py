@@ -859,10 +859,9 @@ class ComponentNode(Node):
         class_name = snakebab_to_pascal(python_file.stem)
 
         try:
-
             cls = live_components_registry.get(f'{module_path}.{class_name}')
 
-            return cls.render_initial(data, {}, {}, "", None)
+            return cls.render_initial(data, {})
         except Exception:
             raise
 

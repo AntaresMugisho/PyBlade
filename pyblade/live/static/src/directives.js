@@ -80,15 +80,15 @@ export const Directives = {
 
     // Registry of built-in and custom directives
     handlers: {
-        click({ el, expression, component, modifier }) {
+        click({ el, expression, component, modifier, signal }) {
             el.addEventListener('click', (e) => {
                 if (modifier === 'prevent') e.preventDefault();
                 const { methodName, args } = Directives.parseExpression(expression);
                 component.callServerMethod(methodName, args);
-            });
+            }, { signal });
         },
 
-        model({ el, expression, component, modifier }) {
+        model({ el, expression, component, modifier, signal }) {
             const state = component.getState();
             
             // Set initial value from state
@@ -135,12 +135,12 @@ export const Directives = {
                 // Live mode: update on input with debouncing
                 el.addEventListener('input', (e) => {
                     updateValue(e.target.value);
-                });
+                }, { signal });
             } else {
                 // Lazy mode (default): update on blur
                 el.addEventListener('blur', (e) => {
                     updateValue(e.target.value);
-                });
+                }, { signal });
             }
 
             // Preserve value during DOM updates - read from local form state
@@ -150,10 +150,10 @@ export const Directives = {
                 if (document.activeElement !== el && localValue !== undefined) {
                     el.value = localValue;
                 }
-            });
+            }, signal);
         },
 
-        submit({ el, expression, component }) {
+        submit({ el, expression, component, signal }) {
             el.addEventListener('submit', (e) => {
                 e.preventDefault();
                 
@@ -169,10 +169,10 @@ export const Directives = {
                     if (submitButton) submitButton.disabled = false;
                     inputs.forEach(input => input.readOnly = false);
                 });
-            });
+            }, { signal });
         },
 
-        loading({ el, expression, component, modifier }) {
+        loading({ el, expression, component, modifier, signal }) {
             const target = modifier === 'remove' ? el : el;
             const originalDisplay = target.style.display || '';
             
@@ -186,7 +186,7 @@ export const Directives = {
                 } else {
                     target.style.display = 'block';
                 }
-            });
+            }, signal);
             
             component.onLoadingEnd(() => {
                 if (modifier === 'remove') {
@@ -198,17 +198,17 @@ export const Directives = {
                 } else {
                     target.style.display = 'none';
                 }
-            });
+            }, signal);
         },
 
-        navigate({ el, component }) {
+        navigate({ el, component, signal }) {
             el.addEventListener('click', (e) => {
                 e.preventDefault();
                 const href = el.getAttribute('href');
                 if (href) {
                     component.navigate(href);
                 }
-            });
+            }, { signal });
         },
 
         current({ el, expression, component }) {
@@ -229,7 +229,7 @@ export const Directives = {
             }, 0);
         },
 
-        dirty({ el, expression, component }) {
+        dirty({ el, expression, component, signal }) {
             const originalClasses = el.className;
             
             component.onDirty(() => {
@@ -238,7 +238,7 @@ export const Directives = {
                 } else if (expression) {
                     el.classList.add(...expression.split(' '));
                 }
-            });
+            }, signal);
             
             component.onClean(() => {
                 if (expression === 'remove') {
@@ -246,19 +246,17 @@ export const Directives = {
                 } else if (expression) {
                     el.classList.remove(...expression.split(' '));
                 }
-            });
+            }, signal);
         },
 
-        confirm({ el, expression, component }) {
-            const originalHandler = el.onclick;
-            
+        confirm({ el, expression, component, signal }) {
             el.addEventListener('click', (e) => {
                 const confirmed = confirm(expression || 'Are you sure?');
                 if (!confirmed) {
                     e.preventDefault();
                     e.stopPropagation();
                 }
-            });
+            }, { signal });
         },
 
         transition({ el, expression, component }) {
@@ -266,26 +264,26 @@ export const Directives = {
             el.classList.add(transitionClass);
         },
 
-        poll({ el, expression, component }) {
+        poll({ el, expression, component, signal }) {
             const interval = parseInt(expression) || 2000;
-            
+
             const pollInterval = setInterval(() => {
                 component.refresh();
             }, interval);
-            
-            // Cleanup on component destroy
-            component.onDestroy(() => {
-                clearInterval(pollInterval);
-            });
+
+            // One timer per binding: it is cleared when the binding is renewed,
+            // when the element goes away and when the component is destroyed.
+            signal.addEventListener('abort', () => clearInterval(pollInterval), { once: true });
+            component.onDestroy(() => clearInterval(pollInterval), signal);
         },
 
-        offline({ el }) {
+        offline({ el, signal }) {
             const updateOfflineStatus = () => {
                 el.style.display = navigator.onLine ? 'none' : 'block';
             };
-            
-            window.addEventListener('online', updateOfflineStatus);
-            window.addEventListener('offline', updateOfflineStatus);
+
+            window.addEventListener('online', updateOfflineStatus, { signal });
+            window.addEventListener('offline', updateOfflineStatus, { signal });
             updateOfflineStatus();
         },
 
@@ -303,7 +301,7 @@ export const Directives = {
             }
         },
 
-        show({ el, expression, component }) {
+        show({ el, expression, component, signal }) {
             const evaluateExpression = () => {
                 // Simple boolean evaluation - can be extended
                 const state = component.getState();
@@ -312,32 +310,48 @@ export const Directives = {
             };
             
             evaluateExpression();
-            component.onStateChange(evaluateExpression);
+            component.onStateChange(evaluateExpression, signal);
         },
 
-        stream({ el, expression, component }) {
+        stream({ el, expression, component, signal }) {
             el.setAttribute('data-pb-stream', expression);
             component.onStreamUpdate((data) => {
                 if (data.target === expression) {
                     el.textContent = data.content;
                 }
-            });
+            }, signal);
         },
 
-        text({ el, expression, component }) {
+        text({ el, expression, component, signal }) {
             const updateText = () => {
                 const state = component.getState();
                 el.textContent = state[expression] || '';
             };
             
             updateText();
-            component.onStateChange(updateText);
+            component.onStateChange(updateText, signal);
         }
     },
 
-    // Scans an element for any pb:* attributes
+    // Scans an element for any pb:* attributes.
+    //
+    // Runs again after every update, on a DOM that morphing left mostly in
+    // place. An element already carrying a directive keeps the binding it was
+    // given: binding it a second time would add a second event listener, and
+    // one click would then count twice. A binding is renewed only when the
+    // expression it was made from has changed, and dropped when the element
+    // it belongs to is gone.
     apply(element, component) {
+        const bindings = component._bindings || (component._bindings = new Map());
         const targets = [element, ...element.querySelectorAll('*')];
+        const present = new Set(targets);
+
+        for (const el of [...bindings.keys()]) {
+            if (!present.has(el)) {
+                bindings.get(el).forEach(binding => binding.controller.abort());
+                bindings.delete(el);
+            }
+        }
 
         targets.forEach(el => {
             Array.from(el.attributes || []).forEach(attr => {
@@ -347,11 +361,36 @@ export const Directives = {
                 const [directiveName, modifier] = attr.name.replace('pb:', '').split('.');
                 const handler = this.handlers[directiveName];
 
-                if (handler) {
-                    handler({ el, expression: attr.value, component, modifier });
+                if (!handler) return;
+
+                let bound = bindings.get(el);
+                const existing = bound && bound.get(attr.name);
+
+                if (existing && existing.expression === attr.value) return;
+                if (existing) existing.controller.abort();
+
+                if (!bound) {
+                    bound = new Map();
+                    bindings.set(el, bound);
                 }
+
+                // Everything a directive holds on to is tied to this signal, so
+                // that renewing or dropping the binding takes it all with it.
+                const controller = new AbortController();
+                bound.set(attr.name, { expression: attr.value, controller });
+
+                handler({ el, expression: attr.value, component, modifier, signal: controller.signal });
             });
         });
+    },
+
+    // Drops every binding made for a component
+    release(component) {
+        const bindings = component._bindings;
+        if (!bindings) return;
+
+        bindings.forEach(bound => bound.forEach(binding => binding.controller.abort()));
+        bindings.clear();
     },
 
     // Allows users/plugins to easily extend PyBlade
