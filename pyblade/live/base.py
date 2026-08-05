@@ -7,7 +7,7 @@ from pprint import pprint # noqa
 
 from pyblade.engine import loader
 from pyblade.engine.exceptions import TemplateNotFoundError
-# from pyblade.engine.template import Template
+from pyblade.engine.template import Template
 from pyblade.config import settings
 
 from .security import generate_checksum
@@ -48,22 +48,26 @@ class Component:
 
     def render_inline(self, template_string: str, context: Dict[str, Any] = None):
         """Render an inline live component (not attached to an HTML template file)"""
-        pass
-        # template = Template(
-        #     template_name=self.get_template_name(),
-        #     template_path=f"{self.get_template_name().removesuffix('.html')}.py",
-        #     template_string=template_string,
-        # )
-        
-        # # Add pb-id to the root node of the template
-        # template.content = self._inject_component_id(template.content)
 
-        # # Update context
-        # context |= self._get_state()
+        if not context:
+            context = {}
 
-        # self._rendered = template.render(context)
-        
-        # return self._rendered
+        template = Template(
+            template_name=self.get_template_name(),
+            template_path=f"{self.get_template_name().removesuffix('.html')}.py",
+            template_string=template_string,
+        )
+
+        # Add pb-id to the root node of the template
+        if self._id is not None:
+            template.content = self._inject_component_id(template.content)
+
+        # Update context
+        context |= self._get_state()
+
+        self._rendered = template.render(context)
+
+        return self._rendered
 
     # LIFECYCLE HOOKS
     def mount(self, **kwargs):
@@ -164,19 +168,33 @@ class Component:
         return []
 
     def _inject_component_id(self, template_string: str):
-        """Inject the component id into the template string"""
+        """Inject the component id into the root element of the template.
 
-        match = re.search(_OPENING_TAG_PATTERN, template_string)
-        tag = match.group("tag")
-        attributes = match.group("attributes")
+        The opening tag is rebuilt from what was matched and spliced back where
+        it was found. Building a pattern out of the attributes it holds would
+        make any regex character they contain, a '(' or a '.', part of the
+        pattern being searched for.
+        """
 
-        return re.sub(
-            rf"{tag}\s*{attributes}",
-            f'{tag} {attributes} pb:id="{self._id}"',
-            template_string,
-            1,
-        )
-    
+        match = _OPENING_TAG_PATTERN.search(template_string)
+        if match is None:
+            return template_string
+
+        attributes = match.group("attributes").strip()
+
+        # A self-closing tag keeps its slash after the attribute is added
+        void = ""
+        if attributes.endswith("/"):
+            attributes, void = attributes[:-1].rstrip(), "/"
+
+        opening = f"<{match.group('tag')}"
+        if attributes:
+            opening += f" {attributes}"
+        opening += f' pb:id="{self._id}"{void}>'
+
+        return f"{template_string[:match.start()]}{opening}{template_string[match.end():]}"
+
+
 
     def serialize(self):
         """Serialize the component state to JSON"""

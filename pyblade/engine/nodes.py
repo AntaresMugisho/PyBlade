@@ -19,7 +19,6 @@ from pyblade.engine.exceptions import (
 )
 from pyblade.i18n import gettext, ngettext, npgettext, pgettext
 from pyblade.utils import validate_single_root_node, snakebab_to_pascal, pascal_to_snake
-from pyblade.live.registry import registry as live_components_registry
 
 from . import loader
 from .contexts import AttributesContext, CycleContext, LoopContext, SafeContent, SlotContent, SlotContext
@@ -750,10 +749,18 @@ class ComponentNode(Node):
         """
         Resolve a component.
 
+        A component backed by a Python class is a live one, whether it keeps its
+        template beside the class or writes it inline. Everything else is a plain
+        HTML component, which is why the Python file is looked for first.
+
         Static component:
             components/button.html
 
         Live component:
+            components/counter.py
+            components/counter.html  # optional
+
+        Live component, in a directory of its own:
             components/counter/
                 counter.py
                 counter.html  # optional
@@ -769,6 +776,17 @@ class ComponentNode(Node):
         # The name the component is known by once normalized, e.g. 'user-profile' -> 'user_profile'
         normalized = ".".join(parts)
 
+        # Live component, with the template it may have next to its class
+        python_file = parent / f"{component_name}.py"
+        if python_file.is_file():
+            html_file = parent / f"{component_name}.html"
+            return {
+                "type": "live",
+                "name": normalized,
+                "html": html_file if html_file.is_file() else None,
+                "python": python_file,
+            }
+
         # Static component
         html_file = parent / f"{component_name}.html"
         if html_file.is_file():
@@ -777,16 +795,6 @@ class ComponentNode(Node):
                 "name": normalized,
                 "html": html_file,
                 "python": None,
-            }
-
-        # Single-file live component
-        python_file = parent / f"{component_name}.py"
-        if python_file.is_file():
-            return {
-                "type": "live",
-                "name": normalized,
-                "html": None,
-                "python": python_file,
             }
 
         # Directory-based live component
@@ -842,6 +850,10 @@ class ComponentNode(Node):
             raise
 
     def _render_live_component(self, python_file : Path, data):
+        # The live package is imported here rather than at the top of the module:
+        # a live component builds on the engine, so the engine cannot depend on it
+        # while it is still being imported itself.
+        from pyblade.live.registry import registry as live_components_registry
 
         module_path = str(python_file.with_suffix("")).replace("/", ".")
         class_name = snakebab_to_pascal(python_file.stem)
@@ -849,7 +861,7 @@ class ComponentNode(Node):
         try:
 
             cls = live_components_registry.get(f'{module_path}.{class_name}')
-            
+
             template_name = getattr(cls, "template_name", ".".join(module_path.split(".")[1:]))
             setattr(cls, "template_name", template_name)
             template = cls.render_initial({}, {}, {}, "", None)
