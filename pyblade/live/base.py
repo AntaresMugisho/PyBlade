@@ -357,7 +357,10 @@ class Component:
             # properties of the component is not for it to decide.
             if cls._is_reserved(key):
                 continue
-            setattr(instance, key, value)
+
+            # A copy, as the component is free to change what it holds and the
+            # state it was handed belongs to whoever handed it over
+            setattr(instance, key, value if isinstance(value, _IMMUTABLE) else deepcopy(value))
 
         return instance
 

@@ -237,6 +237,23 @@ class TestMagicActions(unittest.TestCase):
         with self.assertRaises(AttributeError):
             component.set("template_name", "elsewhere")
 
+    def test_a_component_does_not_mutate_the_state_it_was_handed(self):
+        """The state is the caller's; a component works on one of its own."""
+        cls = type(
+            "Appender",
+            (Component,),
+            {
+                "tags": [],
+                "render": lambda self: self.render_inline("<div>{{ tags }}</div>", context={}),
+                "add": lambda self: self.tags.append("t"),
+            },
+        )
+        state = {"tags": [], "_id": "pb-test"}
+
+        cls.update_component(state, "add")
+
+        self.assertEqual(state["tags"], [])
+
     def test_an_action_may_reset_the_component_from_the_client(self):
         cls = type(
             "Resettable",
