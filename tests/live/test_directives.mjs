@@ -198,6 +198,23 @@ test('releasing a component stops its polling', async () => {
     assert.deepEqual(component.calls, []);
 });
 
+test('an update carrying no html leaves the element alone', async () => {
+    const { Component } = await import('../../pyblade/live/static/src/component.js');
+
+    const button = new FakeElement({ 'pb:click': 'increment' });
+    const root = new FakeElement({ 'pb:id': 'c1' }, [button]);
+    const component = new Component('c1', root, { state: { count: 0 } }, new Map());
+
+    let morphed = false;
+    const original = root.querySelectorAll;
+    root.querySelectorAll = () => { morphed = true; return original.call(root); };
+
+    component.update({ html: null, snapshot: { state: { count: 5 } } });
+
+    assert.equal(morphed, false, 'the element was re-bound although nothing was rendered');
+    assert.equal(component.getState().count, 5, 'the new state was not taken in');
+});
+
 test('a callback registered by a directive is forgotten with its binding', () => {
     const input = new FakeElement({ 'pb:show': 'visible' });
     const root = new FakeElement({ 'pb:id': 'c1' }, [input]);

@@ -253,6 +253,83 @@ class TestMagicActions(unittest.TestCase):
         self.assertEqual(result["snapshot"]["state"]["count"], 0)
 
 
+class TestServerToClient(unittest.TestCase):
+    """What an action sends back besides the new HTML."""
+
+    def _update(self, action, body, state=None):
+        body.setdefault("count", 0)
+        body.setdefault("render", lambda self: self.render_inline("<div>{{ count }}</div>", context={}))
+        cls = type("Talker", (Component,), body)
+        return cls.update_component({"_id": "pb-test", **(state or {})}, action)
+
+    def test_an_action_emits_an_event(self):
+        result = self._update("go", {"go": lambda self: self.emit("saved")})
+
+        self.assertEqual(result["events"], [{"name": "saved", "data": {}}])
+
+    def test_an_event_carries_data(self):
+        result = self._update("go", {"go": lambda self: self.emit("saved", id=3, name="a")})
+
+        self.assertEqual(result["events"], [{"name": "saved", "data": {"id": 3, "name": "a"}}])
+
+    def test_dispatch_is_the_same_as_emit(self):
+        result = self._update("go", {"go": lambda self: self.dispatch("saved", id=3)})
+
+        self.assertEqual(result["events"], [{"name": "saved", "data": {"id": 3}}])
+
+    def test_several_events_keep_the_order_they_were_emitted_in(self):
+        def go(self):
+            self.emit("first")
+            self.emit("second")
+
+        result = self._update("go", {"go": go})
+
+        self.assertEqual([event["name"] for event in result["events"]], ["first", "second"])
+
+    def test_events_do_not_travel_in_the_state(self):
+        result = self._update("go", {"go": lambda self: self.emit("saved")})
+
+        self.assertEqual(result["snapshot"]["state"], {"count": 0})
+
+    def test_an_action_returning_a_redirect_sends_it_to_the_client(self):
+        result = self._update("go", {"go": lambda self: self.redirect("/done")})
+
+        self.assertEqual(result["redirect"], {"href": "/done", "navigate": False})
+
+    def test_an_action_returning_a_navigation_sends_it_to_the_client(self):
+        result = self._update("go", {"go": lambda self: self.navigate("/done")})
+
+        self.assertEqual(result["redirect"], {"href": "/done", "navigate": True})
+
+    def test_an_action_returning_nothing_sends_no_redirect(self):
+        result = self._update("go", {"go": lambda self: None})
+
+        self.assertNotIn("redirect", result)
+
+    def test_a_renderless_action_sends_no_html(self):
+        from pyblade.live.base import renderless
+
+        result = self._update("go", {"go": renderless(lambda self: self.set("count", 5))})
+
+        self.assertIsNone(result["html"])
+        self.assertEqual(result["snapshot"]["state"]["count"], 5)
+
+    def test_skip_render_sends_no_html(self):
+        def go(self):
+            self.set("count", 5)
+            self.skip_render()
+
+        result = self._update("go", {"go": go})
+
+        self.assertIsNone(result["html"])
+        self.assertEqual(result["snapshot"]["state"]["count"], 5)
+
+    def test_an_ordinary_action_still_sends_html(self):
+        result = self._update("go", {"go": lambda self: self.set("count", 5)})
+
+        self.assertEqual(result["html"], '<div pb:id="pb-test">5</div>')
+
+
 class TestInitialRendering(unittest.TestCase):
     """The first rendering of a component, on the server."""
 

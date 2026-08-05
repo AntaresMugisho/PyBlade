@@ -5,6 +5,7 @@ from typing import Any, Dict, Pattern
 from uuid import uuid4
 import json
 import inspect
+from functools import wraps
 from pprint import pprint # noqa
 
 from pyblade.engine import loader
@@ -31,6 +32,8 @@ class Component:
 
     def __init__(self, pb_id: str = None):
         self._id = pb_id
+        self._events = []
+        self._skip_render = False
 
         # A list or a dictionary declared on the class is one object, shared by
         # every component of that class. Each takes a copy of its own, so that
@@ -298,7 +301,7 @@ class Component:
 
     def _get_events(self):
         """Get server-to-client events"""
-        return []
+        return list(self._events)
 
     def _inject_component_id(self, template_string: str):
         """Inject the component id into the root element of the template.
@@ -435,6 +438,8 @@ class Component:
         # 2. Hook : hydrate()
         instance.hydrate()
 
+        outcome = None
+
         # 3. A refresh asks for nothing but a new rendering
         if action_name == "$refresh":
             pass
@@ -457,19 +462,29 @@ class Component:
                     )
                 raise NameError(f"Method '{action_name}' is not defined")
 
-            methods[action_name](*action_args)
+            outcome = methods[action_name](*action_args)
 
-        # 6. Hooks
-        instance.rendering()
-        instance.render()
-        instance.rendered(instance._rendered)
+        # 6. Hooks. An action that asked not to render answers with its new
+        # state alone, and the page is left as it is.
+        if instance._skip_render:
+            instance._rendered = None
+        else:
+            instance.rendering()
+            instance.render()
+            instance.rendered(instance._rendered)
 
         # 7. Return the new HTML and the new serialized state for the frontend
-        return {
+        response = {
             "html": instance._rendered,
             "snapshot": instance.serialize(),
-            "events": instance._get_events()
+            "events": instance._get_events(),
         }
+
+        # What the action returned, when it asked the client to go somewhere
+        if isinstance(outcome, dict) and "redirect" in outcome:
+            response["redirect"] = outcome["redirect"]
+
+        return response
 
     # MAGIC ACTIONS
     def reset(self, *properties: str):
@@ -515,13 +530,18 @@ class Component:
         """Update a property value"""
         self._set_property(prop, value)
 
-    def dispatch(self, event: str):
+    def dispatch(self, event: str, **data):
         """Dispatch an event. Same as emit()"""
-        self.emit(event)
+        self.emit(event, **data)
 
-    def emit(self, event: str):
-        """Emit an event. Same as dispatch()"""
-        pass
+    def emit(self, event: str, **data):
+        """Emit an event. Same as dispatch()
+
+        The events an action emits are handed to the client with the new HTML,
+        which raises each of them on the window as 'pb:<name>', the data they
+        carry as the detail of the event.
+        """
+        self._events.append({"name": event, "data": data})
 
     def js(self, fn: str):
         """Call js functions from python"""
@@ -550,17 +570,22 @@ class Component:
         pass
 
     def skip_render(self):
-        """Call an action without calling the render method"""
-        pass
+        """Call an action without calling the render method.
+
+        The component still answers with its new state, so the client keeps up
+        with it; it is only the HTML it does not send, leaving the page as it is.
+        """
+        self._skip_render = True
 
 
     # Navigation
     def redirect(self, href):
-        return {"redirect": True, "href": href}
-
+        """Leave for another page, loading it anew."""
+        return {"redirect": {"href": href, "navigate": False}}
 
     def navigate(self, href):
-        return {"navigate": True, "href": href}
+        """Leave for another page without reloading the one that is there."""
+        return {"redirect": {"href": href, "navigate": True}}
 
 
 #: Every name the base class declares. What a component adds to it is its own,
@@ -572,7 +597,13 @@ _RESERVED_NAMES = frozenset(vars(Component))
 # Decorators
 def renderless(fn):
     """Call an action without calling the render method"""
-    pass
+
+    @wraps(fn)
+    def action(self, *args, **kwargs):
+        self.skip_render()
+        return fn(self, *args, **kwargs)
+
+    return action
 
 def validate(fn):
     pass

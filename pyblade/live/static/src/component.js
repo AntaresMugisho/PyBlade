@@ -96,17 +96,24 @@ export class Component {
         }
     }
 
-    update({ html, snapshot, events = [] }) {
+    update({ html, snapshot, events = [], redirect = null }) {
         this.store.set(this.id, snapshot);
 
-        Idiomorph.morph(this.element, html);
-
-        Directives.apply(this.element, this);
+        // A renderless action answers with its new state and no HTML at all,
+        // and the page is left as it is
+        if (html) {
+            Idiomorph.morph(this.element, html);
+            Directives.apply(this.element, this);
+        }
 
         events.forEach(evt => window.dispatchEvent(new CustomEvent(`pb:${evt.name}`, { detail: evt.data })));
 
         // Trigger state change callbacks
         this.stateChangeCallbacks.forEach(cb => cb());
+
+        if (redirect) {
+            redirect.navigate ? this.navigate(redirect.href) : (window.location.href = redirect.href);
+        }
     }
 
     // Callback registration methods for directives.
