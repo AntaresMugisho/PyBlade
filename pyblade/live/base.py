@@ -22,13 +22,14 @@ _OPENING_TAG_PATTERN: Pattern = re.compile(r"<(?P<tag>\w+)\s*(?P<attributes>.*?)
 _IMMUTABLE = (str, bytes, int, float, bool, complex, tuple, frozenset, type(None))
 
 
-class Component:
+class LiveComponent:
     _rendered = ""
 
     #: Where the template of the component is, when it is not the one its class
     #: name points at. Reserved like everything else the base class declares, so
     #: it never travels to the client.
     template_name = None
+    layout_name = None
 
     def __init__(self, pb_id: str = None):
         self._id = pb_id
@@ -600,9 +601,15 @@ class Component:
         """
         self._events.append({"name": event, "data": data})
 
-    def js(self, fn: str):
-        """Call js functions from python"""
-        pass
+
+    def skip_render(self):
+        """Call an action without calling the render method.
+
+        The component still answers with its new state, so the client keeps up
+        with it; it is only the HTML it does not send, leaving the page as it is.
+        Same as the @renderless decorator but can be useful for conditionnaly skiping re-render.
+        """
+        self._skip_render = True
 
 
     # MAGIC PROPERTIES
@@ -611,13 +618,6 @@ class Component:
         """The request the component is answering, on the first rendering and on every action."""
         return self._request
 
-    @property
-    def event(self):
-        pass
-
-    @property
-    def parent(self):
-        pass
 
     @staticmethod
     def exception(exc, stopPropagation):
@@ -648,14 +648,6 @@ class Component:
 
         return view
 
-    def skip_render(self):
-        """Call an action without calling the render method.
-
-        The component still answers with its new state, so the client keeps up
-        with it; it is only the HTML it does not send, leaving the page as it is.
-        """
-        self._skip_render = True
-
 
     # Navigation
     def redirect(self, href):
@@ -669,28 +661,6 @@ class Component:
 
 #: Every name the base class declares. What a component adds to it is its own,
 #: and is the only thing the client ever sees or reaches. Read once the class is
-#: built, so that a method added to Component is covered without being listed.
-_RESERVED_NAMES = frozenset(vars(Component))
-
-
-# Decorators
-def renderless(fn):
-    """Call an action without calling the render method"""
-
-    @wraps(fn)
-    def action(self, *args, **kwargs):
-        self.skip_render()
-        return fn(self, *args, **kwargs)
-
-    return action
-
-def validate(fn):
-    pass
-
-def on(fn, event_name):
-    pass
-
-def lazy(fn):
-    pass
-
+#: built, so that a method added to LiveComponent is covered without being listed.
+_RESERVED_NAMES = frozenset(vars(LiveComponent))
 

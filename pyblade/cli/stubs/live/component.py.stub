@@ -1,6 +1,6 @@
-from pyblade import live
+from pyblade import LiveComponent
 
-class {class_name}(live.Component):
+class {class_name}(LiveComponent):
 
     def render(self):
         """Render {template_name}"""

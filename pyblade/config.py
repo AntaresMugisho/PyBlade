@@ -266,3 +266,5 @@ settings = Config()
 
 ## Global singleton instance
 # config = build_config()
+
+config = {}

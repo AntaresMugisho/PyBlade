@@ -2,7 +2,7 @@ import importlib
 from typing import Type, Dict, Any
 
 
-class ComponentRegistry:
+class LiveComponentRegistry:
     """
     Central registry for PyBlade Live components.
     
@@ -45,8 +45,8 @@ class ComponentRegistry:
             self._components[class_path] = cls
             return cls
         except (ValueError, ImportError, AttributeError) as err:
-            raise ValueError(f"PyBlade component '{class_path}' could not be resolved.") from err
+            raise ValueError(f"PyBlade Live Component '{class_path}' could not be resolved.") from err
 
 
 # Global singleton instance
-registry = ComponentRegistry()
+registry = LiveComponentRegistry()

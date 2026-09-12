@@ -859,16 +859,13 @@ class ComponentNode(Node):
             raise
 
     def _render_live_component(self, python_file : Path, attributes):
-        # The live package is imported here rather than at the top of the module:
-        # a live component builds on the engine, so the engine cannot depend on it
-        # while it is still being imported itself.
-        from pyblade.live.registry import registry as live_components_registry
+        from pyblade.live.registry import registry as live_component_registry
 
         module_path = str(python_file.with_suffix("")).replace("/", ".")
         class_name = snakebab_to_pascal(python_file.stem)
 
         try:
-            cls = live_components_registry.get(f'{module_path}.{class_name}')
+            cls = live_component_registry.get(f'{module_path}.{class_name}')
 
             return cls.render_initial(attributes)
         except Exception:
