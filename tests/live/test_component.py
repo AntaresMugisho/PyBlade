@@ -102,9 +102,12 @@ class TestComponentSurface(unittest.TestCase):
     def test_the_snapshot_carries_nothing_but_the_state(self):
         snapshot = self.component.serialize()
 
-        self.assertEqual(set(snapshot), {"id", "class", "state", "listeners", "checksum"})
+        self.assertEqual(
+            set(snapshot), {"id", "class", "state", "listeners", "confirmations", "checksum"}
+        )
         self.assertEqual(snapshot["state"], {"count": 0, "label": "clicks"})
         self.assertEqual(snapshot["listeners"], {})
+        self.assertEqual(snapshot["confirmations"], {})
 
 
 class TestClientActions(unittest.TestCase):

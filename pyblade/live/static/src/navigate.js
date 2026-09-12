@@ -1,4 +1,5 @@
 import { Idiomorph } from '../vendor/idiomorph.esm.js';
+import { applyKeys, morphCallbacks } from './morph.js';
 import { Progress } from './progress.js';
 
 /**
@@ -101,7 +102,11 @@ export const Navigation = {
         // listeners first, while their elements are still there to be found
         this.pyblade?.release(target);
 
-        Idiomorph.morph(target, source.outerHTML);
+        // A whole page is brought in, so nothing here belongs to anyone else;
+        // pb:ignore, pb:replace and pb:key still say what to leave alone.
+        applyKeys(target);
+
+        Idiomorph.morph(target, applyKeys(source), { callbacks: morphCallbacks() });
 
         if (incoming.title) document.title = incoming.title;
         this.mergeHead(incoming);

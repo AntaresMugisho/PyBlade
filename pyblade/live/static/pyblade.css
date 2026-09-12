@@ -223,3 +223,107 @@
     from { transform: translateY(-50%); }
     to { transform: translateY(50%); }
 }
+
+/*
+ * pb:cloak hides an element until PyBlade is up.
+ *
+ * A component is markup before it is anything else, so what it renders is on
+ * the page and painted before any script has run. An element that only makes
+ * sense once a component is driving it -- one the reader would see flash in a
+ * half-built state -- carries pb:cloak and is hidden by this rule until the
+ * directive takes the attribute off, which happens as the component is built.
+ */
+[pb\:cloak] {
+    display: none !important;
+}
+
+/*
+ * The question pb:confirm asks, when the page provides no dialogue of its own.
+ *
+ * Everything here is driven by custom properties, so a project restyles it by
+ * setting them rather than by overriding the rules:
+ *
+ *   :root {
+ *       --pb-confirm-background: #111;
+ *       --pb-confirm-color: #fff;
+ *       --pb-confirm-accept: #e11d48;
+ *   }
+ *
+ * Replacing it altogether is a matter of putting an element marked
+ * pb-confirm-dialogue in the page, built from the stub that ships with PyBlade:
+ * the dialogue below is only built when the page provides none.
+ */
+:root {
+    --pb-confirm-background: #fff;
+    --pb-confirm-color: #1f2937;
+    --pb-confirm-accept: #2563eb;
+    --pb-confirm-accept-color: #fff;
+    --pb-confirm-radius: 10px;
+    --pb-confirm-width: 22rem;
+    --pb-confirm-backdrop: rgba(15, 23, 42, 0.45);
+}
+
+dialog.pb-confirm {
+    width: var(--pb-confirm-width);
+    max-width: calc(100vw - 2rem);
+    padding: 0;
+    border: 0;
+    border-radius: var(--pb-confirm-radius);
+    background: var(--pb-confirm-background);
+    color: var(--pb-confirm-color);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
+}
+
+dialog.pb-confirm::backdrop {
+    background: var(--pb-confirm-backdrop);
+}
+
+dialog.pb-confirm .pb-confirm-body {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    padding: 1.25rem;
+    margin: 0;
+}
+
+dialog.pb-confirm .pb-confirm-message {
+    margin: 0;
+    font-size: 1rem;
+    line-height: 1.5;
+}
+
+dialog.pb-confirm .pb-confirm-prompt {
+    padding: 0.5rem 0.625rem;
+    border: 1px solid rgba(100, 116, 139, 0.4);
+    border-radius: calc(var(--pb-confirm-radius) - 4px);
+    font: inherit;
+}
+
+dialog.pb-confirm .pb-confirm-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+}
+
+dialog.pb-confirm button {
+    padding: 0.5rem 0.9rem;
+    border: 0;
+    border-radius: calc(var(--pb-confirm-radius) - 4px);
+    font: inherit;
+    cursor: pointer;
+}
+
+dialog.pb-confirm .pb-confirm-cancel {
+    background: transparent;
+    color: inherit;
+}
+
+dialog.pb-confirm .pb-confirm-accept {
+    background: var(--pb-confirm-accept);
+    color: var(--pb-confirm-accept-color);
+}
+
+dialog.pb-confirm .pb-confirm-accept[disabled] {
+    opacity: 0.5;
+    cursor: not-allowed;
+}

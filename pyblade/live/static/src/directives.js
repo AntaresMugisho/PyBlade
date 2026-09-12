@@ -1,3 +1,9 @@
+import { Modifiers } from './modifiers.js';
+import { fieldValue, writeField } from './fields.js';
+import { ask, confirmationOf } from './confirm.js';
+import { readCondition } from './expressions.js';
+import { animateOut, enter, onPageVisibility, pageHidden, pollRate, transitionOf } from './transition.js';
+
 export const Directives = {
     // Parse expression with arguments: "method('arg1', 'arg2')" or "method(key='val', key2='val2')"
     parseExpression(expression) {
@@ -147,87 +153,171 @@ export const Directives = {
     },
 
     /**
-     * Run what a directive was given: an event to emit, or an action to call.
+     * Whether what a request is doing is what an element was told to watch.
+     *
+     * An element says so with pb:target, naming the actions or the properties
+     * it is about. Told nothing, it is about whatever the component is doing,
+     * which is what an element with no target of its own has always been.
+     *
+     *     <span pb:loading pb:target="save">          the save action
+     *     <span pb:loading pb:target="name, email">   either property
      */
-    invoke(expression, component) {
+    matchesTarget(el, payload) {
+        const names = this.targetsOf(el);
+        if (!names.length) return true;
+
+        return names.some(name => this.requestIsAbout(payload, name));
+    },
+
+    /**
+     * What a field was read as, once .number or .boolean has had its say.
+     *
+     * A form only ever gives text, so a property that is a number or a flag is
+     * one the field has to be told to read as such. What a checkbox or a
+     * multiple select already answers is left alone: it was never text.
+     */
+    castValue(value, { number = false, boolean = false } = {}) {
+        if (typeof value !== 'string') return value;
+
+        if (number) {
+            if (value === '') return '';
+
+            const parsed = parseFloat(value);
+
+            // A field holding something that is not a number keeps what was
+            // typed, rather than becoming a NaN nothing can be done with
+            return Number.isNaN(parsed) ? value : parsed;
+        }
+
+        if (boolean) return ['true', '1', 'on', 'yes'].includes(value.toLowerCase());
+
+        return value;
+    },
+
+    /** The actions or properties an element says it is about, if it says any. */
+    targetsOf(el) {
+        const target = el.getAttribute?.('pb:target');
+        if (!target) return [];
+
+        return target.split(',').map(name => name.trim()).filter(Boolean);
+    },
+
+    /** Whether a request is about the action, the event or the property named. */
+    requestIsAbout(payload, name) {
+        const { action, params = [] } = payload || {};
+
+        // A property being set, and an event being handled, both name what they
+        // are about in the first of the parameters rather than in the action
+        if (action === '$set' || action === '$event') return params[0] === name;
+
+        return action === name;
+    },
+
+    /**
+     * Run what a directive was given: an event to emit, or an action to call.
+     *
+     * An element written pb:confirm is asked about first, and nothing runs
+     * unless it is answered. The asking is done here rather than by a listener
+     * of its own: a listener beside pb:click cannot stop it -- both are on the
+     * same element, and stopping an event from travelling any further does not
+     * stop what is already listening where it is.
+     */
+    async invoke(expression, component, el = null, asking = ask) {
+        const confirmation = confirmationOf(el);
+
+        if (confirmation) {
+            const accepted = await asking(confirmation);
+            if (!accepted) return undefined;
+        }
+
         const event = this.parseEmit(expression);
 
         if (event) return component.emit(event);
 
         const { methodName, args } = this.parseExpression(expression);
-        return component.callServerMethod(methodName, args);
+
+        // The server is told the reader was asked, for an action that says it
+        // must be: @confirm refuses one that arrives without it
+        return component.callServerMethod(methodName, args, confirmation ? { confirmed: true } : undefined);
     },
 
     handlers: {
-        click({ el, expression, component, modifier, signal }) {
+        click({ el, expression, component, modifiers, signal }) {
             el.addEventListener('click', (e) => {
-                if (modifier === 'prevent') e.preventDefault();
-                Directives.invoke(expression, component);
+                if (modifiers.has('prevent')) e.preventDefault();
+                Directives.invoke(expression, component, el);
             }, { signal });
         },
 
-        model({ el, expression, component, modifier, signal }) {
-            const state = component.getState();
-            
-            // Set initial value from state
-            if (state[expression] !== undefined) {
-                el.value = state[expression];
-                component.formState.values[expression] = state[expression];
+        /**
+         * Bind a form field to a property of the component.
+         *
+         *     <input pb:model="title">                  kept here until something is sent
+         *     <input pb:model.live="query">             as it is typed
+         *     <input pb:model.live.debounce.750ms="q">  once the typing has stopped
+         *     <input pb:model.blur="title">             when the field is left
+         *     <input pb:model.change="country">         when another option is chosen
+         *     <input pb:model.number="quantity">        read as a number
+         *
+         * Written on its own it says nothing to the server: what is typed is
+         * kept on the page and travels with whatever the component asks next,
+         * so filling in a form costs no requests and saving it sees all of it.
+         */
+        model({ el, expression, component, modifiers, signal }) {
+            const cast = { number: modifiers.has('number'), boolean: modifiers.has('boolean') };
+
+            // .fill takes what the markup already holds for the property, for a
+            // field the server wrote a value straight into
+            if (modifiers.has('fill')) {
+                component.setLocal(expression, Directives.castValue(fieldValue(el, expression), cast));
+            } else {
+                writeField(el, component.getState()[expression]);
+                component.seedLocal(expression, component.getState()[expression]);
             }
 
-            // Parse modifiers
-            const modifiers = modifier ? modifier.split('.') : [];
-            const isLive = modifiers.includes('live');
-            const isNumber = modifiers.includes('number');
-            
-            // Parse debounce delay (e.g., "debounce.500ms" -> 500)
-            const debounceModifier = modifiers.find(m => m.startsWith('debounce'));
-            let debounceDelay = 300; // default 300ms
-            if (debounceModifier) {
-                const match = debounceModifier.match(/debounce\.(\d+)ms/);
-                if (match) {
-                    debounceDelay = parseInt(match[1]);
-                }
-            }
+            const read = () => Directives.castValue(fieldValue(el, expression), cast);
 
-            const updateValue = (value) => {
-                // Cast to number if modifier is present
-                let finalValue = value;
-                if (isNumber) {
-                    finalValue = value === '' ? '' : parseFloat(value);
+            const live = modifiers.has('live');
+            const onBlur = modifiers.has('blur');
+            const onChange = modifiers.has('change') || modifiers.has('lazy');
+            const throttle = modifiers.duration('throttle', null);
+
+            let lastSent = 0;
+
+            const send = (value) => {
+                if (throttle !== null) {
+                    const now = Date.now();
+                    if (now - lastSent < throttle) return;
+
+                    lastSent = now;
+                    component.setProperties([expression, value], 0);
+                    return;
                 }
 
-                // Update local form state immediately (react-hook-form pattern)
-                component.formState.values[expression] = finalValue;
-                component.formState.dirtyFields.add(expression);
-                component.formState.touchedFields.add(expression);
-
-                if (isLive) {
-                    // Use component's batched update mechanism (debounced)
-                    component.setProperties([expression, finalValue]);
-                }
-                // If not live, don't send to server - wait for blur
+                component.setProperties([expression, value], modifiers.duration('debounce', 150));
             };
 
-            if (isLive) {
-                // Live mode: update on input with debouncing
-                el.addEventListener('input', (e) => {
-                    updateValue(e.target.value);
-                }, { signal });
-            } else {
-                // Lazy mode (default): update on blur
-                el.addEventListener('blur', (e) => {
-                    updateValue(e.target.value);
-                }, { signal });
-            }
+            const typed = (andSend) => () => {
+                const value = read();
 
-            // Preserve value during DOM updates - read from local form state
+                component.setLocal(expression, value);
+
+                if (andSend) send(value);
+            };
+
+            // What is typed is always kept here; what differs is when, if ever,
+            // the server is told about it
+            el.addEventListener('input', typed(live), { signal });
+            el.addEventListener('change', typed(live || onChange), { signal });
+
+            if (onBlur) el.addEventListener('blur', typed(true), { signal });
+
+            // An answer says what the property holds now; a field being typed
+            // into is left alone, its own value being the newer of the two
             component.onStateChange(() => {
-                const localValue = component.formState.values[expression];
-                // Only update if the value changed on the server (not from local input)
-                if (document.activeElement !== el && localValue !== undefined) {
-                    el.value = localValue;
-                }
+                if (el.ownerDocument?.activeElement === el) return;
+
+                writeField(el, component.formState.values[expression]);
             }, signal);
         },
 
@@ -242,40 +332,77 @@ export const Directives = {
                 if (submitButton) submitButton.disabled = true;
                 inputs.forEach(input => input.readOnly = true);
                 
-                Promise.resolve(Directives.invoke(expression, component)).finally(() => {
+                Promise.resolve(Directives.invoke(expression, component, el)).finally(() => {
                     if (submitButton) submitButton.disabled = false;
                     inputs.forEach(input => input.readOnly = false);
                 });
             }, { signal });
         },
 
-        loading({ el, expression, component, modifier, signal }) {
-            const target = modifier === 'remove' ? el : el;
-            const originalDisplay = target.style.display || '';
-            
-            component.onLoadingStart(() => {
-                if (modifier === 'remove') {
-                    target.style.display = 'none';
-                } else if (modifier === 'class') {
-                    target.classList.add(expression || 'loading');
-                } else if (modifier === 'attr') {
-                    target.setAttribute('disabled', 'true');
-                } else {
-                    target.style.display = 'block';
-                }
+        /**
+         * Show an element while the server is being asked something.
+         *
+         *     <span pb:loading>saving...</span>
+         *     <span pb:loading.remove>save</span>
+         *     <button pb:loading.attr="disabled" pb:target="save">
+         *     <div pb:loading.flex.delay.300ms>
+         *
+         * pb:target narrows it to one action or one property; without it the
+         * element is about whatever the component is doing.
+         */
+        loading({ el, expression, component, modifiers, signal }) {
+            const inverted = modifiers.has('remove');
+            const display = ['flex', 'grid', 'inline-flex', 'inline-block', 'block', 'table']
+                .find(name => modifiers.has(name)) || 'block';
+            const delay = modifiers.duration('delay', 0);
+
+            const shown = () => {
+                if (modifiers.has('class')) el.classList.add(...(expression || 'loading').split(' '));
+                else if (modifiers.has('attr')) el.setAttribute(expression || 'disabled', 'true');
+                else el.style.display = inverted ? 'none' : display;
+            };
+
+            const hidden = () => {
+                if (modifiers.has('class')) el.classList.remove(...(expression || 'loading').split(' '));
+                else if (modifiers.has('attr')) el.removeAttribute(expression || 'disabled');
+                else el.style.display = inverted ? display : 'none';
+            };
+
+            let showing = false;
+            let waiting = null;
+
+            const apply = () => (showing ? shown() : hidden());
+
+            // Nothing is in flight yet, so an element that only shows while
+            // something is starts out of the way
+            apply();
+
+            component.onLoadingStart((payload) => {
+                if (!Directives.matchesTarget(el, payload)) return;
+
+                // A request answered sooner than the delay never shows anything,
+                // which is the point of asking for one
+                const show = () => { showing = true; shown(); };
+
+                if (delay) waiting = setTimeout(show, delay);
+                else show();
             }, signal);
-            
-            component.onLoadingEnd(() => {
-                if (modifier === 'remove') {
-                    target.style.display = originalDisplay;
-                } else if (modifier === 'class') {
-                    target.classList.remove(expression || 'loading');
-                } else if (modifier === 'attr') {
-                    target.removeAttribute('disabled');
-                } else {
-                    target.style.display = 'none';
-                }
+
+            component.onLoadingEnd((payload) => {
+                if (!Directives.matchesTarget(el, payload)) return;
+
+                clearTimeout(waiting);
+                waiting = null;
+                showing = false;
+                hidden();
             }, signal);
+
+            // New markup is put over the old on every update, and what it says
+            // about this element is what the server rendered, which knows
+            // nothing of what is in flight. Said again here.
+            component.onStateChange(apply, signal);
+
+            signal?.addEventListener('abort', () => clearTimeout(waiting), { once: true });
         },
 
         // pb:navigate is answered on the document rather than here, so that a
@@ -293,104 +420,232 @@ export const Directives = {
             }
         },
 
-        cloak({ el }) {
-            el.style.display = 'none';
-            // Will be removed by PyBlade initialization
-            setTimeout(() => {
+        /**
+         * Hide an element until PyBlade is up.
+         *
+         * A component is markup before it is anything else, so what it renders
+         * is on the page before any of this runs. pb:cloak hides what would
+         * otherwise be seen in that moment, and is taken off here -- a handler
+         * only runs once the component it belongs to has been built.
+         */
+        cloak({ el, component, signal }) {
+            const uncloak = () => {
                 el.style.display = '';
-            }, 0);
+                el.removeAttribute('pb:cloak');
+            };
+
+            uncloak();
+
+            // The server renders pb:cloak every time, so every update puts it
+            // back on the element and it has to come off again
+            component.onStateChange(uncloak, signal);
         },
 
-        dirty({ el, expression, component, signal }) {
-            const originalClasses = el.className;
-            
-            component.onDirty(() => {
-                if (expression === 'remove') {
-                    el.style.display = 'none';
-                } else if (expression) {
-                    el.classList.add(...expression.split(' '));
+        /**
+         * Show an element while what the page holds differs from the server's.
+         *
+         *     <span pb:dirty>unsaved</span>
+         *     <span pb:dirty.remove>saved</span>
+         *     <input pb:dirty.class="border-red" pb:target="title">
+         */
+        dirty({ el, expression, component, modifiers, signal }) {
+            const classes = modifiers.has('class') ? (expression || '').split(' ').filter(Boolean) : [];
+            const inverted = modifiers.has('remove');
+            const originalDisplay = el.style.display || '';
+
+            const apply = (isDirty) => {
+                const on = inverted ? !isDirty : isDirty;
+
+                if (classes.length) {
+                    on ? el.classList.add(...classes) : el.classList.remove(...classes);
+                } else {
+                    el.style.display = on ? originalDisplay : 'none';
                 }
+            };
+
+            let isDirty = false;
+
+            apply(false);
+
+            component.onDirtyChange((dirty) => {
+                // What this element was told to watch, or anything at all
+                const watched = Directives.targetsOf(el);
+
+                isDirty = watched.length ? watched.some(name => dirty.has(name)) : dirty.size > 0;
+                apply(isDirty);
             }, signal);
-            
-            component.onClean(() => {
-                if (expression === 'remove') {
-                    el.style.display = '';
-                } else if (expression) {
-                    el.classList.remove(...expression.split(' '));
+
+            // What an update brings is what the server rendered, which knows
+            // nothing of what has been typed since
+            component.onStateChange(() => apply(isDirty), signal);
+        },
+
+        // pb:confirm is asked about by whatever runs the action, in invoke():
+        // a listener of its own could not stop pb:click on the same element
+        // from running whatever the answer was. Declared so that a project can
+        // still take it over with PyBlade.directive().
+        confirm() {},
+
+        // pb:transition is read by morphing itself, off the element it is
+        // written on: an element arriving has no binding yet, and one leaving
+        // is gone before anything could be asked of it. pb:show reads it too.
+        // Declared so that a project can take it over with PyBlade.directive().
+        transition() {},
+
+        /**
+         * Ask the server again, over and over.
+         *
+         *     <div pb:poll>                      every two seconds
+         *     <div pb:poll.15s>                  every fifteen
+         *     <div pb:poll="refresh_posts">      calling an action of its own
+         *     <div pb:poll.visible>              only while it is on screen
+         *     <div pb:poll.keep-alive>           even with the page in the background
+         *
+         * A page nobody is looking at polls at a twentieth of its rate, which
+         * is the traffic of a tab left open all afternoon rather than that of
+         * one being read. .keep-alive is for what must not fall behind.
+         */
+        poll({ el, expression, component, modifiers, signal }) {
+            const interval = modifiers.timing(2000);
+            const keepAlive = modifiers.has('keep-alive');
+            const onlyWhenSeen = modifiers.has('visible');
+
+            let timer = null;
+            let inFlight = false;
+            let seen = !onlyWhenSeen;
+
+            const tick = async () => {
+                // A server slower than the interval would otherwise be asked
+                // again before it has answered, and again, and again
+                if (inFlight || !seen) return;
+
+                inFlight = true;
+                try {
+                    await (expression ? component.callServerMethod(expression, []) : component.refresh());
+                } finally {
+                    inFlight = false;
                 }
-            }, signal);
-        },
+            };
 
-        confirm({ el, expression, component, signal }) {
-            el.addEventListener('click', (e) => {
-                const confirmed = confirm(expression || 'Are you sure?');
-                if (!confirmed) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                }
-            }, { signal });
-        },
+            const schedule = () => {
+                clearInterval(timer);
+                timer = setInterval(tick, pollRate(interval, { hidden: pageHidden(), keepAlive }));
+            };
 
-        transition({ el, expression, component }) {
-            const transitionClass = expression || 'transition';
-            el.classList.add(transitionClass);
-        },
+            schedule();
 
-        poll({ el, expression, component, signal }) {
-            const interval = parseInt(expression) || 2000;
+            // The rate is not the same with the page in the background, so it
+            // is worked out again whenever that changes
+            onPageVisibility(schedule, signal);
 
-            const pollInterval = setInterval(() => {
-                component.refresh();
-            }, interval);
+            let watcher = null;
+            if (onlyWhenSeen && typeof IntersectionObserver === 'function') {
+                watcher = new IntersectionObserver(([entry]) => { seen = entry.isIntersecting; });
+                watcher.observe(el);
+            }
 
             // One timer per binding: it is cleared when the binding is renewed,
             // when the element goes away and when the component is destroyed.
-            signal.addEventListener('abort', () => clearInterval(pollInterval), { once: true });
-            component.onDestroy(() => clearInterval(pollInterval), signal);
+            const stop = () => {
+                clearInterval(timer);
+                watcher?.disconnect();
+            };
+
+            signal.addEventListener('abort', stop, { once: true });
+            component.onDestroy(stop, signal);
         },
 
-        offline({ el, signal }) {
+        offline({ el, component, signal }) {
             const updateOfflineStatus = () => {
-                el.style.display = navigator.onLine ? 'none' : 'block';
+                el.style.display = navigator.onLine ? 'none' : '';
             };
 
             window.addEventListener('online', updateOfflineStatus, { signal });
             window.addEventListener('offline', updateOfflineStatus, { signal });
+            component.onStateChange(updateOfflineStatus, signal);
             updateOfflineStatus();
         },
 
-        ignore({ el, modifier }) {
-            el.setAttribute('data-pb-ignore', 'true');
-            if (modifier === 'attrs') {
-                el.setAttribute('data-pb-ignore-attrs', 'true');
-            }
-        },
+        // pb:ignore, pb:replace and pb:key are read by morphing itself, off the
+        // elements they are written on: what they say has to be known of an
+        // element that has no binding yet, and of a page being navigated to,
+        // where no component is doing the morphing. They are declared here so
+        // that a project can still take one over with PyBlade.directive().
+        ignore() {},
+        replace() {},
+        key() {},
 
-        replace({ el, modifier }) {
-            el.setAttribute('data-pb-replace', 'true');
-            if (modifier === 'self') {
-                el.setAttribute('data-pb-replace-self', 'true');
-            }
-        },
-
+        /**
+         * Keep an element on the page only while a condition holds.
+         *
+         *     <div pb:show="visible">
+         *     <div pb:show="!archived">
+         *     <div pb:show="count > 3">
+         *     <div pb:show="status == 'done'" pb:transition>
+         *
+         * The element stays where it is either way -- it is hidden rather than
+         * taken out -- so what is inside it keeps whatever state it had.
+         */
         show({ el, expression, component, signal }) {
-            const evaluateExpression = () => {
-                // Simple boolean evaluation - can be extended
-                const state = component.getState();
-                const value = state[expression];
-                el.style.display = value ? '' : 'none';
+            const spec = transitionOf(el);
+            const hidden = () => { el.style.display = 'none'; };
+            const shown = () => { el.style.display = ''; };
+
+            let showing = null;
+
+            const apply = (andAnimate) => {
+                const wanted = readCondition(expression, component.getState());
+                if (wanted === showing) return;
+
+                const first = showing === null;
+                showing = wanted;
+
+                if (!spec || !andAnimate || first) {
+                    wanted ? shown() : hidden();
+                    return;
+                }
+
+                if (wanted) {
+                    shown();
+                    enter(el, spec);
+                } else {
+                    // Hidden rather than removed once it has finished going:
+                    // the element belongs to the markup, not to the animation
+                    animateOut(el, spec, hidden);
+                }
             };
-            
-            evaluateExpression();
-            component.onStateChange(evaluateExpression, signal);
+
+            apply(false);
+
+            // What an update brings is the markup as the server renders it,
+            // which says nothing about what is hidden here
+            component.onStateChange(() => apply(true), signal);
         },
 
-        stream({ el, expression, component, signal }) {
-            el.setAttribute('data-pb-stream', expression);
-            component.onStreamUpdate((data) => {
-                if (data.target === expression) {
-                    el.textContent = data.content;
-                }
+        /**
+         * Show what an action streams here, as it streams it.
+         *
+         *     <div pb:stream="summary"></div>
+         *     <div pb:stream.replace="status"></div>
+         *
+         * What arrives is added to what is there, so an answer written a word
+         * at a time reads as it is written. Written .replace, each piece stands
+         * in place of the last, which is what a status line wants.
+         */
+        stream({ el, expression, component, modifiers, signal }) {
+            const replacing = modifiers.has('replace');
+
+            component.onStreamUpdate((chunk) => {
+                if (chunk.to !== expression) return;
+
+                if (chunk.replace || replacing) el.textContent = chunk.content;
+                else el.textContent += chunk.content;
+            }, signal);
+
+            // A second run starts from nothing rather than from where the first
+            // one left off: what is streamed is the answer, not more of it
+            component.onLoadingStart((payload) => {
+                if (!replacing && Directives.matchesTarget(el, payload)) el.textContent = '';
             }, signal);
         },
 
@@ -435,8 +690,9 @@ export const Directives = {
             Array.from(el.attributes || []).forEach(attr => {
                 if (!attr.name.startsWith('pb:')) return;
 
-                // Syntax parsing: "pb:click.prevent" -> name: "click", modifier: "prevent"
-                const [directiveName, modifier] = attr.name.replace('pb:', '').split('.');
+                // "pb:model.live.debounce.500ms" -> name: "model", modifiers: the rest
+                const [directiveName] = attr.name.replace('pb:', '').split('.');
+                const modifiers = Modifiers.from(attr.name);
                 const handler = this.handlers[directiveName];
 
                 if (!handler) return;
@@ -457,7 +713,16 @@ export const Directives = {
                 const controller = new AbortController();
                 bound.set(attr.name, { expression: attr.value, controller });
 
-                handler({ el, expression: attr.value, component, modifier, signal: controller.signal });
+                handler({
+                    el,
+                    expression: attr.value,
+                    component,
+                    modifiers,
+                    // What a handler taking a single modifier has always read,
+                    // kept for the directives a project registers of its own
+                    modifier: modifiers.first,
+                    signal: controller.signal,
+                });
             });
         });
     },

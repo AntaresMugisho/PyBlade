@@ -132,6 +132,13 @@ class LiveComponent:
         # action it sends
         self._known_components = ()
 
+        # What the action has streamed, when there is nowhere to stream it to
+        self._streams = []
+
+        # Where to stream to, when the response is being written as the action
+        # runs rather than after it
+        self._stream_sink = None
+
         # A list or a dictionary declared on the class is one object, shared by
         # every component of that class. Each takes a copy of its own, so that
         # appending to one does not change what the next one starts from.
@@ -401,6 +408,44 @@ class LiveComponent:
 
         return listeners
 
+    @classmethod
+    def _streams_from(cls, action_name):
+        """Whether an action answers in pieces, as it goes.
+
+        Only an action of the component's own: the names the client may send
+        that are not one -- a refresh, a property being set -- are answered the
+        plain way, and so is a name that is nothing at all.
+        """
+        action = cls._own_attributes().get(action_name)
+
+        return callable(action) and getattr(action, "pb_streamed", False) is True
+
+    @classmethod
+    def _confirmations(cls):
+        """The actions that must be confirmed, mapped to what the page is to ask.
+
+        Read from the methods the component declares, the way its listeners are:
+        an action says so with @confirm, which only marks it.
+        """
+        confirmations = {}
+
+        for name, value in cls._own_attributes().items():
+            message = getattr(value, "pb_confirm", None)
+            if message is not None:
+                confirmations[name] = message
+
+        return confirmations
+
+    def _confirm_action(self, method_name, confirmed):
+        """Refuse an action that had to be confirmed and was not."""
+        if method_name not in self._confirmations() or confirmed:
+            return
+
+        raise PermissionError(
+            f"The '{method_name}' action of the {type(self).__name__} component "
+            "must be confirmed before it is called."
+        )
+
     def _resolved_listeners(self):
         """The listeners of the component, with the event names it builds resolved.
 
@@ -573,6 +618,9 @@ class LiveComponent:
             # emitted. Signed with the rest: what a component listens for is
             # not the browser's to decide.
             "listeners": self._resolved_listeners(),
+            # What the page is to ask before calling an action, signed with the
+            # rest: what a component asks is not the browser's to rewrite
+            "confirmations": self._confirmations(),
         }
 
         # Attach signature
@@ -615,7 +663,7 @@ class LiveComponent:
 
         return {name: properties[name] for name in parameters if name in properties}
 
-    def _handle_event(self, event_name, data):
+    def _handle_event(self, event_name, data, confirmed=False):
         """Call the method that listens for the given event, with what it carries.
 
         The client names the event, never the method: which one handles it is
@@ -629,6 +677,8 @@ class LiveComponent:
             raise NameError(
                 f"The {type(self).__name__} component does not listen for the '{event_name}' event."
             )
+
+        self._confirm_action(method_name, confirmed)
 
         method = getattr(self, method_name)
 
@@ -722,13 +772,27 @@ class LiveComponent:
         )
 
     @classmethod
-    def update_component(cls, state, action_name, action_args = [], request=None, known=()):
+    def update_component(
+        cls, state, action_name, action_args=[], request=None, known=(), updates=None,
+        confirmed=False, sink=None,
+    ):
         """
         Manage the livfecycle on every AJAX request.
 
         `known` is what the client says it already holds: the live components
         written in this one's template that are on the page are left where they
         are rather than started over.
+
+        `updates` is what the page holds and the server has not seen: a field
+        written pb:model keeps what is typed into it until the component next
+        has something to ask, and then sends it along. It is applied before the
+        action runs, so that the action sees the form as the reader left it.
+
+        `confirmed` is the page saying the reader was asked and answered, which
+        an action written @confirm will not run without.
+
+        `sink` is where an action writing @streamed sends what it streams, as it
+        streams it. Without one, what it streams is kept and sent with the answer.
         """
         # 1. Recréer l'instance
         instance = cls.deserialize(state)
@@ -736,27 +800,36 @@ class LiveComponent:
         instance._inherit = False
         instance._rerendering = True
         instance._known_components = known
+        instance._stream_sink = sink
 
         # 2. Hook : hydrate()
         instance.hydrate()
 
+        # 3. What was typed into the form and not sent until now. Set the way
+        # any property is, so that the hooks watching one run for it too.
+        if isinstance(updates, dict):
+            for name, value in updates.items():
+                instance._set_property(name, value)
+
         outcome = None
 
-        # 3. A refresh asks for nothing but a new rendering
+        # 4. A refresh asks for nothing but a new rendering
         if action_name == "$refresh":
             pass
 
-        # 4. If the action consists on updating a property (e.g., pb:model)
+        # 5. If the action consists on updating a property (e.g., pb:model)
         elif action_name == "$set":
             instance._set_property(action_args[0], action_args[1])
 
-        # 5. An event another component emitted, come back to be handled here
+        # 6. An event another component emitted, come back to be handled here
         elif action_name == "$event":
             event_name = action_args[0] if action_args else None
             data = action_args[1] if len(action_args) > 1 else {}
-            outcome = instance._handle_event(event_name, data if isinstance(data, dict) else {})
+            outcome = instance._handle_event(
+                event_name, data if isinstance(data, dict) else {}, confirmed=confirmed
+            )
 
-        # 6. If it's a method calling
+        # 7. If it's a method calling
         else:
             # Only the methods the component itself declares are within reach of
             # the client, never the ones it inherits, which drive it.
@@ -770,9 +843,11 @@ class LiveComponent:
                     )
                 raise NameError(f"Method '{action_name}' is not defined")
 
+            instance._confirm_action(action_name, confirmed)
+
             outcome = methods[action_name](*action_args)
 
-        # 7. Hooks. An action that asked not to render answers with its new
+        # 8. Hooks. An action that asked not to render answers with its new
         # state alone, and the page is left as it is.
         if instance._skip_render:
             instance._rendered = None
@@ -781,12 +856,17 @@ class LiveComponent:
             instance.render()
             instance.rendered(instance._rendered)
 
-        # 8. Return the new HTML and the new serialized state for the frontend
+        # 9. Return the new HTML and the new serialized state for the frontend
         response = {
             "html": instance._rendered,
             "snapshot": instance.serialize(),
             "events": instance._get_events(),
         }
+
+        # What the action streamed with nowhere to stream it to, which reaches
+        # the page with the answer rather than as it was written
+        if instance._streams:
+            response["streams"] = instance._streams
 
         # What the action returned, when it asked the client to go somewhere
         if isinstance(outcome, dict) and "redirect" in outcome:
@@ -861,6 +941,26 @@ class LiveComponent:
 
         return EmittedEvent(emitted)
 
+
+    def stream(self, to: str, content, replace: bool = False):
+        """Send content to an element on the page, without waiting to be done.
+
+            self.stream("summary", word)
+            self.stream("summary", everything, replace=True)
+
+        `to` names the element, which says so with pb:stream. What is sent is
+        added to what is there, unless it is to replace it.
+
+        An action written @streamed sends it as it goes; one that is not keeps
+        it and sends it with its answer, so what is written still arrives -- all
+        at once rather than as it was written.
+        """
+        chunk = {"to": to, "content": str(content), "replace": bool(replace)}
+
+        if self._stream_sink is not None:
+            self._stream_sink(chunk)
+        else:
+            self._streams.append(chunk)
 
     def skip_render(self):
         """Call an action without calling the render method.

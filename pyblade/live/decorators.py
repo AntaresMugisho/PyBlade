@@ -84,6 +84,58 @@ def on(*events: str):
     return decorator
 
 
+#: What the page asks when an action was marked without a message of its own
+DEFAULT_CONFIRMATION = "Are you sure?"
+
+
+def confirm(message=None):
+    """Ask before the action runs, and refuse it if nothing was answered.
+
+        @confirm("Delete this post? This cannot be undone.")
+        def delete(self):
+            ...
+
+    The mark is on the action rather than on the button that calls it, so that
+    the same action reached by a button that forgot to ask, or by a call written
+    by hand, is refused rather than carried out.
+
+    It guards against reaching an action by accident, and nothing more: a client
+    that means harm can say it confirmed as easily as it can call the action at
+    all. What must not happen without the right to it belongs behind a check on
+    that right, not behind this.
+    """
+    if callable(message):
+        message.pb_confirm = DEFAULT_CONFIRMATION
+        return message
+
+    def decorator(fn):
+        fn.pb_confirm = message or DEFAULT_CONFIRMATION
+        return fn
+
+    return decorator
+
+
+def streamed(fn):
+    """Answer in pieces, as the action goes, rather than once it has finished.
+
+        @streamed
+        def summarize(self):
+            for word in answer:
+                self.stream("summary", word)
+
+    Whatever the action streams reaches the page while it is still running, so
+    a long answer is read as it is written rather than waited for.
+
+    It costs something: the action runs beside the response rather than before
+    it, on a thread of its own. An action that does not say so keeps the plainer
+    way -- one answer, when it is done -- and what it streams, if it streams
+    anything, arrives with that answer instead.
+    """
+    fn.pb_streamed = True
+
+    return fn
+
+
 # Not implemented yet. Declared here so that the decorators of a live component
 # are all in one place, and so that what is still missing is plain to see.
 def validate(fn):
