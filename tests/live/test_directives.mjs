@@ -230,3 +230,34 @@ test('a callback registered by a directive is forgotten with its binding', () =>
 
     assert.equal(component.stateChangeCallbacks.size, 0);
 });
+
+// A component written inside another binds its own directives
+// ---------------------------------------------------------------------------
+
+test('a directive inside a nested component is not bound by the one around it', () => {
+    const nestedButton = new FakeElement({ 'pb:click': 'bump' });
+    const nestedRoot = new FakeElement({ 'pb:id': 'child' }, [nestedButton]);
+    const own = new FakeElement({ 'pb:click': 'save' });
+    const root = new FakeElement({ 'pb:id': 'parent' }, [own, nestedRoot, nestedButton]);
+
+    // closest() is what tells one component's elements from another's
+    const boundary = (el) => (el === nestedButton || el === nestedRoot ? nestedRoot : root);
+    [root, own, nestedRoot, nestedButton].forEach(el => { el.closest = () => boundary(el); });
+
+    const component = fakeComponent(root);
+    Directives.apply(root, component);
+
+    // pb:id is not a directive, so the roots themselves bind nothing
+    assert.deepEqual([...component._bindings.keys()], [own]);
+});
+
+test('an element of the component itself is still bound', () => {
+    const own = new FakeElement({ 'pb:click': 'save' });
+    const root = new FakeElement({ 'pb:id': 'parent' }, [own]);
+    [root, own].forEach(el => { el.closest = () => root; });
+
+    const component = fakeComponent(root);
+    Directives.apply(root, component);
+
+    assert.equal(component._bindings.has(own), true);
+});

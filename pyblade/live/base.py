@@ -5,7 +5,6 @@ from typing import Any, Dict, Pattern
 from uuid import uuid4
 import json
 import inspect
-from functools import wraps
 from pprint import pprint # noqa
 
 from pyblade.engine import loader
@@ -16,10 +15,85 @@ from pyblade.config import settings
 from .security import generate_checksum
 
 
-_OPENING_TAG_PATTERN: Pattern = re.compile(r"<(?P<tag>\w+)\s*(?P<attributes>.*?)>")
+#: The opening tag of the root element of a component. A slot the component
+#: declares is not one: it is markup for the layout to render, not the element
+#: the component is put back into, hence the pb- tags left out.
+_OPENING_TAG_PATTERN: Pattern = re.compile(r"<(?P<tag>(?!pb-)[a-zA-Z][\w.-]*)\s*(?P<attributes>.*?)>")
 
 #: Values a component may share with its class without either changing under the other
 _IMMUTABLE = (str, bytes, int, float, bool, complex, tuple, frozenset, type(None))
+
+#: The layout a page component renders inside when it names none. A project that
+#: has no such template renders its page components on their own.
+DEFAULT_LAYOUT = "layouts.app"
+
+#: What an event name reads from the component it is declared on, as in
+#: @on("post-updated.{post.id}")
+_PLACEHOLDER_PATTERN: Pattern = re.compile(r"\{([^{}]+)\}")
+
+
+class EmittedEvent:
+    """An event on its way out, and who it is meant for.
+
+    Handed back by emit() so that the component may say who is to receive it,
+    and nothing more: the event is already on its way, the modifiers only narrow
+    who the client hands it to.
+
+        self.emit("post-created").to("Dashboard")
+        self.emit("post-created").self()
+    """
+
+    def __init__(self, event: Dict[str, Any]):
+        self._event = event
+
+    def to(self, component: str):
+        """Hand the event to components of that class alone."""
+        self._event["to"] = component
+        return self
+
+    def self(self):
+        """Keep the event for the component that emitted it."""
+        self._event["self"] = True
+        return self
+
+
+class LiveRender:
+    """What the live components written in a template need to know about the
+    rendering they are part of.
+
+    A live component written in the template of another is not rendered afresh
+    every time its parent is: it is a component of its own, with a state of its
+    own, and the page already holds it. What it needs from the rendering around
+    it is an identity that does not change under it, and whether the parent is
+    being rendered for the first time or over again.
+    """
+
+    def __init__(self, parent_id: str, rerendering: bool = False, known=()):
+        self.parent_id = parent_id
+        self.rerendering = rerendering
+
+        #: The components the client says it already holds, so that one already
+        #: on the page is left where it is rather than rendered over again
+        self.known = set(known)
+
+        self._counts = {}
+
+    def child_id(self, name: str, key=None):
+        """The id of a live component written in the template being rendered.
+
+        The same component gets the same id every time its parent renders, so
+        that the page keeps the one it holds instead of starting a new one. A
+        key names it outright; without one it is told apart by its name and by
+        how many of that name came before it, which is stable as long as what
+        the template renders is.
+        """
+        if key is not None:
+            return str(key)
+
+        index = self._counts.get(name, 0)
+        self._counts[name] = index + 1
+
+        return f"{self.parent_id}-{name.replace('.', '-')}-{index}"
 
 
 class LiveComponent:
@@ -29,6 +103,9 @@ class LiveComponent:
     #: name points at. Reserved like everything else the base class declares, so
     #: it never travels to the client.
     template_name = None
+
+    #: The layout the component renders inside when it is a page of its own,
+    #: written here or set by the @layout decorator. Reserved likewise.
     layout_name = None
 
     def __init__(self, pb_id: str = None):
@@ -41,6 +118,19 @@ class LiveComponent:
         # on the first rendering, which is a whole page; it is not when an action
         # answers with the component to be put back where it already is.
         self._inherit = True
+
+        # The layout rendered around the component, when it is a page of its own.
+        # Only a component reached through as_view() is a page: one rendered as a
+        # tag is already inside one, and nothing is put around it.
+        self._layout = None
+
+        # Whether this is a rendering of a component the page already holds,
+        # which an action asks for and the first rendering is not
+        self._rerendering = False
+
+        # The components the client says it holds, as it says so with every
+        # action it sends
+        self._known_components = ()
 
         # A list or a dictionary declared on the class is one object, shared by
         # every component of that class. Each takes a copy of its own, so that
@@ -69,7 +159,7 @@ class LiveComponent:
         # Update the context
         context |= self._context()
 
-        self._rendered = template.render(context, inherit=self._inherit)
+        self._rendered = template.render(context, inherit=self._inherit, layout=self._page_layout())
 
         return self._rendered
 
@@ -96,7 +186,7 @@ class LiveComponent:
         # Update context
         context |= self._context()
 
-        self._rendered = template.render(context, inherit=self._inherit)
+        self._rendered = template.render(context, inherit=self._inherit, layout=self._page_layout())
 
         return self._rendered
 
@@ -191,6 +281,42 @@ class LiveComponent:
 
         return name
 
+    @classmethod
+    def get_layout_name(cls):
+        """The layout a component rendered as a page of its own renders inside.
+
+        A page component is not a whole document, it is the content of one, and
+        the layout is what surrounds it. It is named on the class, by the
+        @layout decorator or by writing layout_name, rather than in the template:
+        the same component renders as a page under one route and inside another
+        page as a tag, and only the first of the two is surrounded by anything.
+
+        Left unsaid, it is DEFAULT_LAYOUT, which a project is free not to have:
+        a component with no layout to render inside renders on its own.
+        """
+        return cls.layout_name or DEFAULT_LAYOUT
+
+    def _page_layout(self):
+        """The layout to render around this particular rendering, if any.
+
+        There is one only when the component is a page of its own and the layout
+        is rendered around it, which the first rendering of a page is and an
+        action answering with the component alone is not.
+        """
+        if self._layout is None or not self._inherit:
+            return None
+
+        # A project is free to have no layouts/app.html. A component that never
+        # named a layout renders on its own rather than failing on a template it
+        # did not ask for; one that named its own is told when it is missing.
+        if self._layout == DEFAULT_LAYOUT and type(self).layout_name is None:
+            try:
+                loader.load_template(self._layout)
+            except TemplateNotFoundError:
+                return None
+
+        return self._layout
+
     def _locate(self):
         """Where the class of the component lives, read from the components directory."""
         try:
@@ -226,7 +352,7 @@ class LiveComponent:
     def _declares(cls, name: str) -> bool:
         """Whether the component writes a hook of its own rather than inheriting it."""
         for klass in cls.__mro__:
-            if klass is Component:
+            if klass is LiveComponent:
                 return False
             if name in vars(klass):
                 return True
@@ -239,7 +365,7 @@ class LiveComponent:
         attributes = {}
 
         for klass in reversed(cls.__mro__):
-            if klass is Component or not issubclass(klass, Component):
+            if klass is LiveComponent or not issubclass(klass, LiveComponent):
                 continue
 
             for name, value in vars(klass).items():
@@ -258,6 +384,70 @@ class LiveComponent:
         holds whatever the component has been through.
         """
         return {name: value for name, value in cls._own_attributes().items() if not callable(value)}
+
+    @classmethod
+    def _listeners(cls):
+        """The events the component listens for, mapped to the method that handles each.
+
+        A method says so with the @on decorator, which only marks it: what the
+        marks add up to is read here, from the methods the component declares,
+        so that a listener is a component method like any other.
+        """
+        listeners = {}
+
+        for name, value in cls._own_attributes().items():
+            for event in getattr(value, "pb_events", ()):
+                listeners[event] = name
+
+        return listeners
+
+    def _resolved_listeners(self):
+        """The listeners of the component, with the event names it builds resolved.
+
+        An event name may name a property between braces, and it is what the
+        property holds that the event is called. Resolved against the component
+        as it stands, on every request: the post a component is looking at may
+        well have changed since the page was rendered.
+
+        A name that cannot be resolved is left out rather than advertised as it
+        was written: an event nothing can emit is an event nobody listens for.
+        """
+        resolved = {}
+
+        for event, method in self._listeners().items():
+            name = self._resolve_event_name(event)
+            if name is not None:
+                resolved[name] = method
+
+        return resolved
+
+    def _resolve_event_name(self, event: str):
+        """Read the placeholders of an event name, or None if one cannot be read."""
+        if "{" not in event:
+            return event
+
+        try:
+            return _PLACEHOLDER_PATTERN.sub(lambda match: str(self._read_path(match.group(1).strip())), event)
+        except (AttributeError, KeyError, IndexError, TypeError):
+            return None
+
+    def _read_path(self, path: str):
+        """Follow a dotted path into what the component holds.
+
+        It starts at a property of the component, never at its machinery: an
+        event name is written by the developer but travels to the client, and
+        what it is built from is what the client is told.
+        """
+        parts = path.split(".")
+
+        if not parts[0] or self._is_reserved(parts[0]):
+            raise AttributeError(f"'{path}' is not a property of the {type(self).__name__} component.")
+
+        value = self
+        for part in parts:
+            value = value[part] if isinstance(value, dict) else getattr(value, part)
+
+        return value
 
     def _set_property(self, name: str, value):
         """Set a property of the component, running the hooks that watch it.
@@ -287,6 +477,14 @@ class LiveComponent:
         token in it is a form whose every submission is refused.
         """
         context = self._get_state()
+
+        # The live components written in the template are rendered from here,
+        # and this is what tells them which rendering they belong to.
+        context["__live"] = LiveRender(
+            parent_id=self._id,
+            rerendering=self._rerendering,
+            known=self._known_components,
+        )
 
         if self._request is None:
             return context
@@ -370,7 +568,11 @@ class LiveComponent:
         payload = {
             "id": self._id,
             "class": class_path,
-            "state": self._get_state()
+            "state": self._get_state(),
+            # So the client knows which components to wake when an event is
+            # emitted. Signed with the rest: what a component listens for is
+            # not the browser's to decide.
+            "listeners": self._resolved_listeners(),
         }
 
         # Attach signature
@@ -398,28 +600,55 @@ class LiveComponent:
 
     # LIFECYCLE CALLERS (SSR and AJAX HANDLING)
     @staticmethod
-    def _mount_arguments(mount, properties):
-        """The properties mount() asks for, among the ones the component was given.
+    def _accepted_arguments(callable_, properties):
+        """The properties a callable asks for, among the ones on offer.
 
         A component declares what it expects as the parameters of its mount(),
-        so only those are passed to it. One that takes **kwargs is handed
-        everything, and one that takes nothing is called with nothing.
+        and a listener as the parameters of the method @on marks, so only those
+        are passed. One that takes **kwargs is handed everything, and one that
+        takes nothing is called with nothing.
         """
-        parameters = inspect.signature(mount).parameters
+        parameters = inspect.signature(callable_).parameters
 
         if any(parameter.kind is parameter.VAR_KEYWORD for parameter in parameters.values()):
             return dict(properties)
 
         return {name: properties[name] for name in parameters if name in properties}
 
+    def _handle_event(self, event_name, data):
+        """Call the method that listens for the given event, with what it carries.
+
+        The client names the event, never the method: which one handles it is
+        read here, from what the component declares with @on. An event nothing
+        listens for is refused, so that no name coming from a browser can reach
+        a method that was never offered to it.
+        """
+        method_name = self._resolved_listeners().get(event_name)
+
+        if method_name is None:
+            raise NameError(
+                f"The {type(self).__name__} component does not listen for the '{event_name}' event."
+            )
+
+        method = getattr(self, method_name)
+
+        # The data of an event is a dictionary, and a listener is handed the
+        # entries it asks for by name, the way mount() is handed its properties.
+        return method(**self._accepted_arguments(method, data))
+
     @classmethod
-    def render_initial(cls, attributes=None, request=None):
+    def render_initial(cls, attributes=None, request=None, layout=None):
         """
         Manage the FIRST lifecycle of Server-Side Rendering.
 
         A live component declares what it holds as the attributes of its class,
         which is where the defaults come from. What is left to be given is the
         attributes of the call, and they override those defaults.
+
+        A layout is given when the component is a page of its own, and is
+        rendered around it the way a layout is rendered around the template that
+        extends it: the markup of the component fills its slot and the slots the
+        component declares are read from the layout by name.
         """
         # 1. What the component was given, be it as a dictionary or as tag attributes
         properties = dict(attributes or {})
@@ -430,11 +659,12 @@ class LiveComponent:
         # 2. Initial instanciation with component_id
         instance = cls(pb_id)
         instance._request = request
+        instance._layout = layout
 
         # 3. Résolution of mount() arguments, among the properties given.
         # A component that does not write its own mount() takes none of them:
         # the mount() of the base class accepts anything and would swallow them all.
-        arguments = cls._mount_arguments(instance.mount, properties) if cls._declares("mount") else {}
+        arguments = cls._accepted_arguments(instance.mount, properties) if cls._declares("mount") else {}
 
         # 4. The properties override the defaults declared on the class, which
         # are read from there and do not have to be copied over. The ones mount()
@@ -451,47 +681,61 @@ class LiveComponent:
         instance.render()
         instance.rendered(instance._rendered)
 
-        snapshot = instance.serialize()
+        return instance._with_snapshot(instance._rendered)
 
-        return cls._with_snapshot(instance._rendered, cls._snapshot_script(pb_id, snapshot))
+    def _with_snapshot(self, rendered):
+        """Write what the component boots from on its own root element.
+
+        On the element rather than in a script beside it: the two belong
+        together. Morphing keeps an element or replaces it whole, so a snapshot
+        written on one is never left behind by the markup it describes, and a
+        page brought in by navigating carries the state of its components with
+        its markup rather than as loose tags to be gathered afterwards.
+
+        The snapshot is what travels back to the server on every request, and is
+        signed. The events the component emitted while mounting are only on
+        their way out, and are written apart from it.
+        """
+        attributes = f"pb:snapshot='{self._as_attribute(self.serialize())}'"
+
+        events = self._get_events()
+        if events:
+            attributes += f" pb:events='{self._as_attribute(events)}'"
+
+        # The id is on the root element and nowhere else, so there is one place
+        # for this to land and no tag to look for.
+        return rendered.replace(f'pb:id="{self._id}"', f'pb:id="{self._id}" {attributes}', 1)
 
     @staticmethod
-    def _with_snapshot(rendered, script):
-        """Put the snapshot in the markup, inside the body when there is one.
+    def _as_attribute(payload):
+        """Write a payload as the value of a single-quoted HTML attribute.
 
-        A component that is a page renders a whole document, and anything after
-        </html> is only in the page because the browser puts it back.
+        Only what would end the attribute or open a tag is escaped, which leaves
+        the double quotes of the JSON as they are: escaping those instead would
+        be six characters for every name and every string it holds.
         """
-        closing = rendered.rfind("</body>")
-
-        if closing == -1:
-            return rendered + script
-
-        return rendered[:closing] + script + rendered[closing:]
-
-    @staticmethod
-    def _snapshot_script(pb_id, snapshot):
-        """The snapshot the client boots the component from, written as data.
-
-        Data rather than a statement to run: navigating morphs the markup of the
-        next page in, and a <script> that is morphed into a document is never
-        run by the browser. Read as the text of the tag, it works the same on
-        the first load and on every page that follows.
-        """
-        # '</script>' anywhere in the state would close the tag around it
-        payload = json.dumps(snapshot).replace("</", "<\\/")
-
-        return f'<script type="application/json" pb:snapshot="{pb_id}">{payload}</script>'
+        return (
+            json.dumps(payload)
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace("'", "&#39;")
+        )
 
     @classmethod
-    def update_component(cls, state, action_name, action_args = [], request=None):
+    def update_component(cls, state, action_name, action_args = [], request=None, known=()):
         """
         Manage the livfecycle on every AJAX request.
+
+        `known` is what the client says it already holds: the live components
+        written in this one's template that are on the page are left where they
+        are rather than started over.
         """
         # 1. Recréer l'instance
         instance = cls.deserialize(state)
         instance._request = request
         instance._inherit = False
+        instance._rerendering = True
+        instance._known_components = known
 
         # 2. Hook : hydrate()
         instance.hydrate()
@@ -506,7 +750,13 @@ class LiveComponent:
         elif action_name == "$set":
             instance._set_property(action_args[0], action_args[1])
 
-        # 5. If it's a method calling
+        # 5. An event another component emitted, come back to be handled here
+        elif action_name == "$event":
+            event_name = action_args[0] if action_args else None
+            data = action_args[1] if len(action_args) > 1 else {}
+            outcome = instance._handle_event(event_name, data if isinstance(data, dict) else {})
+
+        # 6. If it's a method calling
         else:
             # Only the methods the component itself declares are within reach of
             # the client, never the ones it inherits, which drive it.
@@ -522,7 +772,7 @@ class LiveComponent:
 
             outcome = methods[action_name](*action_args)
 
-        # 6. Hooks. An action that asked not to render answers with its new
+        # 7. Hooks. An action that asked not to render answers with its new
         # state alone, and the page is left as it is.
         if instance._skip_render:
             instance._rendered = None
@@ -531,7 +781,7 @@ class LiveComponent:
             instance.render()
             instance.rendered(instance._rendered)
 
-        # 7. Return the new HTML and the new serialized state for the frontend
+        # 8. Return the new HTML and the new serialized state for the frontend
         response = {
             "html": instance._rendered,
             "snapshot": instance.serialize(),
@@ -590,16 +840,26 @@ class LiveComponent:
 
     def dispatch(self, event: str, **data):
         """Dispatch an event. Same as emit()"""
-        self.emit(event, **data)
+        return self.emit(event, **data)
 
     def emit(self, event: str, **data):
         """Emit an event. Same as dispatch()
 
-        The events an action emits are handed to the client with the new HTML,
-        which raises each of them on the window as 'pb:<name>', the data they
-        carry as the detail of the event.
+        The events an action emits are handed to the client with the new HTML.
+        The client calls every component listening for one of them, and raises
+        each on the window as 'pb:<name>' for whatever plain JavaScript is
+        listening, the data it carries as the detail of the event.
+
+        An event goes to every component that listens for it. What comes back
+        says who else it is for:
+
+            self.emit("post-created").to("Dashboard")
+            self.emit("post-created").self()
         """
-        self._events.append({"name": event, "data": data})
+        emitted = {"name": event, "data": data}
+        self._events.append(emitted)
+
+        return EmittedEvent(emitted)
 
 
     def skip_render(self):
@@ -634,14 +894,21 @@ class LiveComponent:
 
         The arguments captured by the route are handed to the component the way
         the attributes of a tag would be, so mount() receives the ones it asks
-        for. What surrounds the component on the page is what its template
-        extends: a component that is a page writes @extends("layouts.app") and
-        its content fills the layout in, as any template does.
+        for. What surrounds the component on the page is the layout it names on
+        its class, with the @layout decorator or by writing layout_name; the
+        markup of the component fills the slot of that layout and the slots the
+        component declares are read from it by name, as for any template that
+        extends another.
         """
         from django.http import HttpResponse
 
         def view(request, *args, **kwargs):
-            return HttpResponse(cls.render_initial({**properties, **kwargs}, request=request))
+            page = cls.render_initial(
+                {**properties, **kwargs},
+                request=request,
+                layout=cls.get_layout_name(),
+            )
+            return HttpResponse(page)
 
         # So that a project can tell which component a route renders
         view.component = cls

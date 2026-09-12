@@ -1,4 +1,5 @@
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -7,10 +8,23 @@ import unittest
 from pathlib import Path
 
 from pyblade.config import settings
-from pyblade.live import Component
+from pyblade.live import LiveComponent
 
 
-class Counter(Component):
+def without_snapshot(markup):
+    """The markup with the snapshot the root element carries taken out.
+
+    What a component boots from is written on its root element, which makes the
+    opening tag long and its exact text beside the point of most of what is
+    checked here.
+    """
+    if isinstance(markup, bytes):
+        markup = markup.decode()
+
+    return re.sub(r" pb:(?:snapshot|events)='[^']*'", "", markup)
+
+
+class Counter(LiveComponent):
     """A component as a developer writes one."""
 
     count = 0
@@ -88,8 +102,9 @@ class TestComponentSurface(unittest.TestCase):
     def test_the_snapshot_carries_nothing_but_the_state(self):
         snapshot = self.component.serialize()
 
-        self.assertEqual(set(snapshot), {"id", "class", "state", "checksum"})
+        self.assertEqual(set(snapshot), {"id", "class", "state", "listeners", "checksum"})
         self.assertEqual(snapshot["state"], {"count": 0, "label": "clicks"})
+        self.assertEqual(snapshot["listeners"], {})
 
 
 class TestClientActions(unittest.TestCase):
@@ -144,7 +159,7 @@ class TestMagicActions(unittest.TestCase):
 
     def _component(self, **body):
         body.setdefault("render", lambda self: self.render_inline("<div>{{ count }}</div>", context={}))
-        return type("Magic", (Component,), {"count": 0, "label": "clicks", "tags": ["a"], **body})("pb-test")
+        return type("Magic", (LiveComponent,), {"count": 0, "label": "clicks", "tags": ["a"], **body})("pb-test")
 
     def test_reset_restores_a_property_to_what_the_class_declares(self):
         component = self._component()
@@ -214,7 +229,7 @@ class TestMagicActions(unittest.TestCase):
 
         cls = type(
             "Hooked",
-            (Component,),
+            (LiveComponent,),
             {
                 "count": 0,
                 "render": lambda self: self.render_inline("<div>{{ count }}</div>", context={}),
@@ -241,7 +256,7 @@ class TestMagicActions(unittest.TestCase):
         """The state is the caller's; a component works on one of its own."""
         cls = type(
             "Appender",
-            (Component,),
+            (LiveComponent,),
             {
                 "tags": [],
                 "render": lambda self: self.render_inline("<div>{{ tags }}</div>", context={}),
@@ -257,7 +272,7 @@ class TestMagicActions(unittest.TestCase):
     def test_an_action_may_reset_the_component_from_the_client(self):
         cls = type(
             "Resettable",
-            (Component,),
+            (LiveComponent,),
             {
                 "count": 0,
                 "render": lambda self: self.render_inline("<div>{{ count }}</div>", context={}),
@@ -276,7 +291,7 @@ class TestServerToClient(unittest.TestCase):
     def _update(self, action, body, state=None):
         body.setdefault("count", 0)
         body.setdefault("render", lambda self: self.render_inline("<div>{{ count }}</div>", context={}))
-        cls = type("Talker", (Component,), body)
+        cls = type("Talker", (LiveComponent,), body)
         return cls.update_component({"_id": "pb-test", **(state or {})}, action)
 
     def test_an_action_emits_an_event(self):
@@ -324,7 +339,7 @@ class TestServerToClient(unittest.TestCase):
         self.assertNotIn("redirect", result)
 
     def test_a_renderless_action_sends_no_html(self):
-        from pyblade.live.base import renderless
+        from pyblade.live.decorators import renderless
 
         result = self._update("go", {"go": renderless(lambda self: self.set("count", 5))})
 
@@ -352,7 +367,7 @@ class TestInitialRendering(unittest.TestCase):
 
     def _component(self, **body):
         body.setdefault("render", lambda self: self.render_inline("<div>{{ count }}</div>", context={}))
-        return type("Greeter", (Component,), {"count": 0, **body})
+        return type("Greeter", (LiveComponent,), {"count": 0, **body})
 
     def test_class_defaults_make_up_the_initial_state(self):
         cls = self._component()
@@ -495,7 +510,7 @@ class LiveProjectTestCase(unittest.TestCase):
         """Write a live component, its class and the template it renders."""
         (self.components_dir / "live" / f"{name}.py").write_text(
             "from pyblade import live\n\n"
-            f"class {name.title().replace('_', '')}(live.Component):\n"
+            f"class {name.title().replace('_', '')}(live.LiveComponent):\n"
             + textwrap.indent(textwrap.dedent(body).strip(), "    ")
             + "\n"
         )
@@ -527,12 +542,12 @@ class TestLiveComponentTag(LiveProjectTestCase):
     def test_the_component_renders_with_its_defaults(self):
         html = self._render('<pb-live.counter key="c1" />')
 
-        self.assertIn('<div pb:id="c1">0</div>', html)
+        self.assertIn('<div pb:id="c1">0</div>', without_snapshot(html))
 
     def test_a_bound_attribute_reaches_the_component_as_a_value(self):
         html = self._render('<pb-live.counter :count="2 + 3" key="c1" />')
 
-        self.assertIn('<div pb:id="c1">5</div>', html)
+        self.assertIn('<div pb:id="c1">5</div>', without_snapshot(html))
         self.assertIn('"count": 5', html)
 
     def test_a_quoted_attribute_reaches_the_component_as_text(self):
@@ -554,7 +569,7 @@ class TestLiveComponentTag(LiveProjectTestCase):
         html = self._render('<pb-live.counter key="c1" />')
 
         # The class default wins over the one @props declares, and holds the state
-        self.assertIn('<div pb:id="c1">0 clicks</div>', html)
+        self.assertIn('<div pb:id="c1">0 clicks</div>', without_snapshot(html))
         self.assertIn('"state": {"count": 0}', html)
 
     def test_a_bound_attribute_is_evaluated_in_the_context_of_the_caller(self):
@@ -587,8 +602,9 @@ class TestAsView(LiveProjectTestCase):
 
         response = view(self._request())
 
-        self.assertIn(b'<script type="application/json" pb:snapshot="pb-', response.content)
-        self.assertIn(b'"class": "components.live.counter.Counter"', response.content)
+        self.assertRegex(response.content.decode(), r"""<div pb:id="pb-[^"]+" pb:snapshot='{""")
+        self.assertIn(b'&quot;class&quot;: &quot;components.live.counter.Counter&quot;'
+                      .replace(b"&quot;", b'"'), response.content)
 
     def test_the_layout_the_template_extends_wraps_the_page(self):
         self.write_template(
@@ -686,19 +702,23 @@ class TestAsView(LiveProjectTestCase):
 
         self.assertNotIn(b"request", response.content.split(b"pb:snapshot")[1])
 
-    def test_the_snapshot_is_data_rather_than_a_script_to_run(self):
-        """Navigation morphs new markup in, and a <script> that is morphed in never runs."""
+    def test_the_snapshot_travels_with_the_element_it_describes(self):
+        """Morphing keeps an element or replaces it whole, snapshot and all."""
         response = self.load_component().as_view()(self._request())
 
-        self.assertIn(b'type="application/json"', response.content)
-        self.assertNotIn(b"window.__PB_SNAPSHOTS__", response.content)
+        self.assertNotIn(b"<script", response.content.split(b"pb:snapshot")[0].split(b"<div")[-1])
+        self.assertIn(b"pb:snapshot='{", response.content)
 
-    def test_a_closing_script_tag_in_the_state_cannot_break_out(self):
-        self.write_component("note = '</script><b>x</b>'", "<div>{{ note }}</div>")
+    def test_a_quote_in_the_state_cannot_break_out_of_the_attribute(self):
+        self.write_component('''note = "it\'s <b>bold</b>"''', "<div>x</div>")
 
-        response = self.load_component().as_view()(self._request())
+        response = self.load_component().as_view()(self._request()).content.decode()
 
-        self.assertNotIn(b"</script><b>x</b>", response.content)
+        # Neither the quote that would end the attribute nor the bracket that
+        # would open a tag survives in it
+        snapshot = re.search(r"pb:snapshot='([^']*)'", response).group(1)
+        self.assertNotIn("<", snapshot)
+        self.assertIn("&#39;", snapshot)
 
     def test_the_view_carries_the_component_it_renders(self):
         """So that a project can tell which component a route is for."""
@@ -756,7 +776,7 @@ class TestTemplateName(unittest.TestCase):
                 """
                 from pyblade import live
 
-                class Counter(live.Component):
+                class Counter(live.LiveComponent):
                     count = 0
                 """
             )

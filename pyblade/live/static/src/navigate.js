@@ -103,30 +103,10 @@ export const Navigation = {
 
         Idiomorph.morph(target, source.outerHTML);
 
-        this.carrySnapshots(incoming);
-
         if (incoming.title) document.title = incoming.title;
         this.mergeHead(incoming);
 
         this.pyblade?.scan(target);
-    },
-
-    /**
-     * Bring across the snapshots the components of the new page boot from.
-     *
-     * They sit in the body of the page they came with, which is not always
-     * inside the region being replaced: a component that is a page has its
-     * snapshot written at the end of the document, well outside pb:root. A
-     * component booted without one has no state to send back, and the server
-     * turns away the first action it asks for.
-     */
-    carrySnapshots(incoming) {
-        incoming.querySelectorAll('script[pb\\:snapshot]').forEach((script) => {
-            const id = script.getAttribute('pb:snapshot');
-            if (document.querySelector(`script[pb\\:snapshot="${CSS.escape(id)}"]`)) return;
-
-            document.body.appendChild(document.importNode(script, true));
-        });
     },
 
     /**

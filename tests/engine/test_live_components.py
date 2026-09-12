@@ -81,9 +81,9 @@ class TestInlineRendering(unittest.TestCase):
     """A live component writing its template inline rather than in a file."""
 
     def _component(self, template_string, **state):
-        from pyblade.live import Component
+        from pyblade.live import LiveComponent
 
-        class Inline(Component):
+        class Inline(LiveComponent):
             template_name = "inline"
 
             def render(self):

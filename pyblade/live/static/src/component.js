@@ -84,6 +84,9 @@ export class Component {
                 body: JSON.stringify({
                     id: this.id,
                     snapshot: this.store.get(this.id),
+                    // What the page already holds, so that a component written
+                    // inside this one is left where it is rather than started over
+                    known: [...window.PyBlade.components.keys()],
                     ...payload
                 })
             });
@@ -102,11 +105,25 @@ export class Component {
         // A renderless action answers with its new state and no HTML at all,
         // and the page is left as it is
         if (html) {
-            Idiomorph.morph(this.element, html);
+            Idiomorph.morph(this.element, this.withNestedComponents(html), {
+                callbacks: {
+                    // A component written inside this one answers for itself.
+                    // Its element is left exactly as it is, with the state, the
+                    // listeners and the timers it has been keeping.
+                    beforeNodeMorphed: (node) => !this.isNested(node),
+                },
+            });
+
             Directives.apply(this.element, this);
+
+            // Whatever the new markup brought with it, and whatever it took away
+            window.PyBlade.scan(this.element);
+            window.PyBlade.prune();
         }
 
-        events.forEach(evt => window.dispatchEvent(new CustomEvent(`pb:${evt.name}`, { detail: evt.data })));
+        // Handed to the core rather than raised here: an event is for the other
+        // components on the page as much as for whatever JavaScript listens.
+        events.forEach(event => window.PyBlade.deliver(event, this.id));
 
         // Trigger state change callbacks
         this.stateChangeCallbacks.forEach(cb => cb());
@@ -158,6 +175,74 @@ export class Component {
 
     onDestroy(callback, signal) {
         return this._register(this.destroyCallbacks, callback, signal);
+    }
+
+    /**
+     * Whether a node belongs to a component written inside this one.
+     *
+     * The root of this component carries an id too, and that one is ours.
+     */
+    isNested(node) {
+        return node !== this.element && node.nodeType === 1 && node.hasAttribute('pb:id');
+    }
+
+    /**
+     * Put back the markup of the components this one only said the place of.
+     *
+     * A component already on the page is not rendered again: its parent answers
+     * with an empty element carrying its id. Morphing pairs the old markup with
+     * the new by what the two look like, so the placeholder is filled with what
+     * the page holds before it is handed over -- an empty element of another
+     * name would be taken for a different one and the component swept away with it.
+     */
+    withNestedComponents(html) {
+        if (!html.includes('pb:placeholder')) return html;
+
+        const incoming = document.createElement('div');
+        incoming.innerHTML = html;
+
+        incoming.querySelectorAll('[pb\\:placeholder]').forEach((placeholder) => {
+            const id = placeholder.getAttribute('pb:id');
+            const live = document.querySelector(`[pb\\:id="${CSS.escape(id)}"]`);
+
+            if (live) placeholder.replaceWith(live.cloneNode(true));
+        });
+
+        return incoming.innerHTML;
+    }
+
+    /**
+     * Emit an event from this component, as pb:click="emit('saved')" does.
+     */
+    emit(event) {
+        return window.PyBlade.deliver(event, this.id);
+    }
+
+    /**
+     * Answer an event this component listens for.
+     *
+     * What it listens for is read from the snapshot on every event rather than
+     * subscribed to once: an event name may be built from what the component
+     * holds, and what it holds changes with every answer it gets.
+     */
+    handleEvent(name, data = {}) {
+        const listeners = this.store.get(this.id)?.listeners || {};
+
+        if (!Object.prototype.hasOwnProperty.call(listeners, name)) return;
+
+        return this.sendRequest({ action: '$event', params: [name, data] });
+    }
+
+    /**
+     * Whether this component is the one named, as emit().to('Dashboard') names it.
+     *
+     * Either the class on its own or the whole path it is reached by, so that
+     * two components of the same name in different modules can be told apart.
+     */
+    isNamed(name) {
+        const path = this.store.get(this.id)?.class || '';
+
+        return path === name || path.split('.').pop() === name;
     }
 
     // Utility methods for directives

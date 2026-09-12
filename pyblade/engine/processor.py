@@ -35,6 +35,7 @@ class TemplateProcessor:
         template_name: str = None,
         template_path: str = None,
         inherit: bool = True,
+        layout: str = None,
     ) -> str:
         """
         Render a template with the given context.
@@ -43,6 +44,10 @@ class TemplateProcessor:
             template: The template string to render
             context: The context dictionary
             template_name: Optional name of the template file
+            layout: The layout to render the template inside, for a template
+                that names one elsewhere than in its own source. A live
+                component rendered as a page names it on its class; a template
+                writing @extends keeps the layout it writes.
 
         Returns:
             The rendered template
@@ -58,10 +63,15 @@ class TemplateProcessor:
         cache_context = self.context.copy()
 
         # A template renders differently depending on whether the layout it
-        # extends is rendered around it, so the two are cached apart. The key is
-        # the template itself, marked rather than the context, which is the
-        # caller's and is looked up with as it was given.
-        cache_key = template if inherit else f"\0own\0{template}"
+        # extends is rendered around it, and on which layout that is, so each is
+        # cached apart. The key is the template itself, marked rather than the
+        # context, which is the caller's and is looked up with as it was given.
+        if not inherit:
+            cache_key = f"\0own\0{template}"
+        elif layout:
+            cache_key = f"\0layout\0{layout}\0{template}"
+        else:
+            cache_key = template
 
         # Check cache first
         cached_result = self.cache.get(cache_key, cache_context)
@@ -75,7 +85,7 @@ class TemplateProcessor:
             if inherit:
                 # If the template extends another one, render the resulting tree
                 # instead, with the slots the template passes to its layout.
-                nodes, inherited_context = self._resolve_inheritance(nodes, self.context)
+                nodes, inherited_context = self._resolve_inheritance(nodes, self.context, layout=layout)
                 self.context.update(inherited_context)
             else:
                 # Rendering the template for itself: what it extends says what
@@ -99,16 +109,15 @@ class TemplateProcessor:
             raise e
 
     def _own_nodes(self, nodes):
-        """The content of a template, without the layout it extends.
+        """The content of a template, without the layout that surrounds it.
 
-        What a template extends says what surrounds it on a page. Rendered for
+        A layout says what surrounds a template on a page, whether the template
+        extends it or a live component names it on its class. Rendered for
         itself rather than as a page, as a live component is when it answers an
         action, it is that content alone that is wanted: the layout is already
-        on the page, around the very element the answer is morphed into.
+        on the page, around the very element the answer is morphed into, and so
+        are the slots the layout reads.
         """
-        if not any(isinstance(node, ExtendsNode) for node in nodes):
-            return nodes
-
         # The same split inheritance makes, keeping the part that would have
         # become the layout's default slot
         _, slots = self._split_child_nodes(nodes)
@@ -118,7 +127,7 @@ class TemplateProcessor:
     # TEMPLATE INHERITANCE
     # ------------------------------------------------------------------------------------------------------------
 
-    def _resolve_inheritance(self, nodes, context=None, _seen=None):
+    def _resolve_inheritance(self, nodes, context=None, _seen=None, layout=None):
         """
         Resolve the @extends directive of a parsed template, if any.
 
@@ -143,39 +152,43 @@ class TemplateProcessor:
             nodes: The parsed nodes of the template
             context: The rendering context, used to evaluate the layout name
             _seen: Internal, the layout names already visited, to detect cycles
+            layout: The layout to extend when the template does not name one itself, as a
+                live component rendered as a page names it on its class. A template writing
+                @extends keeps the layout it writes.
 
         Returns:
             A tuple (nodes, context_updates) where nodes is the node tree to render and
             context_updates holds the slot and the named slots the template passes to its layout.
-            Templates without @extends are returned untouched, along with an empty dictionary.
+            Templates without @extends and with no layout to render inside are returned untouched,
+            along with an empty dictionary.
         """
 
         extends = next((node for node in nodes if isinstance(node, ExtendsNode)), None)
-        if extends is None:
+        if extends is None and layout is None:
             return nodes, {}
 
         context = context or {}
-        layout_name = self._layout_name(extends, context)
+        layout_name = self._layout_name(extends, context) if extends else layout
 
         _seen = _seen or []
         if layout_name in _seen:
             raise TemplateRenderError(
                 f"Circular template inheritance detected: '{layout_name}' extends itself.",
-                line=extends.line,
-                column=extends.column,
+                line=extends.line if extends else None,
+                column=extends.column if extends else None,
                 help="Make sure the templates in the @extends chain do not extend each other.",
             )
 
         overrides, slots = self._split_child_nodes(nodes)
 
-        layout = loader.load_template(layout_name)
-        layout_nodes = Parser(Lexer(layout.content or "").tokenize()).parse()
+        layout_template = loader.load_template(layout_name)
+        layout_nodes = Parser(Lexer(layout_template.content or "").tokenize()).parse()
 
         try:
             layout_nodes, inherited = self._resolve_inheritance(layout_nodes, context, [*_seen, layout_name])
         except TemplateRenderError as exc:
             if getattr(exc, "template", None) is None:
-                setattr(exc, "template", layout)
+                setattr(exc, "template", layout_template)
             raise
 
         context_updates = dict(inherited)

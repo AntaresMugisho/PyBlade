@@ -70,6 +70,7 @@ class PyBlade:
         context: Optional[Dict] = None,
         template_path: Optional[Path] = None,
         inherit: bool = True,
+        layout: Optional[str] = None,
     ) -> str:
         """
         Render a template with the given context.
@@ -78,6 +79,8 @@ class PyBlade:
             template: The template string to render
             context: The context dictionary
             template_path: The full path to teh template file
+            layout: Optional layout to render the template inside, for a template
+                that names one elsewhere than in its own source
 
         Returns:
             The rendered template string
@@ -87,7 +90,7 @@ class PyBlade:
             context = {}
 
         try:
-            template = self._processor.render(template, context, inherit=inherit)
+            template = self._processor.render(template, context, inherit=inherit, layout=layout)
         except PyBladeException as exc:
             if settings.DEBUG:
 

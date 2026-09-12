@@ -27,15 +27,21 @@ export const Directives = {
             } else if (inString && char === stringChar) {
                 inString = false;
                 current += char;
-            } else if (!inString && char === '=') {
+            } else if (!inString && char === '=' && !inKeyword) {
                 inKeyword = true;
                 keywordName = current.trim();
                 current = '';
-            } else if (!inString && char === ',' && !inKeyword) {
+            } else if (!inString && char === ',') {
+                // A comma ends an argument, keyword or not: one written after
+                // another used to be swallowed by the value of the first.
                 if (current.trim()) {
-                    args.push(this.parseValue(current.trim()));
+                    args.push(inKeyword
+                        ? { [keywordName]: this.parseValue(current.trim()) }
+                        : this.parseValue(current.trim()));
                 }
                 current = '';
+                inKeyword = false;
+                keywordName = '';
             } else if (!inString && char === ' ' && !inKeyword) {
                 // Skip spaces outside strings and keywords
                 continue;
@@ -79,12 +85,84 @@ export const Directives = {
     },
 
     // Registry of built-in and custom directives
+    /**
+     * Read an expression that emits an event rather than calling the server.
+     *
+     *     emit('show-post-modal', id=3)
+     *     dispatch('saved').to('PostList')
+     *     emit('saved').self()
+     *
+     * Returns the event to emit, or null when the expression is an ordinary
+     * action, which is what most of them are.
+     */
+    parseEmit(expression) {
+        const opening = /^\s*(?:emit|dispatch)\s*\(/.exec(expression || '');
+        if (!opening) return null;
+
+        // Walk to the parenthesis that closes the call, so that one written
+        // inside a string or a nested call does not end it early
+        let depth = 0;
+        let inString = false;
+        let quote = '';
+        let i = opening[0].length - 1;
+
+        for (; i < expression.length; i++) {
+            const char = expression[i];
+
+            if (inString) {
+                if (char === quote) inString = false;
+            } else if (char === '"' || char === "'") {
+                inString = true;
+                quote = char;
+            } else if (char === '(') {
+                depth++;
+            } else if (char === ')') {
+                depth--;
+                if (depth === 0) break;
+            }
+        }
+
+        if (depth !== 0) return null;
+
+        const { args } = this.parseExpression(`emit(${expression.slice(opening[0].length, i)})`);
+        const [name, ...rest] = args;
+
+        if (typeof name !== 'string' || !name) return null;
+
+        // Anything written as key=value is data the event carries
+        const data = Object.assign({}, ...rest.filter(arg => arg && typeof arg === 'object'));
+        const event = { name, data };
+
+        // What follows the call says who the event is for
+        const modifiers = expression.slice(i + 1);
+        const modifier = /\.\s*(?:to\s*\(\s*['"]([^'"]*)['"]\s*\)|self\s*\(\s*\))/g;
+        let match;
+
+        while ((match = modifier.exec(modifiers)) !== null) {
+            if (match[1] === undefined) event.self = true;
+            else event.to = match[1];
+        }
+
+        return event;
+    },
+
+    /**
+     * Run what a directive was given: an event to emit, or an action to call.
+     */
+    invoke(expression, component) {
+        const event = this.parseEmit(expression);
+
+        if (event) return component.emit(event);
+
+        const { methodName, args } = this.parseExpression(expression);
+        return component.callServerMethod(methodName, args);
+    },
+
     handlers: {
         click({ el, expression, component, modifier, signal }) {
             el.addEventListener('click', (e) => {
                 if (modifier === 'prevent') e.preventDefault();
-                const { methodName, args } = Directives.parseExpression(expression);
-                component.callServerMethod(methodName, args);
+                Directives.invoke(expression, component);
             }, { signal });
         },
 
@@ -164,8 +242,7 @@ export const Directives = {
                 if (submitButton) submitButton.disabled = true;
                 inputs.forEach(input => input.readOnly = true);
                 
-                const { methodName, args } = Directives.parseExpression(expression);
-                component.callServerMethod(methodName, args).finally(() => {
+                Promise.resolve(Directives.invoke(expression, component)).finally(() => {
                     if (submitButton) submitButton.disabled = false;
                     inputs.forEach(input => input.readOnly = false);
                 });
@@ -338,7 +415,13 @@ export const Directives = {
     // it belongs to is gone.
     apply(element, component) {
         const bindings = component._bindings || (component._bindings = new Map());
-        const targets = [element, ...element.querySelectorAll('*')];
+
+        // A component written inside this one binds its own directives: what
+        // belongs to it would otherwise be bound twice, and its actions asked
+        // of the component around it, which never declared them.
+        const targets = [element, ...element.querySelectorAll('*')].filter(
+            el => el === element || (el.closest?.('[pb\\:id]') ?? element) === element,
+        );
         const present = new Set(targets);
 
         for (const el of [...bindings.keys()]) {

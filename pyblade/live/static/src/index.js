@@ -14,6 +14,10 @@ class PyBladeCore {
         const boot = () => {
             this.scan();
             Navigation.start(this);
+
+            // So that a script on the page can register its listeners knowing
+            // PyBlade is there to hand events to
+            document.dispatchEvent(new CustomEvent('live:init', { detail: this }));
         };
 
         if (document.readyState === 'loading') {
@@ -30,16 +34,78 @@ class PyBladeCore {
      * that was already there is left running rather than started over.
      */
     scan(root = document) {
+        const emitted = [];
+
         root.querySelectorAll('[pb\\:id]').forEach((el) => {
             const id = el.getAttribute('pb:id');
             if (this.components.has(id)) return;
 
-            const script = document.querySelector(`script[pb\\:snapshot="${CSS.escape(id)}"]`);
-            const snapshot = script ? JSON.parse(script.textContent) : {};
-            script?.remove();
+            // What the component boots from is written on the element itself,
+            // and read off it once: morphing may bring newer markup in, but the
+            // state of a running component is the one it has been keeping.
+            const snapshot = this.read(el, 'pb:snapshot') || {};
+            const events = this.read(el, 'pb:events') || [];
+
+            el.removeAttribute('pb:snapshot');
+            el.removeAttribute('pb:events');
 
             this.components.set(id, new Component(id, el, snapshot, this.store));
+            events.forEach(event => emitted.push([event, id]));
         });
+
+        // Held back until every component of the page is built, so that one
+        // emitting while it mounts reaches the others rather than an empty page
+        emitted.forEach(([event, id]) => this.deliver(event, id));
+    }
+
+    /** Read what a component wrote on its element as JSON, if it wrote any. */
+    read(el, attribute) {
+        const value = el.getAttribute(attribute);
+        if (!value) return null;
+
+        try {
+            return JSON.parse(value);
+        } catch {
+            return null;
+        }
+    }
+
+    /**
+     * Let go of the components whose element has left the page.
+     *
+     * A component written in the template of another is gone as soon as the
+     * parent stops writing it, and nothing else would tell us so.
+     */
+    prune() {
+        this.components.forEach((component, id) => {
+            if (component.element.isConnected) return;
+
+            component.destroy();
+            this.components.delete(id);
+            this.store.delete(id);
+        });
+    }
+
+    /**
+     * Hand an event to whoever it is meant for.
+     *
+     * Every component listening for it, unless the one that emitted it said
+     * otherwise: .self() keeps it for itself, .to() names the component it is
+     * for. It is then raised on the window as 'pb:<name>' for whatever plain
+     * JavaScript is listening, the data it carries as the detail of the event.
+     */
+    deliver(event, originId = null) {
+        const { name, data = {}, to = null, self: toSelf = false } = event || {};
+        if (!name) return;
+
+        this.components.forEach((component, id) => {
+            if (toSelf && id !== originId) return;
+            if (to && !component.isNamed(to)) return;
+
+            component.handleEvent(name, data);
+        });
+
+        window.dispatchEvent(new CustomEvent(`pb:${name}`, { detail: data }));
     }
 
     /**
@@ -66,12 +132,34 @@ class PyBladeCore {
     }
 
     // Server-to-Client / Client-to-Client Event Bus
+
+    /**
+     * Listen for an event from anywhere on the page.
+     *
+     * The callback is handed the event, the data it carries being its detail.
+     * What comes back un-registers the listener:
+     *
+     *     const cleanup = PyBlade.on('post-created', (event) => ...);
+     *     cleanup();
+     */
     on(eventName, callback) {
-        window.addEventListener(`pb:${eventName}`, (e) => callback(e.detail));
+        const type = `pb:${eventName}`;
+
+        window.addEventListener(type, callback);
+
+        return () => window.removeEventListener(type, callback);
     }
 
-    emit(eventName, detail = {}) {
-        window.dispatchEvent(new CustomEvent(`pb:${eventName}`, { detail }));
+    /**
+     * Emit an event from plain JavaScript, reaching every component that
+     * listens for it as one emitted by a component would.
+     */
+    emit(eventName, data = {}) {
+        this.deliver({ name: eventName, data });
+    }
+
+    dispatch(eventName, data = {}) {
+        this.emit(eventName, data);
     }
 
     // Register custom directives via JS API

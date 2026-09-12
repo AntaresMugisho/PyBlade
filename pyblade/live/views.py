@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from pprint import pprint
+from pprint import pprint # noqa
 
 from django.http import HttpRequest, HttpResponse, JsonResponse, Http404
 from django.views.decorators.http import require_POST
@@ -11,9 +11,8 @@ from .security import verify_snapshot
 from .registry import registry
 
 
-def serve_assets(request, asset_type: str):
-    current_dir = Path(__file__).resolve().parent
-    assets_dir = current_dir / "static"
+def serve_assets(request: HttpRequest, asset_type: str):
+    assets_dir = Path(__file__).resolve().parent / "static"
 
     if asset_type == "js":
         js_file_path = assets_dir / "pyblade.min.js"
@@ -49,6 +48,12 @@ def update_component(request: HttpRequest) -> JsonResponse:
     action = payload.get("action")
     params = payload.get("params", [])
 
+    # The components the page says it holds. Only ever used to leave one where
+    # it is, so a client saying anything else only shortchanges itself.
+    known = payload.get("known", [])
+    if not isinstance(known, list):
+        known = []
+
     # Verify if snapshot was not tempared
     try:
         verify_snapshot(snapshot)
@@ -62,7 +67,7 @@ def update_component(request: HttpRequest) -> JsonResponse:
 
     try:
         ComponentClass = registry.get(class_path)
-        response_data = ComponentClass.update_component(state, action, params, request=request)
+        response_data = ComponentClass.update_component(state, action, params, request=request, known=known)
     except ValueError as err:
         return JsonResponse({"error": str(err)}, status=404)
 

@@ -858,18 +858,37 @@ class ComponentNode(Node):
                 exc.template = template
             raise
 
-    def _render_live_component(self, python_file : Path, attributes):
+    def _render_live_component(self, python_file: Path, name: str, attributes, context):
+        """Render a live component written in the template of another.
+
+        A live component is not part of the markup of the one that writes it: it
+        has a state of its own and answers for itself. So it is given an identity
+        that survives its parent being rendered again, and one the page already
+        holds is left alone rather than started over -- its state lives in the
+        page by then, and rendering it afresh would take it back to what it was
+        declared with.
+        """
         from pyblade.live.registry import registry as live_component_registry
 
         module_path = str(python_file.with_suffix("")).replace("/", ".")
         class_name = snakebab_to_pascal(python_file.stem)
 
-        try:
-            cls = live_component_registry.get(f'{module_path}.{class_name}')
+        cls = live_component_registry.get(f"{module_path}.{class_name}")
 
+        live = context.get("__live")
+        if live is None:
+            # Written in a plain template rather than in a component: there is
+            # no rendering around it to belong to.
             return cls.render_initial(attributes)
-        except Exception:
-            raise
+
+        pb_id = live.child_id(name, attributes.get("key"))
+
+        if live.rerendering and pb_id in live.known:
+            # The page holds it already. All its parent has to say is where it
+            # is, and the client keeps the one it has.
+            return f'<div pb:id="{pb_id}" pb:placeholder></div>'
+
+        return cls.render_initial({**attributes, "key": pb_id})
 
     def render(self, context):
         """Resolve the component and render it with its properties and slots."""
@@ -888,7 +907,7 @@ class ComponentNode(Node):
                 return self._render_static_component(component["name"], attributes, context)
 
             elif component["type"] == "live":
-                return self._render_live_component(component["python"], attributes)
+                return self._render_live_component(component["python"], component["name"], attributes, context)
 
         except TemplateRenderError:
             # To avoid the error being cathed by the following except clauses
