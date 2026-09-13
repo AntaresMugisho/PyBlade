@@ -1,0 +1,29 @@
+{#
+    The question pb:confirm asks.
+
+    Put this wherever it will be on every page -- the layout, usually -- and it
+    is used in place of the one PyBlade builds for itself. Style it, translate
+    it, rearrange it: what PyBlade needs is only the four marks below.
+
+        pb-confirm-dialogue   the <dialog> itself
+        pb-confirm-message    where the question is written
+        pb-confirm-prompt     the field for .prompt, hidden unless it is asked for
+        pb-confirm-accept     the button that carries the action out
+        pb-confirm-cancel     the button that does not
+
+    The buttons sit in a <form method="dialog">, so their value is the answer
+    and the dialogue closes on its own. A reader who presses Escape or clicks
+    the backdrop has answered no.
+#}
+<dialog pb-confirm-dialogue class="confirm-dialogue">
+    <form method="dialog">
+        <p pb-confirm-message></p>
+
+        <input pb-confirm-prompt type="text" autocomplete="off" hidden>
+
+        <div class="confirm-dialogue-actions">
+            <button value="cancel" pb-confirm-cancel>@trans('Cancel')</button>
+            <button value="accept" pb-confirm-accept>@trans('Confirm')</button>
+        </div>
+    </form>
+</dialog>

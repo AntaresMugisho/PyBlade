@@ -103,7 +103,8 @@ class TestComponentSurface(unittest.TestCase):
         snapshot = self.component.serialize()
 
         self.assertEqual(
-            set(snapshot), {"id", "class", "state", "listeners", "confirmations", "checksum"}
+            set(snapshot),
+            {"id", "class", "state", "listeners", "confirmations", "errors", "checksum"},
         )
         self.assertEqual(snapshot["state"], {"count": 0, "label": "clicks"})
         self.assertEqual(snapshot["listeners"], {})

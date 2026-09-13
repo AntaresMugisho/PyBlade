@@ -17,6 +17,9 @@ if not settings.configured:
         USE_TZ=False,
         INSTALLED_APPS=["django.forms"],
         STATIC_URL="/static/",
+        # What PyBlade itself serves -- the update endpoint, uploads and the
+        # view that shows a file on its way -- so that a name may be reversed
+        ROOT_URLCONF="pyblade.live.urls",
         MEDIA_URL="/media/",
         DATABASES={},
     )

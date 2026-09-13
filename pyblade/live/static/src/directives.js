@@ -3,6 +3,7 @@ import { fieldValue, writeField } from './fields.js';
 import { ask, confirmationOf } from './confirm.js';
 import { readCondition } from './expressions.js';
 import { animateOut, enter, onPageVisibility, pageHidden, pollRate, transitionOf } from './transition.js';
+import { cancelUpload, uploadFile } from './upload.js';
 
 export const Directives = {
     // Parse expression with arguments: "method('arg1', 'arg2')" or "method(key='val', key2='val2')"
@@ -153,6 +154,114 @@ export const Directives = {
     },
 
     /**
+     * What an expression may ask of the client rather than of the server.
+     *
+     * Stopping a file that is on its way is one: there is nothing to ask the
+     * server, the request being ours to abandon.
+     */
+    clientActions: {
+        cancel_upload: (component, [property]) => cancelUpload(component, property),
+    },
+
+    /**
+     * Bind a file input: choosing a file sends it, on a request of its own.
+     *
+     * The reader is told how far along it is as it goes, through events the
+     * page can listen for, and the property is set to the note that comes back.
+     */
+    bindFileInput({ el, expression, component, signal }) {
+        el.addEventListener('change', async () => {
+            const chosen = [...(el.files || [])];
+            if (!chosen.length) return;
+
+            const sent = await Directives.sendFiles({
+                property: expression, files: chosen, component, multiple: el.multiple,
+            });
+
+            // A field holding a file the server would not take is a field
+            // saying something that is not so
+            if (!sent) el.value = '';
+        }, { signal });
+
+        // Leaving the page with a file half sent is not a reason to keep sending it
+        signal?.addEventListener('abort', () => cancelUpload(component, expression), { once: true });
+    },
+
+    /**
+     * Send files for a property and leave it holding what comes back.
+     *
+     * What the property holds is what the place they came from takes: a list
+     * where several may be given, one note where one may, and every sending
+     * starts it over. Answers whether the property was set, so that a field
+     * whose files were refused can clear itself.
+     *
+     * The page is told how it goes throughout -- started, how far along,
+     * finished, refused, stopped -- as events anything may listen for, which
+     * is what pb:upload-progress reads.
+     */
+    async sendFiles({ property, files, component, multiple = false }) {
+        const announce = (name, detail) => {
+            window.dispatchEvent(new CustomEvent(`pb:upload-${name}`, {
+                detail: { id: component.id, property, ...detail },
+            }));
+        };
+
+        announce('start', {
+            names: files.map(file => file.name),
+            size: files.reduce((sum, file) => sum + file.size, 0),
+        });
+
+        const answer = await uploadFile(component, property, files, {
+            onProgress: (progress) => announce('progress', progress),
+        });
+
+        // Stopped part way: the reader asked for nothing to happen
+        if (answer === null) {
+            announce('cancelled', {});
+            return false;
+        }
+
+        if (answer.errors) {
+            announce('error', { errors: answer.errors });
+            return false;
+        }
+
+        announce('finish', {
+            names: answer.files.map(file => file.name),
+            size: answer.files.reduce((sum, file) => sum + (file.size || 0), 0),
+        });
+
+        const held = multiple
+            ? answer.files.map(file => file.reference)
+            : answer.files[0].reference;
+
+        // Set like any other property, so the server sees it the moment the
+        // next action runs
+        component.setLocal(property, held);
+        component.setProperties([property, held], 0);
+
+        return true;
+    },
+
+    /**
+     * Hand files to a file input as though the reader had chosen them there.
+     *
+     * What a field holds is a FileList, which is not a thing a page may build
+     * -- a DataTransfer is how one is come by.
+     */
+    handOverFiles(input, files) {
+        if (typeof DataTransfer === 'function') {
+            const carrier = new DataTransfer();
+            files.forEach(file => carrier.items.add(file));
+            input.files = carrier.files;
+        } else {
+            input.files = files;
+        }
+
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+    },
+
+    /**
      * Whether what a request is doing is what an element was told to watch.
      *
      * An element says so with pb:target, naming the actions or the properties
@@ -236,6 +345,10 @@ export const Directives = {
 
         const { methodName, args } = this.parseExpression(expression);
 
+        // Asked of the client, there being nothing for the server to do about it
+        const clientAction = this.clientActions[methodName];
+        if (clientAction) return clientAction(component, args);
+
         // The server is told the reader was asked, for an action that says it
         // must be: @confirm refuses one that arrives without it
         return component.callServerMethod(methodName, args, confirmation ? { confirmed: true } : undefined);
@@ -264,6 +377,13 @@ export const Directives = {
          * so filling in a form costs no requests and saving it sees all of it.
          */
         model({ el, expression, component, modifiers, signal }) {
+            // A file is not a value to be sent with the rest: it goes on its
+            // own, ahead of any action, and what the property holds is a note
+            // saying which file it is.
+            if ((el.type || '').toLowerCase() === 'file') {
+                return Directives.bindFileInput({ el, expression, component, signal });
+            }
+
             const cast = { number: modifiers.has('number'), boolean: modifiers.has('boolean') };
 
             // .fill takes what the markup already holds for the property, for a
@@ -408,6 +528,59 @@ export const Directives = {
         // pb:navigate is answered on the document rather than here, so that a
         // link outside any component is followed as well as one inside. This is
         // left as a directive so that a plugin can still take it over.
+        /**
+         * Let files be dropped on an element and sent for a property.
+         *
+         *     <div pb:drop="photo">Drop a photo here</div>
+         *     <div pb:drop.multiple="photos">Drop what you have</div>
+         *
+         * While something is over it the element carries pb:dropping, which is
+         * what a page styles the target against.
+         *
+         * A target with a file input inside it hands what was dropped to that
+         * input instead of sending it: dropping and choosing are then the one
+         * path, and whatever the input takes is what the property holds.
+         */
+        drop({ el, expression, component, modifiers, signal }) {
+            const dropping = (over) => {
+                if (over) el.setAttribute('pb:dropping', '');
+                else el.removeAttribute('pb:dropping');
+            };
+
+            // Without this the browser opens the file itself and the page the
+            // reader was filling in is gone
+            const over = (event) => {
+                event.preventDefault();
+                dropping(true);
+            };
+
+            el.addEventListener('dragenter', over, { signal });
+            el.addEventListener('dragover', over, { signal });
+            el.addEventListener('dragleave', () => dropping(false), { signal });
+
+            el.addEventListener('drop', async (event) => {
+                event.preventDefault();
+                dropping(false);
+
+                const dropped = [...(event.dataTransfer?.files || [])];
+                if (!dropped.length) return;
+
+                const input = el.querySelector?.('input[type="file"]');
+                if (input) return Directives.handOverFiles(input, dropped);
+
+                const multiple = modifiers?.has('multiple') ?? false;
+
+                await Directives.sendFiles({
+                    property: expression,
+                    files: multiple ? dropped : dropped.slice(0, 1),
+                    component,
+                    multiple,
+                });
+            }, { signal });
+
+            signal?.addEventListener('abort', () => cancelUpload(component, expression), { once: true });
+        },
+
         navigate() {},
 
         current({ el, expression, component }) {
@@ -620,6 +793,39 @@ export const Directives = {
             // What an update brings is the markup as the server renders it,
             // which says nothing about what is hidden here
             component.onStateChange(() => apply(true), signal);
+        },
+
+        /**
+         * Show how far along a file is, while it is going up.
+         *
+         *     <progress pb:upload-progress="photo" max="100"></progress>
+         *     <span pb:upload-progress="photo"></span>
+         *
+         * An element that takes a value is given the percentage as its value;
+         * anything else is given it as its text. Either way it is hidden until
+         * there is a file on its way and hidden again once there is not.
+         */
+        "upload-progress"({ el, expression, signal }) {
+            const takesAValue = "value" in el;
+            const originalDisplay = el.style.display || "";
+
+            const show = (percent) => {
+                el.style.display = originalDisplay;
+                if (takesAValue) el.value = percent;
+                else el.textContent = `${percent}%`;
+            };
+
+            const hide = () => { el.style.display = "none"; };
+
+            const mine = (event) => event.detail.property === expression;
+
+            hide();
+
+            window.addEventListener("pb:upload-start", (e) => mine(e) && show(0), { signal });
+            window.addEventListener("pb:upload-progress", (e) => mine(e) && show(e.detail.percent), { signal });
+            window.addEventListener("pb:upload-finish", (e) => mine(e) && hide(), { signal });
+            window.addEventListener("pb:upload-cancelled", (e) => mine(e) && hide(), { signal });
+            window.addEventListener("pb:upload-error", (e) => mine(e) && hide(), { signal });
         },
 
         /**

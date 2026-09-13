@@ -4,12 +4,18 @@ import threading
 from pathlib import Path
 from pprint import pprint # noqa
 
-from django.http import HttpRequest, HttpResponse, JsonResponse, Http404, StreamingHttpResponse
+from django.http import (HttpRequest, HttpResponse, JsonResponse, FileResponse, Http404,
+                         StreamingHttpResponse)
 from django.views.decorators.http import require_POST
 from django.conf import settings as dj_settings
 from django.urls import path
 
+from django import forms
+from django.core.exceptions import ValidationError as DjangoValidationError
+
 from .security import verify_snapshot
+from .uploads import (MultipleFileField, REFERENCE_PREFIX, TemporaryUpload, store_temporarily,
+                      sweep_if_due)
 from .registry import registry
 
 
@@ -31,6 +37,139 @@ def serve_assets(request: HttpRequest, asset_type: str):
         return HttpResponse(content, content_type="text/css")
 
     return Http404(f"Pyblade {asset_type} assets not found.")
+
+
+@require_POST
+def upload_file(request: HttpRequest) -> JsonResponse:
+    """Take a file for a property of a component, before any action runs.
+
+    A file arrives on a request of its own so that it can be watched while it
+    goes and stopped part way, which is not something a request carrying the
+    whole answer could offer.
+
+    What arrives is checked against the very field the component declares for
+    that property -- so an ImageField refuses what is not an image, and
+    MaxFileSize refuses what is too big -- and it is refused before its bytes
+    are kept rather than after.
+    """
+    # Taking a file is also when the ones nobody came back for are thrown
+    # away: a project that takes uploads tidies up after itself, with nothing
+    # to schedule and nothing to install. It happens at most once an hour.
+    sweep_if_due()
+
+    uploaded = request.FILES.getlist("file")
+    if not uploaded:
+        return JsonResponse({"error": "No file was sent."}, status=400)
+
+    try:
+        snapshot = json.loads(request.POST.get("snapshot") or "")
+    except (json.JSONDecodeError, TypeError):
+        return JsonResponse({"error": "Invalid PyBlade snapshot."}, status=400)
+
+    # A file is taken for a page PyBlade rendered, and for no other: without
+    # this the endpoint would be somewhere for anyone to keep their files
+    try:
+        verify_snapshot(snapshot)
+    except (ValueError, AttributeError) as err:
+        return JsonResponse({"error": str(err)}, status=400)
+
+    try:
+        ComponentClass = registry.get(snapshot.get("class"))
+    except ValueError as err:
+        return JsonResponse({"error": str(err)}, status=404)
+
+    property_name = request.POST.get("property") or ""
+    field = _upload_field(ComponentClass, property_name)
+
+    if field is None:
+        return JsonResponse(
+            {"errors": [
+                f"The {ComponentClass.__name__} component does not take a file "
+                f"for '{property_name}'."
+            ]},
+            status=422,
+        )
+
+    # A field asking for one file is given the file rather than the list, so
+    # that what it is handed here is what a form would hand it
+    if not isinstance(field, MultipleFileField):
+        if len(uploaded) > 1:
+            return JsonResponse(
+                {"errors": [
+                    f"The {ComponentClass.__name__} component takes one file for "
+                    f"'{property_name}', not several."
+                ]},
+                status=422,
+            )
+
+        uploaded = uploaded[0]
+
+    try:
+        field.clean(uploaded, None)
+    except DjangoValidationError as err:
+        return JsonResponse({"errors": [str(message) for message in err.messages]}, status=422)
+
+    # Answered as a list however many were sent: what the property is to hold --
+    # one file or several -- is the page's to decide, from the input it read
+    # them off.
+    files = uploaded if isinstance(uploaded, list) else [uploaded]
+    kept = [store_temporarily(one) for one in files]
+
+    return JsonResponse({"files": [
+        {
+            "reference": upload.reference,
+            "name": upload.name,
+            "size": upload.size,
+            "content_type": upload.content_type,
+        }
+        for upload in kept
+    ]})
+
+
+def preview_upload(request: HttpRequest, reference: str):
+    """Hand over a file that has been sent but not kept, so it can be shown.
+
+    A preview has to read the bytes from somewhere, and the temporary directory
+    is the one place they are. Serving it from here rather than from the media
+    path means a file nobody has kept yet is reachable only by the note the
+    page was given -- signed, and no older than the note is allowed to be.
+    """
+    upload = TemporaryUpload.from_reference(REFERENCE_PREFIX + reference)
+
+    if upload is None:
+        raise Http404("That file is not one PyBlade is holding.")
+
+    try:
+        handle = upload.open()
+    except (FileNotFoundError, OSError):
+        raise Http404("That file is no longer here.")
+
+    response = FileResponse(handle, content_type=upload.content_type)
+
+    # A file on its way belongs to the reader who sent it and to nobody else,
+    # least of all to a cache between them
+    response["Cache-Control"] = "private, max-age=0, no-store"
+
+    return response
+
+
+def _upload_field(ComponentClass, property_name):
+    """The field a component declares for a property, when it takes a file.
+
+    The name comes from the page, so it is only ever looked up among the fields
+    the component declares: nothing else is a property a file may be sent for,
+    least of all the machinery a component runs on.
+    """
+    if not property_name or ComponentClass._is_reserved(property_name):
+        return None
+
+    form_class = ComponentClass._validation_form()
+    if form_class is None:
+        return None
+
+    field = form_class.base_fields.get(property_name)
+
+    return field if isinstance(field, forms.FileField) else None
 
 
 def streamed_response(ComponentClass, state, action, params=None, **kwargs):
@@ -128,6 +267,9 @@ def update_component(request: HttpRequest) -> JsonResponse:
     component_id = snapshot.get("id")
     state = snapshot.get("state", {}) | {"_id": component_id}
 
+    # What was wrong when the component was last checked, signed with the rest
+    errors = snapshot.get("errors")
+
     try:
         ComponentClass = registry.get(class_path)
     except ValueError as err:
@@ -140,13 +282,15 @@ def update_component(request: HttpRequest) -> JsonResponse:
             streamed_response(
                 ComponentClass, state, action, params,
                 request=request, known=known, updates=updates, confirmed=confirmed,
+                errors=errors,
             ),
             content_type="application/x-ndjson",
         )
 
     try:
         response_data = ComponentClass.update_component(
-            state, action, params, request=request, known=known, updates=updates, confirmed=confirmed
+            state, action, params, request=request, known=known, updates=updates,
+            confirmed=confirmed, errors=errors,
         )
     except PermissionError as err:
         return JsonResponse({"error": str(err)}, status=403)

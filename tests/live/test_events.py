@@ -265,7 +265,7 @@ class TestEventsOnTheFirstRendering(unittest.TestCase):
 
         self.assertEqual(
             set(_attribute(rendered, "snapshot")),
-            {"id", "class", "state", "listeners", "confirmations", "checksum"},
+            {"id", "class", "state", "listeners", "confirmations", "errors", "checksum"},
         )
 
     def test_a_component_emitting_nothing_writes_no_events(self):

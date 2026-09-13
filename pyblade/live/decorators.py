@@ -136,11 +136,27 @@ def streamed(fn):
     return fn
 
 
+def validate(fn):
+    """Check what the component holds first, and do not run the action if it is wrong.
+
+        @validate
+        def save(self):
+            ...
+
+    What is expected is said by the component, as the fields it declares in
+    `rules` or as the form it points at with `form_class`. An action that does
+    not hold up leaves what was wrong in `errors` and is not called, so the page
+    renders again with the messages and nothing was saved.
+
+    Use validate() in the body of the action instead when it is to carry on
+    either way, or validate_only() to ask about a single field.
+    """
+    fn.pb_validate = True
+
+    return fn
+
+
 # Not implemented yet. Declared here so that the decorators of a live component
 # are all in one place, and so that what is still missing is plain to see.
-def validate(fn):
-    pass
-
-
 def lazy(fn):
     pass

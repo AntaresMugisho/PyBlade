@@ -13,6 +13,9 @@ from pyblade.engine.template import Template
 from pyblade.config import settings
 
 from .security import generate_checksum
+from django.utils.datastructures import MultiValueDict
+
+from .uploads import TemporaryUpload, is_upload_reference
 
 
 #: The opening tag of the root element of a component. A slot the component
@@ -108,6 +111,17 @@ class LiveComponent:
     #: written here or set by the @layout decorator. Reserved likewise.
     layout_name = None
 
+    #: What the properties of the component are expected to look like, as Django
+    #: form fields against the names they check: {"email": forms.EmailField()}.
+    rules = None
+
+    #: A form of its own to check against, instead of declaring the fields here.
+    form_class = None
+
+    #: What was wrong the last time it was checked, by property name. Reserved,
+    #: so no browser can put words of its own into the page.
+    errors = {}
+
     def __init__(self, pb_id: str = None):
         self._id = pb_id
         self._events = []
@@ -131,6 +145,10 @@ class LiveComponent:
         # The components the client says it holds, as it says so with every
         # action it sends
         self._known_components = ()
+
+        # What was wrong the last time this component was checked. A copy, the
+        # one on the class being shared by every component of that class.
+        self.errors = {}
 
         # What the action has streamed, when there is nowhere to stream it to
         self._streams = []
@@ -409,6 +427,34 @@ class LiveComponent:
         return listeners
 
     @classmethod
+    def _validation_form(cls):
+        """The form the component is checked against, if it is checked at all.
+
+        A component either points at a form of its own or declares the fields
+        where its properties are; either way what does the checking is a Django
+        form, so every field, validator and message Django ships works here.
+        """
+        if cls.form_class is not None:
+            return cls.form_class
+
+        if not cls.rules:
+            return None
+
+        # Assembled once per class rather than per request. Read from the class
+        # itself rather than inherited, so a component declaring rules of its
+        # own does not use the form its parent assembled.
+        assembled = cls.__dict__.get("_assembled_form")
+        if assembled is not None:
+            return assembled
+
+        from django import forms
+
+        assembled = type(f"{cls.__name__}Rules", (forms.Form,), dict(cls.rules))
+        cls._assembled_form = assembled
+
+        return assembled
+
+    @classmethod
     def _streams_from(cls, action_name):
         """Whether an action answers in pieces, as it goes.
 
@@ -494,6 +540,25 @@ class LiveComponent:
 
         return value
 
+    @staticmethod
+    def _from_state(value):
+        """A value the client sent, as the property is to hold it.
+
+        The other half of _as_state: a note saying which file a property holds
+        is handed back as the file, one note or a list of them. A note that was
+        written over, or kept too long, is worth nothing and leaves the property
+        empty rather than raising -- a page left open overnight is not a server
+        error.
+        """
+        if is_upload_reference(value):
+            return TemporaryUpload.from_reference(value)
+
+        if isinstance(value, list) and any(is_upload_reference(item) for item in value):
+            uploads = [TemporaryUpload.from_reference(item) for item in value]
+            return [upload for upload in uploads if upload is not None]
+
+        return value
+
     def _set_property(self, name: str, value):
         """Set a property of the component, running the hooks that watch it.
 
@@ -522,6 +587,14 @@ class LiveComponent:
         token in it is a form whose every submission is refused.
         """
         context = self._get_state()
+
+        # A property holding a file renders as the file rather than as the note
+        # that travels in its place, so that a template may write
+        # {{ photo.url }} to show what is on its way
+        context |= self._uploads()
+
+        # What was wrong when the component was last checked, which @error reads
+        context["errors"] = self.errors
 
         # The live components written in the template are rendered from here,
         # and this is what tells them which rendering they belong to.
@@ -552,14 +625,30 @@ class LiveComponent:
         for name in self._own_attributes():
             value = getattr(self, name)
             if not callable(value):
-                state[name] = value
+                state[name] = self._as_state(value)
 
         # Properties set while the component is alive, in mount() or in an action
         for name, value in self.__dict__.items():
             if not self._is_reserved(name) and not callable(value):
-                state[name] = value
+                state[name] = self._as_state(value)
 
         return state
+
+    @staticmethod
+    def _as_state(value):
+        """A property as it travels: what is written as JSON, and signed.
+
+        A file cannot travel, so what travels is the note saying which file it
+        is -- one note, or a list of them where the property holds several.
+        Everything else goes as it is.
+        """
+        if isinstance(value, TemporaryUpload):
+            return value.reference
+
+        if isinstance(value, list) and any(isinstance(item, TemporaryUpload) for item in value):
+            return [LiveComponent._as_state(item) for item in value]
+
+        return value
 
     def _get_methods(self):
         """Get public methods of the component, the ones the client may call"""
@@ -621,6 +710,10 @@ class LiveComponent:
             # What the page is to ask before calling an action, signed with the
             # rest: what a component asks is not the browser's to rewrite
             "confirmations": self._confirmations(),
+            # What was wrong when it was last checked. Signed with the rest and
+            # kept out of the state, so no browser writes its own messages into
+            # the page, and so one field being put right does not forget another.
+            "errors": self.errors,
         }
 
         # Attach signature
@@ -637,6 +730,13 @@ class LiveComponent:
             # The state comes from the client. Whatever it holds beyond the
             # properties of the component is not for it to decide.
             if cls._is_reserved(key):
+                continue
+
+            # A note saying which file a property holds is handed back as the
+            # file, one note or a list of them
+            held = cls._from_state(value)
+            if held is not value:
+                setattr(instance, key, held)
                 continue
 
             # A copy, as the component is free to change what it holds and the
@@ -774,7 +874,7 @@ class LiveComponent:
     @classmethod
     def update_component(
         cls, state, action_name, action_args=[], request=None, known=(), updates=None,
-        confirmed=False, sink=None,
+        confirmed=False, sink=None, errors=None,
     ):
         """
         Manage the livfecycle on every AJAX request.
@@ -793,6 +893,10 @@ class LiveComponent:
 
         `sink` is where an action writing @streamed sends what it streams, as it
         streams it. Without one, what it streams is kept and sent with the answer.
+
+        `errors` is what was wrong when the component was last checked, come
+        back with the snapshot: a field put right is no reason to forget what
+        was said about another.
         """
         # 1. Recréer l'instance
         instance = cls.deserialize(state)
@@ -801,6 +905,7 @@ class LiveComponent:
         instance._rerendering = True
         instance._known_components = known
         instance._stream_sink = sink
+        instance.errors = dict(errors) if isinstance(errors, dict) else {}
 
         # 2. Hook : hydrate()
         instance.hydrate()
@@ -809,7 +914,7 @@ class LiveComponent:
         # any property is, so that the hooks watching one run for it too.
         if isinstance(updates, dict):
             for name, value in updates.items():
-                instance._set_property(name, value)
+                instance._set_property(name, cls._from_state(value))
 
         outcome = None
 
@@ -819,7 +924,7 @@ class LiveComponent:
 
         # 5. If the action consists on updating a property (e.g., pb:model)
         elif action_name == "$set":
-            instance._set_property(action_args[0], action_args[1])
+            instance._set_property(action_args[0], cls._from_state(action_args[1]))
 
         # 6. An event another component emitted, come back to be handled here
         elif action_name == "$event":
@@ -845,7 +950,15 @@ class LiveComponent:
 
             instance._confirm_action(action_name, confirmed)
 
-            outcome = methods[action_name](*action_args)
+            action = methods[action_name]
+
+            # An action written @validate is not called when what the component
+            # holds is not what it expects: the page is rendered again instead,
+            # with what was wrong on it, and nothing was done.
+            if getattr(action, "pb_validate", False) and not instance.validate():
+                action = None
+
+            outcome = action(*action_args) if action is not None else None
 
         # 8. Hooks. An action that asked not to render answers with its new
         # state alone, and the page is left as it is.
@@ -862,6 +975,10 @@ class LiveComponent:
             "snapshot": instance.serialize(),
             "events": instance._get_events(),
         }
+
+        # What was wrong when it was checked, so the page can say so
+        if instance.errors:
+            response["errors"] = instance.errors
 
         # What the action streamed with nowhere to stream it to, which reaches
         # the page with the answer rather than as it was written
@@ -941,6 +1058,127 @@ class LiveComponent:
 
         return EmittedEvent(emitted)
 
+
+    def validate(self, only=None):
+        """Check the properties against what the component expects of them.
+
+            if not self.validate():
+                return
+
+        Answers whether they hold up, and leaves what was wrong in `errors`,
+        which the template reads with @error. What the form made of the values
+        -- a number where the page sent text -- is written back to the
+        properties, so an action works with what it should rather than with
+        whatever a form field happened to give.
+
+        A component expecting nothing of its properties is always right.
+        """
+        form_class = self._validation_form()
+        if form_class is None:
+            return True
+
+        names = list(form_class.base_fields)
+
+        # A field asked about on its own that nothing is expected of is right:
+        # there is nothing for it to fail
+        if only is not None and only not in names:
+            return True
+
+        files = self._files()
+        data = {name: getattr(self, name, None) for name in names if name not in files}
+
+        form = form_class(data=data, files=files)
+        form.is_valid()
+
+        wrong = {name: [str(message) for message in messages] for name, messages in form.errors.items()}
+
+        if only is None:
+            self.errors = wrong
+        else:
+            # What was said about another field is not forgotten because this
+            # one was asked about
+            errors = dict(self.errors)
+            errors.pop(only, None)
+            if only in wrong:
+                errors[only] = wrong[only]
+            self.errors = errors
+
+        # Only what came through cleanly is written back, and only over a
+        # property the component actually holds. A property holding a file is
+        # left alone: what a form gives back for one is an open file with
+        # nowhere to be kept, where the property holds the upload itself --
+        # which is what an action keeps for good, and what travels to the page
+        # as its signed note.
+        for name, value in getattr(form, "cleaned_data", {}).items():
+            if name in files:
+                continue
+
+            if (only is None or name == only) and not self._is_reserved(name):
+                setattr(self, name, value)
+
+        return only not in wrong if only is not None else not wrong
+
+    def validate_only(self, name: str):
+        """Check a single property, leaving what was said about the others alone.
+
+        What a field being left behind asks for: the reader has finished with
+        this one and not yet reached the next, so only this one is answered for.
+        """
+        return self.validate(only=name)
+
+    def _uploads(self):
+        """The properties holding a file that has been sent but not kept.
+
+        A property holding several is answered as the list it holds, so that
+        what reads this sees the property as the component does.
+        """
+        uploads = {}
+
+        def held(value):
+            if isinstance(value, TemporaryUpload):
+                return value
+
+            if isinstance(value, list) and value and all(
+                isinstance(item, TemporaryUpload) for item in value
+            ):
+                return value
+
+            return None
+
+        for name in self._own_attributes():
+            value = held(getattr(self, name, None))
+            if value is not None:
+                uploads[name] = value
+
+        for name, value in self.__dict__.items():
+            if self._is_reserved(name):
+                continue
+
+            value = held(value)
+            if value is not None:
+                uploads[name] = value
+
+        return uploads
+
+    def _files(self):
+        """The properties holding a file, as Django hands files to a form.
+
+        A form takes what was typed and what was uploaded in two bags, and a
+        file field looks in the second one. A property holding an upload belongs
+        there rather than among the values.
+
+        The bag is the one Django's own is: a field asking for several files
+        reads them with getlist, which only a MultiValueDict answers.
+        """
+        files = MultiValueDict()
+
+        for name, upload in self._uploads().items():
+            if isinstance(upload, list):
+                files.setlist(name, [one.as_file() for one in upload])
+            else:
+                files[name] = upload.as_file()
+
+        return files
 
     def stream(self, to: str, content, replace: bool = False):
         """Send content to an element on the page, without waiting to be done.
