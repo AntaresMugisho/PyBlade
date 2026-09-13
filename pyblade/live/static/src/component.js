@@ -39,6 +39,17 @@ export class Component {
         // told again when they have actually changed
         this._dirtySignature = '';
 
+        // Requests are numbered as they are made, and answers applied in that
+        // order rather than in the order they happen to come back. A slow
+        // answer landing after a quick one would otherwise take the page back
+        // to an older state -- and, worse, that older state is what the next
+        // request would then be built on.
+        this._asked = 0;
+        this._applied = 0;
+
+        // What is listening for a request that came back wrong
+        this.errorCallbacks = new Set();
+
         // Bind directives to DOM
         Directives.apply(this.element, this);
     }
@@ -80,25 +91,36 @@ export class Component {
         // action or one property can tell whether this is the one
         this.loadingStartCallbacks.forEach(cb => cb(payload));
 
+        const ticket = ++this._asked;
+
         try {
-            const response = await fetch('/pyblade/live/', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': csrfToken,
-                },
-                body: JSON.stringify({
-                    id: this.id,
-                    snapshot: this.store.get(this.id),
-                    // What the page already holds, so that a component written
-                    // inside this one is left where it is rather than started over
-                    known: [...window.PyBlade.components.keys()],
-                    // What was typed into the form and not sent yet, so that
-                    // the action runs against the form as the reader left it
-                    updates: this.pendingUpdatesToSend(payload),
-                    ...payload
-                })
-            });
+            let response;
+
+            try {
+                response = await fetch('/pyblade/live/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken,
+                    },
+                    body: JSON.stringify({
+                        id: this.id,
+                        snapshot: this.store.get(this.id),
+                        // What the page already holds, so that a component written
+                        // inside this one is left where it is rather than started over
+                        known: [...window.PyBlade.components.keys()],
+                        // What was typed into the form and not sent yet, so that
+                        // the action runs against the form as the reader left it
+                        updates: this.pendingUpdatesToSend(payload),
+                        ...payload
+                    })
+                });
+            } catch (error) {
+                // Nothing came back at all: the connection, not the server
+                return this.failed({ status: 0, payload, error });
+            }
+
+            if (!response.ok) return this.failed({ status: response.status, payload });
 
             // An action that answers as it goes says so with its content type:
             // its answer is a line of JSON at a time, the last of which is the
@@ -106,16 +128,70 @@ export class Component {
             if (response.headers.get('Content-Type')?.includes('x-ndjson')) {
                 await readLines(response.body, (line) => {
                     if (line.stream) this.streamTo(line.stream);
-                    else this.update(line);
+                    else this.apply(ticket, line);
                 });
                 return;
             }
 
             const data = await response.json();
-            if (data) this.update(data);
+            if (data) this.apply(ticket, data);
         } finally {
             this.loadingEndCallbacks.forEach(cb => cb(payload));
         }
+    }
+
+    /**
+     * Apply an answer, unless a newer one has already been applied.
+     *
+     * Two requests going at once come back in whatever order the network and
+     * the server between them decide. The older answer is not merely out of
+     * date: the state it carries would become what the next request is built
+     * on, so applying it loses everything the newer one said.
+     */
+    apply(ticket, data) {
+        if (ticket < this._applied) return;
+
+        this._applied = ticket;
+        this.update(data);
+    }
+
+    /**
+     * Say that a request came back wrong, rather than leaving the page as one
+     * that has quietly stopped working.
+     *
+     * Nothing of the answer is applied: a component whose request was refused
+     * holds what it held before, and the page is told so it can say something.
+     *
+     *     document.addEventListener('live:error', ({ detail }) => {
+     *         banner.textContent = detail.expired
+     *             ? 'Your session has ended. Reload the page to carry on.'
+     *             : 'Something went wrong. Try again.';
+     *     });
+     */
+    failed({ status, payload, error = null }) {
+        const detail = {
+            id: this.id,
+            action: payload?.action ?? null,
+            status,
+
+            // A session or a token that has gone stale is refused, and asking
+            // again will be refused too until the page has been loaded afresh
+            expired: status === 403,
+            error,
+        };
+
+        console.error(
+            `PyBlade: ${detail.action || 'a request'} for ${this.id} was not answered `
+            + `(${status || 'no answer at all'}).`
+        );
+
+        this.errorCallbacks.forEach(cb => cb(detail));
+        document.dispatchEvent(new CustomEvent('live:error', { detail, cancelable: true }));
+    }
+
+    /** Watch for a request of this component's that came back wrong. */
+    onError(callback, signal) {
+        return this._register(this.errorCallbacks, callback, signal);
     }
 
     update({ html, snapshot, events = [], streams = [], redirect = null }) {

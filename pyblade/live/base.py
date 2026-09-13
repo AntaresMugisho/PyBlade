@@ -767,9 +767,32 @@ class LiveComponent:
             payload["mount"] = self._deferred_mount
 
         # Attach signature
-        payload["checksum"] = generate_checksum(payload)
-        
+        try:
+            payload["checksum"] = generate_checksum(payload)
+        except TypeError as error:
+            # A property that cannot be written as JSON cannot travel, and the
+            # component would fail this way on every request. Saying which
+            # property it is beats json's own "Object of type X is not JSON
+            # serializable", which names neither the component nor the name.
+            raise TypeError(
+                f"The {type(self).__name__} component holds {self._untravellable(payload)}, "
+                f"which cannot travel to the page and back: {error}"
+            ) from None
+
         return payload
+
+    @staticmethod
+    def _untravellable(payload):
+        """Which of the properties are the ones that cannot be written as JSON."""
+        offenders = []
+
+        for name, value in (payload.get("state") or {}).items():
+            try:
+                json.dumps(value)
+            except TypeError:
+                offenders.append(name)
+
+        return ", ".join(offenders) or "something"
 
     @classmethod
     def deserialize(cls, state):
@@ -838,6 +861,18 @@ class LiveComponent:
 
     @classmethod
     def render_initial(cls, attributes=None, request=None, layout=None):
+        """The markup of a first rendering, with what the component boots from.
+
+        What a page is given. The rendering itself is done by _first_pass, which
+        answers with the component as well, for whoever needs the component
+        rather than the markup -- a test driving one, above all.
+        """
+        instance, markup = cls._first_pass(attributes, request=request, layout=layout)
+
+        return instance._with_snapshot(markup)
+
+    @classmethod
+    def _first_pass(cls, attributes=None, request=None, layout=None):
         """
         Manage the FIRST lifecycle of Server-Side Rendering.
 
@@ -884,7 +919,7 @@ class LiveComponent:
         if settings is not None:
             instance._deferred_mount = cls._mountable(arguments)
 
-            return instance._with_snapshot(instance._waiting_markup(settings))
+            return instance, instance._waiting_markup(settings)
 
         # 6. Call hooks
         instance.mount(**arguments)
@@ -893,7 +928,7 @@ class LiveComponent:
         instance.render()
         instance.rendered(instance._rendered)
 
-        return instance._with_snapshot(instance._rendered)
+        return instance, instance._rendered
 
     @classmethod
     def _lazy_settings(cls, written_at_the_call_site=None):
