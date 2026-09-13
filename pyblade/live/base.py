@@ -15,6 +15,7 @@ from pyblade.config import settings
 from .security import generate_checksum
 from django.utils.datastructures import MultiValueDict
 
+from .skeleton import skeleton_markup
 from .uploads import TemporaryUpload, is_upload_reference
 
 
@@ -117,6 +118,16 @@ class LiveComponent:
 
     #: A form of its own to check against, instead of declaring the fields here.
     form_class = None
+
+    #: What @lazy said, when a component is written that way: how its skeleton
+    #: is drawn and whether it waits to be scrolled to. A component that does
+    #: its work while the page is being built says nothing here.
+    _lazy = None
+
+    #: What a component that has not mounted yet is to be mounted with. Set
+    #: while it is waiting and dropped the moment it has, so that its presence
+    #: is what says there is still work owed.
+    _deferred_mount = None
 
     #: What was wrong the last time it was checked, by property name. Reserved,
     #: so no browser can put words of its own into the page.
@@ -227,6 +238,18 @@ class LiveComponent:
     def hydrate(self):
         """Called on every AJAX request, just after the state is deserialized."""
         pass
+
+    def placeholder(self):
+        """What a lazy component shows while it is being got ready.
+
+            def placeholder(self):
+                return self.render_inline("<div>Counting the votes...</div>")
+
+        Written when the drawn skeleton is not what the component should look
+        like while it waits. Without one, PyBlade draws the skeleton @lazy asked
+        for.
+        """
+        return None
 
     def render(self):
         """
@@ -716,6 +739,12 @@ class LiveComponent:
             "errors": self.errors,
         }
 
+        # A lazy component has not mounted yet. What it is to be mounted with
+        # travels here, signed, and is gone from the snapshot once it has: the
+        # key is the component saying it is still waiting.
+        if self._deferred_mount is not None:
+            payload["mount"] = self._deferred_mount
+
         # Attach signature
         payload["checksum"] = generate_checksum(payload)
         
@@ -803,8 +832,10 @@ class LiveComponent:
         # 1. What the component was given, be it as a dictionary or as tag attributes
         properties = dict(attributes or {})
 
-        # The key names the component, it is not one of its properties
+        # The key names the component and `lazy` says how it is to be rendered;
+        # neither is one of its properties
         pb_id = properties.pop("key", None) or f"pb-{uuid4().hex[:8]}"
+        written_lazy = properties.pop("lazy", None)
 
         # 2. Initial instanciation with component_id
         instance = cls(pb_id)
@@ -824,7 +855,17 @@ class LiveComponent:
                 continue
             setattr(instance, key, value)
 
-        # 5. Call hooks
+        # 5. A component that is not to keep the page waiting writes a skeleton
+        # of itself and is asked for again once the page has loaded. None of its
+        # work -- not mount(), not the rendering -- happens here.
+        settings = cls._lazy_settings(written_lazy)
+
+        if settings is not None:
+            instance._deferred_mount = cls._mountable(arguments)
+
+            return instance._with_snapshot(instance._waiting_markup(settings))
+
+        # 6. Call hooks
         instance.mount(**arguments)
         instance.boot()
         instance.rendering()
@@ -832,6 +873,71 @@ class LiveComponent:
         instance.rendered(instance._rendered)
 
         return instance._with_snapshot(instance._rendered)
+
+    @classmethod
+    def _lazy_settings(cls, written_at_the_call_site=None):
+        """How this rendering is to be lazy, or None if it is not to be.
+
+        A component says so once and for all with @lazy; a tag may say it for a
+        single rendering, which is what to do when a component is only in the
+        way on one page.
+        """
+        asked = written_at_the_call_site
+
+        if asked is None or asked is False or asked == "False":
+            return cls._lazy
+
+        settings = dict(cls._lazy or {"lines": 3, "shape": "text", "visible": False})
+
+        # <pb-comments lazy="visible" />
+        if isinstance(asked, str) and asked.strip().lower() == "visible":
+            settings["visible"] = True
+
+        return settings
+
+    @classmethod
+    def _mountable(cls, arguments):
+        """What mount() is to be given later, having checked that it can wait.
+
+        The arguments travel to the page inside the signed snapshot and come
+        back with it, so they have to be things a snapshot can carry. Saying so
+        here names the component and the argument; letting json.dumps say it
+        names neither.
+        """
+        for name, value in arguments.items():
+            try:
+                json.dumps(value)
+            except TypeError:
+                raise TypeError(
+                    f"The {cls.__name__} component is lazy, so what it is given has to "
+                    f"travel to the page and back -- and {name}={value!r} cannot. Give it "
+                    f"something a snapshot can carry, or let the component load with the page."
+                ) from None
+
+        return arguments
+
+    def _waiting_markup(self, settings):
+        """What stands in for the component until it has been got ready.
+
+        A component that writes a placeholder() is shown that; otherwise the
+        skeleton PyBlade draws from the shape and the number of lines. Either
+        way it carries the component's id, and the marker that tells the page to
+        come back for the real thing.
+        """
+        written = self.placeholder() if self._declares("placeholder") else None
+
+        # Rendered the way the component's own template is, so that the id
+        # lands on the root and -- for a component that is a page of its own --
+        # the layout is rendered around it. The layout is what carries the
+        # scripts that come back for the component; a skeleton on a page without
+        # them would wait for ever.
+        markup = written or self.render_inline(
+            skeleton_markup(lines=settings["lines"], shape=settings["shape"]), context={}
+        )
+
+        marker = 'pb:lazy="visible"' if settings["visible"] else 'pb:lazy=""'
+
+        return markup.replace(f'pb:id="{self._id}"', f'pb:id="{self._id}" {marker}', 1)
 
     def _with_snapshot(self, rendered):
         """Write what the component boots from on its own root element.
@@ -874,7 +980,7 @@ class LiveComponent:
     @classmethod
     def update_component(
         cls, state, action_name, action_args=[], request=None, known=(), updates=None,
-        confirmed=False, sink=None, errors=None,
+        confirmed=False, sink=None, errors=None, mount=None,
     ):
         """
         Manage the livfecycle on every AJAX request.
@@ -897,6 +1003,10 @@ class LiveComponent:
         `errors` is what was wrong when the component was last checked, come
         back with the snapshot: a field put right is no reason to forget what
         was said about another.
+
+        `mount` is what a lazy component was to be mounted with, come back with
+        the snapshot. Its presence is the component saying it has not mounted
+        yet, and mounting is the first thing done here when it has not.
         """
         # 1. Recréer l'instance
         instance = cls.deserialize(state)
@@ -907,7 +1017,14 @@ class LiveComponent:
         instance._stream_sink = sink
         instance.errors = dict(errors) if isinstance(errors, dict) else {}
 
-        # 2. Hook : hydrate()
+        # 2. A lazy component mounts on the first request that reaches it,
+        # whatever that request was for: what it holds until then is only what
+        # it was declared with, and half a component is no use to an action.
+        if mount is not None:
+            instance.mount(**mount)
+            instance.boot()
+
+        # 3. Hook : hydrate()
         instance.hydrate()
 
         # 3. What was typed into the form and not sent until now. Set the way
@@ -918,8 +1035,9 @@ class LiveComponent:
 
         outcome = None
 
-        # 4. A refresh asks for nothing but a new rendering
-        if action_name == "$refresh":
+        # 4. A refresh asks for nothing but a new rendering, and so does the
+        # load of a lazy component: the mounting above was the work it wanted.
+        if action_name in ("$refresh", "$lazy"):
             pass
 
         # 5. If the action consists on updating a property (e.g., pb:model)

@@ -5,6 +5,9 @@ import { readCondition } from './expressions.js';
 import { animateOut, enter, onPageVisibility, pageHidden, pollRate, transitionOf } from './transition.js';
 import { cancelUpload, uploadFile } from './upload.js';
 
+/** How long a live field waits for the typing to stop before it sends. */
+const DEFAULT_DEBOUNCE = 250;
+
 export const Directives = {
     // Parse expression with arguments: "method('arg1', 'arg2')" or "method(key='val', key2='val2')"
     parseExpression(expression) {
@@ -414,7 +417,7 @@ export const Directives = {
                     return;
                 }
 
-                component.setProperties([expression, value], modifiers.duration('debounce', 150));
+                component.setProperties([expression, value], modifiers.duration('debounce', DEFAULT_DEBOUNCE));
             };
 
             const typed = (andSend) => () => {

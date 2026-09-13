@@ -270,6 +270,10 @@ def update_component(request: HttpRequest) -> JsonResponse:
     # What was wrong when the component was last checked, signed with the rest
     errors = snapshot.get("errors")
 
+    # What a lazy component is to be mounted with, signed with the rest. Its
+    # presence is the component saying it has not done its work yet.
+    mount = snapshot.get("mount")
+
     try:
         ComponentClass = registry.get(class_path)
     except ValueError as err:
@@ -282,7 +286,7 @@ def update_component(request: HttpRequest) -> JsonResponse:
             streamed_response(
                 ComponentClass, state, action, params,
                 request=request, known=known, updates=updates, confirmed=confirmed,
-                errors=errors,
+                errors=errors, mount=mount,
             ),
             content_type="application/x-ndjson",
         )
@@ -290,7 +294,7 @@ def update_component(request: HttpRequest) -> JsonResponse:
     try:
         response_data = ComponentClass.update_component(
             state, action, params, request=request, known=known, updates=updates,
-            confirmed=confirmed, errors=errors,
+            confirmed=confirmed, errors=errors, mount=mount,
         )
     except PermissionError as err:
         return JsonResponse({"error": str(err)}, status=403)

@@ -12,6 +12,8 @@ without reaching into the internals of the engine.
     from pyblade.live.decorators import layout, renderless
 """
 
+from .skeleton import check_skeleton
+
 from functools import wraps
 
 
@@ -156,7 +158,43 @@ def validate(fn):
     return fn
 
 
-# Not implemented yet. Declared here so that the decorators of a live component
-# are all in one place, and so that what is still missing is plain to see.
-def lazy(fn):
-    pass
+def lazy(component_class=None, *, lines=3, shape="text", visible=False):
+    """Keep the page waiting for nothing: do the work after it has loaded.
+
+        @lazy
+        class Dashboard(LiveComponent):
+            def mount(self):
+                self.figures = a_long_query()
+
+        @lazy(lines=6, shape="table")
+        class Report(LiveComponent):
+            ...
+
+        @lazy(visible=True)
+        class Comments(LiveComponent):
+            ...
+
+    A component written this way does none of its work while the page is being
+    built. It writes a skeleton of itself instead, and the page asks for it
+    again as soon as it has loaded -- or once it has been scrolled to, where it
+    says `visible`. What mount() was to be given travels in the signed snapshot,
+    so the work happens once, later, with the same arguments it would have had.
+
+    `lines` and `shape` say what the skeleton looks like; a component that
+    writes a placeholder() of its own is shown that instead.
+
+    A component may also be made lazy where it is written, which is what to do
+    when it is only in the way on one page:
+
+        <pb-dashboard lazy />
+        <pb-comments lazy="visible" />
+    """
+    check_skeleton(lines=lines, shape=shape)
+
+    def decorate(cls):
+        cls._lazy = {"lines": lines, "shape": shape, "visible": visible}
+
+        return cls
+
+    # Written @lazy rather than @lazy(...), the class itself is what arrives
+    return decorate(component_class) if component_class is not None else decorate

@@ -327,3 +327,89 @@ dialog.pb-confirm .pb-confirm-accept[disabled] {
     opacity: 0.5;
     cursor: not-allowed;
 }
+
+/*
+ * The skeleton a lazy component shows while it is being got ready.
+ *
+ * Everything here is driven by custom properties too, so a project that wants
+ * darker bars, squarer corners or no shimmer at all sets them rather than
+ * overriding the rules:
+ *
+ *   :root {
+ *       --pb-skeleton-color: #2a2a2a;
+ *       --pb-skeleton-highlight: #3a3a3a;
+ *       --pb-skeleton-radius: 2px;
+ *   }
+ *
+ * Replacing it altogether is a matter of styling .pb-skeleton from scratch, or
+ * of writing a placeholder() on the component and drawing whatever it should
+ * look like instead.
+ */
+:root {
+    --pb-skeleton-color: #e9ecef;
+    --pb-skeleton-highlight: #f6f8fa;
+    --pb-skeleton-radius: 4px;
+    --pb-skeleton-height: 0.85rem;
+    --pb-skeleton-gap: 0.6rem;
+    --pb-skeleton-block-height: 8rem;
+    --pb-skeleton-duration: 1.4s;
+}
+
+.pb-skeleton {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pb-skeleton-gap);
+}
+
+.pb-skeleton-line,
+.pb-skeleton-block,
+.pb-skeleton-cell {
+    border-radius: var(--pb-skeleton-radius);
+
+    /* The shimmer is a highlight travelling across a flat bar, which is one
+       background rather than an element of its own to position and hide */
+    background-color: var(--pb-skeleton-color);
+    background-image: linear-gradient(
+        90deg,
+        transparent 0%,
+        var(--pb-skeleton-highlight) 50%,
+        transparent 100%
+    );
+    background-size: 200% 100%;
+    background-repeat: no-repeat;
+    animation: pb-skeleton-shimmer var(--pb-skeleton-duration) ease-in-out infinite;
+}
+
+.pb-skeleton-line {
+    height: var(--pb-skeleton-height);
+}
+
+.pb-skeleton-block {
+    height: var(--pb-skeleton-block-height);
+}
+
+.pb-skeleton-row {
+    display: flex;
+    gap: var(--pb-skeleton-gap);
+}
+
+.pb-skeleton-cell {
+    flex: 1;
+    height: var(--pb-skeleton-height);
+}
+
+@keyframes pb-skeleton-shimmer {
+    from { background-position: 150% 0; }
+    to { background-position: -50% 0; }
+}
+
+/* A reader who has asked for less movement gets bars that simply sit there:
+   the point is to show that something is coming, not to animate at them */
+@media (prefers-reduced-motion: reduce) {
+    .pb-skeleton-line,
+    .pb-skeleton-block,
+    .pb-skeleton-cell {
+        animation: none;
+        background-image: none;
+    }
+}

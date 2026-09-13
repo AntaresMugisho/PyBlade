@@ -12,6 +12,7 @@ import test from 'node:test';
 import { Directives } from '../../pyblade/live/static/src/directives.js';
 import { fieldValue, writeField } from '../../pyblade/live/static/src/fields.js';
 import { Component } from '../../pyblade/live/static/src/component.js';
+import { Modifiers } from '../../pyblade/live/static/src/modifiers.js';
 
 /** Enough of a form field for what is read off one and written to one. */
 class FakeField {
@@ -280,4 +281,48 @@ test('an ordinary action carries everything that is waiting', () => {
     component.setLocal('query', 'abc');
 
     assert.deepEqual(component.pendingUpdatesToSend({ action: 'save', params: [] }), { query: 'abc' });
+});
+
+// How long a live field waits before it sends
+// ---------------------------------------------------------------------------
+
+/** A component that records how long it was asked to wait. */
+function recorder(state = {}) {
+    return {
+        id: 'c1',
+        sent: [],
+        formState: { values: { ...state } },
+        getState: () => state,
+        setLocal() {},
+        seedLocal() {},
+        onStateChange() {},
+        setProperties(pair, delay) { this.sent.push({ pair, delay }); },
+    };
+}
+
+const bindModel = (el, component, modifiers) =>
+    Directives.handlers.model({
+        el, expression: 'query', component, modifiers, signal: undefined,
+    });
+
+test('a live field waits a quarter of a second before it sends', () => {
+    const component = recorder({ query: '' });
+    const field = new FakeField({}, { value: '' });
+
+    bindModel(field, component, Modifiers.from('pb:model.live'));
+    field.value = 'abc';
+    field.fire('input');
+
+    assert.equal(component.sent[0].delay, 250);
+});
+
+test('unless it says how long to wait', () => {
+    const component = recorder({ query: '' });
+    const field = new FakeField({}, { value: '' });
+
+    bindModel(field, component, Modifiers.from('pb:model.live.debounce.500ms'));
+    field.value = 'abc';
+    field.fire('input');
+
+    assert.equal(component.sent[0].delay, 500);
 });

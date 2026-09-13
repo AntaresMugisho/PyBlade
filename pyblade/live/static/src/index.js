@@ -1,5 +1,6 @@
 import { Component } from './component.js';
 import { Directives } from './directives.js';
+import { loadWhenReady } from './lazy.js';
 import { Navigation } from './navigate.js';
 import { Progress } from './progress.js';
 
@@ -35,6 +36,7 @@ class PyBladeCore {
      */
     scan(root = document) {
         const emitted = [];
+        const waiting = [];
 
         root.querySelectorAll('[pb\\:id]').forEach((el) => {
             const id = el.getAttribute('pb:id');
@@ -49,13 +51,21 @@ class PyBladeCore {
             el.removeAttribute('pb:snapshot');
             el.removeAttribute('pb:events');
 
-            this.components.set(id, new Component(id, el, snapshot, this.store));
+            const component = new Component(id, el, snapshot, this.store);
+
+            this.components.set(id, component);
             events.forEach(event => emitted.push([event, id]));
+
+            // A component that arrived as a skeleton, to be asked for once the
+            // page is standing rather than while it is still being put together
+            if (el.hasAttribute('pb:lazy')) waiting.push([component, el]);
         });
 
         // Held back until every component of the page is built, so that one
         // emitting while it mounts reaches the others rather than an empty page
         emitted.forEach(([event, id]) => this.deliver(event, id));
+
+        waiting.forEach(([component, el]) => loadWhenReady(component, el));
     }
 
     /** Read what a component wrote on its element as JSON, if it wrote any. */

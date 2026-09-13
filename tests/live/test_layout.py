@@ -274,3 +274,49 @@ class TestAsView(LayoutTestCase):
         page = self._page("<div>Hi</div>")
 
         self.assertIs(page.as_view().component, page)
+
+
+class TestALazyPage(LayoutTestCase):
+    """A page that keeps nobody waiting is still a page.
+
+    A lazy component skips its own rendering, and the layout is what carries the
+    scripts that would ask for it: skipping that too would leave a skeleton on a
+    page with no PyBlade on it, waiting for something that never comes.
+    """
+
+    def _lazy_page(self, **body):
+        from pyblade.live.decorators import lazy
+
+        return lazy(self._page("<div>Loaded</div>", **body))
+
+    def test_the_layout_is_rendered_around_the_skeleton(self):
+        self._layout(content="<html><head><title>App</title></head><body>{{ slot }}</body></html>")
+
+        rendered = self._render(self._lazy_page())
+
+        self.assertTrue(rendered.startswith("<html><head><title>App</title></head>"))
+        self.assertIn("pb-skeleton", rendered)
+
+    def test_the_skeleton_is_the_component_of_the_page(self):
+        self._layout()
+
+        rendered = self._render(self._lazy_page())
+
+        self.assertIn('pb:id="pb-test"', rendered)
+        self.assertIn("pb:snapshot=", rendered)
+
+    def test_the_id_is_written_once(self):
+        self._layout()
+
+        self.assertEqual(self._render(self._lazy_page()).count('pb:id="pb-test"'), 1)
+
+    def test_a_placeholder_of_its_own_is_given_the_layout_too(self):
+        self._layout(content="<html><body>{{ slot }}</body></html>")
+        page = self._lazy_page(
+            placeholder=lambda self: self.render_inline("<div>Just a moment</div>", context={}),
+        )
+
+        rendered = self._render(page)
+
+        self.assertTrue(rendered.startswith("<html><body>"))
+        self.assertIn("Just a moment", rendered)
