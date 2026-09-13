@@ -176,17 +176,34 @@ class LiveComponent:
                 setattr(self, name, deepcopy(value))
 
 
-    def render_template(self, context: Dict[str, Any] = None):
-        """Render a component with its context"""
+    def render_template(self, template_name: str = None, context: Dict[str, Any] = None):
+        """Render a template as this component, with its context.
+
+            def render(self):
+                return self.render_template()
+
+            def placeholder(self):
+                return self.render_template("skeletons.figures")
+
+        Its own template is what it renders when no name is given, which is what
+        a component does. Naming one is for a component with more than one way
+        to look -- the skeleton a lazy component shows before it has loaded,
+        above all. Either way the component's id lands on the root, what it
+        holds is in the context, and a page component is given its layout.
+        """
 
         if not context:
             context = {}
 
-        # Load the component's template
+        # Load the template: the one named, or the component's own
+        name = template_name or self.get_template_name()
+
         try:
-            template = loader.load_template(self.get_template_name(), [settings.components_dir])
+            template = loader.load_template(name, [settings.components_dir])
         except TemplateNotFoundError:
-            raise TemplateNotFoundError(f"No component named {self.get_template_name()}")
+            raise TemplateNotFoundError(
+                f"No template named {name}" if template_name else f"No component named {name}"
+            )
        
         # Add pb-id to the root node of the template
         if self._id is not None:
@@ -243,11 +260,15 @@ class LiveComponent:
         """What a lazy component shows while it is being got ready.
 
             def placeholder(self):
+                return self.render_template("skeletons.figures")
+
+            def placeholder(self):
                 return self.render_inline("<div>Counting the votes...</div>")
 
         Written when the drawn skeleton is not what the component should look
-        like while it waits. Without one, PyBlade draws the skeleton @lazy asked
-        for.
+        like while it waits -- a skeleton shaped like the real thing, say, kept
+        in a template of its own. Without one, PyBlade draws the skeleton @lazy
+        asked for.
         """
         return None
 

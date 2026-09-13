@@ -320,3 +320,68 @@ class TestALazyPage(LayoutTestCase):
 
         self.assertTrue(rendered.startswith("<html><body>"))
         self.assertIn("Just a moment", rendered)
+
+
+class TestRenderingAnotherTemplate(LayoutTestCase):
+    """A component may render a template other than its own.
+
+    Its own is what it renders when it says nothing, which is what a component
+    does. Naming one is for the times a component has more than one way to look:
+    the skeleton a lazy component shows before it has loaded, above all.
+    """
+
+    def _component(self, **body):
+        return type("Page", (LiveComponent,), body)
+
+    def test_the_template_named_is_the_one_rendered(self):
+        self._layout()
+        self._write("skeletons.figures", "<div>Still counting</div>")
+        page = self._component(render=lambda self: self.render_template("skeletons.figures"))
+
+        self.assertIn("Still counting", self._render(page))
+
+    def test_it_is_rendered_as_the_component(self):
+        """The id lands on its root, and what the component holds is in it."""
+        self._layout()
+        self._write("skeletons.figures", "<div>{{ count }} so far</div>")
+        page = self._component(
+            count=7, render=lambda self: self.render_template("skeletons.figures")
+        )
+
+        rendered = without_snapshot(self._render(page))
+
+        self.assertIn('<div pb:id="pb-test">7 so far</div>', rendered)
+
+    def test_the_layout_is_rendered_around_it(self):
+        self._layout(content="<html><body>{{ slot }}</body></html>")
+        self._write("skeletons.figures", "<div>Still counting</div>")
+        page = self._component(render=lambda self: self.render_template("skeletons.figures"))
+
+        self.assertTrue(self._render(page).startswith("<html><body>"))
+
+    def test_a_template_that_is_not_there_is_said_so_by_name(self):
+        self._layout()
+        page = self._component(render=lambda self: self.render_template("skeletons.nowhere"))
+
+        with self.assertRaises(TemplateNotFoundError) as caught:
+            self._render(page)
+
+        self.assertIn("skeletons.nowhere", str(caught.exception))
+
+    def test_naming_nothing_still_renders_the_component_s_own(self):
+        self._layout()
+        self._write("figures", "<div>The component's own</div>", directory=self.components_dir)
+        page = self._component(
+            template_name="figures", render=lambda self: self.render_template()
+        )
+
+        self.assertIn("The component's own", self._render(page))
+
+    def test_a_context_may_still_be_given_as_it_always_could(self):
+        self._layout()
+        self._write("skeletons.figures", "<div>{{ note }}</div>")
+        page = self._component(
+            render=lambda self: self.render_template("skeletons.figures", {"note": "Hold on"})
+        )
+
+        self.assertIn("Hold on", self._render(page))

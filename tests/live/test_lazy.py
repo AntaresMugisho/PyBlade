@@ -271,3 +271,60 @@ class Waiting(LiveComponent):
 import sys  # noqa: E402  -- the endpoint resolves the component by this module's name
 
 sys.modules[__name__].Waiting = Waiting
+
+
+class TestASkeletonOfItsOwn(unittest.TestCase):
+    """A lazy component may show a template of its own while it waits."""
+
+    def setUp(self):
+        import shutil
+        import tempfile
+        from pathlib import Path
+
+        from pyblade.config import settings
+        from pyblade.engine import loader
+
+        self.root = Path(tempfile.mkdtemp())
+        self.templates = self.root / "templates"
+        self.templates.mkdir()
+        (self.templates / "skeletons").mkdir()
+        (self.templates / "skeletons" / "figures.html").write_text(
+            "<div class='my-own-skeleton'>Counting the figures</div>", encoding="utf-8"
+        )
+
+        self._saved_dirs = list(loader._default_loader._template_dirs)
+        loader._default_loader.add_directories([self.templates])
+
+        self._saved = settings._data.get("templates_dir")
+        settings._data["templates_dir"] = str(self.templates)
+
+        self._cleanup = lambda: (
+            setattr(loader._default_loader, "_template_dirs", self._saved_dirs),
+            settings._data.__setitem__("templates_dir", self._saved)
+            if self._saved is not None else settings._data.pop("templates_dir", None),
+            shutil.rmtree(self.root, ignore_errors=True),
+        )
+
+    def tearDown(self):
+        self._cleanup()
+
+    def test_a_template_may_stand_in_for_it(self):
+        cls = lazy(component(
+            placeholder=lambda self: self.render_template("skeletons.figures"),
+        ))
+
+        markup = cls.render_initial()
+
+        self.assertIn("Counting the figures", markup)
+        self.assertNotIn("pb-skeleton-line", markup)
+
+    def test_and_is_still_the_component_waiting(self):
+        cls = lazy(component(
+            placeholder=lambda self: self.render_template("skeletons.figures"),
+        ))
+
+        markup = cls.render_initial()
+
+        self.assertIn("pb:id=", markup)
+        self.assertIn("pb:snapshot=", markup)
+        self.assertIn("pb:lazy", markup)
