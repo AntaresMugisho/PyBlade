@@ -198,6 +198,17 @@ export function morphCallbacks({ isOwn = () => true } = {}) {
             const persisted = persistedName(oldNode);
             if (persisted !== null && persisted === persistedName(newNode)) return false;
 
+            // A @script block is the one it was, or another one altogether:
+            // never one morphed into the other, which would leave the new key
+            // on the old code
+            if (oldNode.tagName === 'TEMPLATE' && oldNode.hasAttribute?.('pb:script')) {
+                if (oldNode.getAttribute('pb:script') !== newNode.getAttribute?.('pb:script')) {
+                    oldNode.replaceWith(newNode.cloneNode(true));
+                }
+
+                return false;
+            }
+
             if (ignoresContent(oldNode)) return false;
 
             const replace = replacement(oldNode);

@@ -1,3 +1,4 @@
+import hashlib
 import re
 
 from pyblade.engine.exceptions import DirectiveParsingError, TemplateRenderError
@@ -46,6 +47,7 @@ from .nodes import (
     SpacelessNode,
     StackNode,
     PersistNode,
+    ScriptNode,
     LangNode,
     LanguagesNode,
     PushNode,
@@ -181,6 +183,7 @@ class Parser:
         "endsection",
         "endpush",
         "endpersist",
+        "endscript",
         "enderror",
         "endspaceless",
         "endautoescape",
@@ -238,6 +241,8 @@ class Parser:
             return self._parse_push(args, token)
         elif name == "persist":
             return self._parse_persist(args, token)
+        elif name == "script":
+            return self._parse_script(args, token)
         elif name == "lang":
             return LangNode(self._parse_as_name(args, "@lang"), line=token.line, column=token.column)
         elif name == "languages":
@@ -681,6 +686,21 @@ class Parser:
         body = self._parse_until_directives(["@endpersist"])
         self.expect("DIRECTIVE", value_prefix="@endpersist")
         return PersistNode(name, body, line=token.line, column=token.column)
+
+    def _parse_script(self, args_str, token):
+        """Parses a @script...@endscript block.
+
+        Its key is taken from what is written, where it is written: the same
+        block rendered again, with other values in it, is still the same script.
+        """
+        start = self.pos
+        body = self._parse_until_directives(["@endscript"])
+        source = "".join(str(t.value) for t in self.tokens[start:self.pos])
+        self.expect("DIRECTIVE", value_prefix="@endscript")
+
+        key = hashlib.sha1(f"{token.line}:{token.column}:{source}".encode("utf-8")).hexdigest()[:12]
+
+        return ScriptNode(key, body, line=token.line, column=token.column)
 
     def _parse_as_name(self, args_str, directive_name):
         """The variable named by '(as NAME)', or None when nothing was written."""

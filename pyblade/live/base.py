@@ -731,9 +731,13 @@ class LiveComponent:
         pattern being searched for.
         """
 
+        # A @script is written after the root, as it is in Livewire, but has to
+        # be inside it to be the component's: it goes first in the root
+        template_string, scripts = self._take_trailing_scripts(template_string)
+
         match = _OPENING_TAG_PATTERN.search(template_string)
         if match is None:
-            return template_string
+            return template_string + scripts
 
         attributes = match.group("attributes").strip()
 
@@ -747,7 +751,30 @@ class LiveComponent:
             opening += f" {attributes}"
         opening += f' pb:id="{self._id}"{void}>'
 
-        return f"{template_string[:match.start()]}{opening}{template_string[match.end():]}"
+        return f"{template_string[:match.start()]}{opening}{scripts}{template_string[match.end():]}"
+
+    @staticmethod
+    def _take_trailing_scripts(template_string: str):
+        """Take the @script blocks written after everything else out of a template.
+
+        Answers the template without them and the blocks themselves, in the
+        order they were written.
+        """
+        scripts = []
+        rest = template_string.rstrip()
+
+        while rest.endswith("@endscript"):
+            start = rest.rfind("@script")
+            if start == -1:
+                break
+
+            scripts.insert(0, rest[start:])
+            rest = rest[:start].rstrip()
+
+        if not scripts:
+            return template_string, ""
+
+        return rest, "".join(scripts)
 
 
 

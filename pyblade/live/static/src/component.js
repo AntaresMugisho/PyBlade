@@ -4,6 +4,7 @@ import { applyKeys, morphCallbacks } from './morph.js';
 import { readLines } from './streaming.js';
 import { showErrorPage } from './errors.js';
 import { addPushes, runScripts } from './stacks.js';
+import { pbFor, runComponentScripts } from './script.js';
 
 /**
  * How many times a request refused for asking too often is sent again, having
@@ -66,6 +67,15 @@ export class Component {
 
         // Bind directives to DOM
         Directives.apply(this.element, this);
+
+        // What the component wrote @script, now that there is a component to
+        // hand it
+        runComponentScripts(this);
+    }
+
+    /** The component as its @script blocks, and any other JavaScript, see it. */
+    get $pb() {
+        return (this._pb ??= pbFor(this));
     }
 
     async callServerMethod(methodName, params = [], options = undefined) {
@@ -342,6 +352,10 @@ export class Component {
             });
 
             Directives.apply(this.element, this);
+
+            // A @script the new markup brought that has not run yet: one inside
+            // an @if that has just come true
+            runComponentScripts(this);
 
             // Whatever the new markup brought with it, and whatever it took away
             window.PyBlade.scan(this.element);

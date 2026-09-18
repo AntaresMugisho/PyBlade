@@ -172,6 +172,29 @@ class PyBladeCore {
         this.emit(eventName, data);
     }
 
+    /** The $pb of the component of that id, or undefined. */
+    find(id) {
+        return this.components.get(id)?.$pb;
+    }
+
+    /** The $pb of the first component on the page. */
+    first() {
+        return this.components.values().next().value?.$pb;
+    }
+
+    /** The $pb of every component on the page. */
+    all() {
+        return [...this.components.values()].map(component => component.$pb);
+    }
+
+    /**
+     * The $pb of every component of that name: the class on its own, or the
+     * whole path it is reached by.
+     */
+    getByName(name) {
+        return [...this.components.values()].filter(component => component.isNamed(name)).map(c => c.$pb);
+    }
+
     // Register custom directives via JS API
     directive(name, callback) {
         Directives.add(name, callback);

@@ -734,6 +734,39 @@ class PersistNode(Node):
         return f'<div data-pb-persist="{name}">{"".join(output)}</div>'
 
 
+class ScriptNode(Node):
+    """Represents a @script...@endscript block: a live component's own JavaScript.
+
+        @script
+        <script>
+            $pb.$on('saved', () => $pb.$el.classList.add('saved'))
+        </script>
+        @endscript
+
+    It is rendered inert, in a <template>, and the client runs it once each
+    time the component comes onto the page, with `$pb` standing for the
+    component. The key says which @script it is, so an update carrying it again
+    does not run it again (see `static/src/script.js`).
+    """
+
+    def __init__(self, key, body, line=None, column=None):
+        super().__init__(line, column)
+        self.key = key
+        self.body = body
+
+    def __repr__(self):
+        return f"ScriptNode(key='{self.key}', body={self.body})"
+
+    def render(self, context):
+        output = []
+        for node in self.body:
+            rendered = node.render(context)
+            if rendered:
+                output.append(str(rendered))
+
+        return f'<template pb:script="{self.key}">{"".join(output).strip()}</template>'
+
+
 class AutoescapeNode(Node):
     """Represents an @autoescape(True/False)...@endautoescape block.
 
