@@ -24,3 +24,20 @@ if not settings.configured:
         DATABASES={},
     )
     django.setup()
+
+
+import pytest  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _fresh_cache():
+    """Every test starts with nothing counted against it.
+
+    The throttle keeps its counts in Django's cache, which lives as long as the
+    test run does. Without this, a module that makes enough requests from the
+    same address would be refused by the counts of the tests before it.
+    """
+    from django.core.cache import cache
+
+    cache.clear()
+    yield

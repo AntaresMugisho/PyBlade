@@ -4,6 +4,7 @@ from .engine import contexts, exceptions, loader, template
 from .engine.renderer import PyBlade
 from .live import decorators
 from .live.base import LiveComponent
+from .live.mixins import ComponentMixin
 
 
 __all__ = [
@@ -16,5 +17,6 @@ __all__ = [
     template,
     PyBlade,
     decorators,
-    LiveComponent
+    LiveComponent,
+    ComponentMixin,
 ]

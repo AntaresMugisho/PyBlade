@@ -13,7 +13,10 @@ from django.urls import path
 from django import forms
 from django.core.exceptions import ValidationError as DjangoValidationError
 
+from pyblade.engine.renderer import error_page
+
 from .security import verify_snapshot
+from .throttle import stream_slots, throttled
 from .uploads import (MultipleFileField, REFERENCE_PREFIX, TemporaryUpload, store_temporarily,
                       sweep_if_due)
 from .registry import registry
@@ -40,6 +43,9 @@ def serve_assets(request: HttpRequest, asset_type: str):
 
 
 @require_POST
+# A file's size is the component's to decide, with MaxFileSize, so only the
+# rate is counted here
+@throttled("uploads", check_size=False)
 def upload_file(request: HttpRequest) -> JsonResponse:
     """Take a file for a property of a component, before any action runs.
 
@@ -126,6 +132,32 @@ def upload_file(request: HttpRequest) -> JsonResponse:
     ]})
 
 
+def in_development():
+    """Whether the project is being run by whoever is writing it."""
+    return bool(dj_settings.DEBUG)
+
+
+def gone_wrong(error):
+    """What the page is told about an error nobody caught.
+
+    The error page comes back with the message, so the browser can show it over
+    the page the developer is working on. It is built here and not in
+    production: what it holds -- paths on the machine that is serving, the code
+    around the line, the frames it came through -- is for whoever is writing the
+    code and for nobody else.
+    """
+    template = getattr(error, "template", None)
+
+    return {
+        "error": str(error),
+        "page": error_page(
+            error,
+            template_source=getattr(template, "content", None),
+            template_path=getattr(template, "path", None),
+        ),
+    }
+
+
 def preview_upload(request: HttpRequest, reference: str):
     """Hand over a file that has been sent but not kept, so it can be shown.
 
@@ -172,6 +204,41 @@ def _upload_field(ComponentClass, property_name):
     return field if isinstance(field, forms.FileField) else None
 
 
+class _HoldingASlot:
+    """A streamed answer, which gives its slot back even if it never starts.
+
+    The thread a streamed action runs on gives the slot back when it ends. But
+    that thread is only started once the answer starts being written, and a
+    client that has gone before then leaves nothing to start it -- so the slot
+    would be held for ever, and enough of those would leave no slot for anyone.
+    Django closes every answer once it is done with it; this is what makes
+    closing one that never started give the slot back.
+    """
+
+    def __init__(self, answer):
+        self._answer = answer
+        self._started = False
+        self._closed = False
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        # From the first piece on, the thread holds the slot and gives it back
+        self._started = True
+        return next(self._answer)
+
+    def close(self):
+        if self._closed:
+            return
+        self._closed = True
+
+        if not self._started:
+            stream_slots.give_back()
+
+        self._answer.close()
+
+
 def streamed_response(ComponentClass, state, action, params=None, **kwargs):
     """The answer of an action written @streamed, a line of JSON at a time.
 
@@ -207,6 +274,7 @@ def streamed_response(ComponentClass, state, action, params=None, **kwargs):
             except Exception:  # noqa: BLE001 - a project without a database
                 pass
 
+            stream_slots.give_back()
             chunks.put(DONE)
 
     worker = threading.Thread(target=run, daemon=True)
@@ -222,12 +290,19 @@ def streamed_response(ComponentClass, state, action, params=None, **kwargs):
     worker.join()
 
     if "error" in outcome:
-        yield json.dumps({"error": str(outcome["error"])}) + "\n"
+        # A stream has already begun answering, so an error cannot be a status
+        # code any more: it is the last line, with the page where there is one
+        answer = gone_wrong(outcome["error"]) if in_development() else {
+            "error": str(outcome["error"])
+        }
+
+        yield json.dumps(answer) + "\n"
     else:
         yield json.dumps(outcome["response"]) + "\n"
 
 
 @require_POST
+@throttled("actions")
 def update_component(request: HttpRequest) -> JsonResponse:
     """
     HTTP endpoint handling AJAX actions for PyBlade components.
@@ -282,12 +357,21 @@ def update_component(request: HttpRequest) -> JsonResponse:
     # An action that answers as it goes is written out as it goes, rather than
     # built whole and handed over at the end
     if ComponentClass._streams_from(action):
+        # Each one is a thread for as long as it runs, so only so many at once:
+        # enough requests for them would otherwise run the server out of threads
+        if not stream_slots.take():
+            response = JsonResponse(
+                {"error": "The server is busy answering others. Try again in a moment."}, status=429
+            )
+            response["Retry-After"] = "5"
+            return response
+
         return StreamingHttpResponse(
-            streamed_response(
+            _HoldingASlot(streamed_response(
                 ComponentClass, state, action, params,
                 request=request, known=known, updates=updates, confirmed=confirmed,
                 errors=errors, mount=mount,
-            ),
+            )),
             content_type="application/x-ndjson",
         )
 
@@ -298,7 +382,17 @@ def update_component(request: HttpRequest) -> JsonResponse:
         )
     except PermissionError as err:
         return JsonResponse({"error": str(err)}, status=403)
-    except ValueError as err:
-        return JsonResponse({"error": str(err)}, status=404)
+    except Exception as err:
+        # While developing, anything nobody caught comes back as the error page
+        # rather than as the framework's own: it is the page for what went
+        # wrong here, and the browser shows it over the page being worked on.
+        if in_development():
+            return JsonResponse(gone_wrong(err), status=500)
+
+        # A component the registry does not know is not a server error
+        if isinstance(err, ValueError):
+            return JsonResponse({"error": str(err)}, status=404)
+
+        raise
 
     return JsonResponse(response_data)

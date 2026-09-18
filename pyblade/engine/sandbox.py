@@ -91,6 +91,15 @@ class SafeEvaluator:
         return self._eval_node(tree.body, context or {})
 
     def _is_safe_method(self, owner, method_name):
+        # An object may say which of its methods a template is allowed to call,
+        # by listing them in pb_safe_methods. It is the object that says so,
+        # never the template, so a template still cannot widen what it may call
+        # -- and an object that says nothing goes on being unable to be called
+        # into at all, which is what everything a project puts in a context is.
+        declared = getattr(type(owner), "pb_safe_methods", None)
+        if declared is not None:
+            return method_name in declared
+
         for typ, allowed in self._safe_methods.items():
             if isinstance(owner, typ):
                 return method_name in allowed

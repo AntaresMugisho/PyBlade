@@ -413,3 +413,63 @@ dialog.pb-confirm .pb-confirm-accept[disabled] {
         background-image: none;
     }
 }
+
+/*
+ * The dialogue the PyBlade error page is shown in while developing.
+ *
+ * It is only ever built when something has gone wrong, and only ever while
+ * developing: the server sends no page in production, so none of this appears
+ * on a page a reader will see.
+ */
+:root {
+    --pb-error-width: min(72rem, 92vw);
+    --pb-error-height: min(46rem, 86vh);
+    --pb-error-radius: 12px;
+    --pb-error-backdrop: rgba(2, 6, 23, 0.72);
+}
+
+dialog.pb-error {
+    width: var(--pb-error-width);
+    height: var(--pb-error-height);
+    max-width: var(--pb-error-width);
+    padding: 0;
+    border: 0;
+    border-radius: var(--pb-error-radius);
+    overflow: hidden;
+    background: transparent;
+}
+
+dialog.pb-error::backdrop {
+    background: var(--pb-error-backdrop);
+}
+
+dialog.pb-error .pb-error-page {
+    width: 100%;
+    height: 100%;
+    border: 0;
+    display: block;
+    border-radius: var(--pb-error-radius);
+    background: #0f172b;
+}
+
+dialog.pb-error .pb-error-close {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.75rem;
+    z-index: 1;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    font: inherit;
+    font-size: 1.25rem;
+    line-height: 1;
+    color: #e2e8f0;
+    background: rgba(15, 23, 43, 0.85);
+    cursor: pointer;
+}
+
+dialog.pb-error .pb-error-close:hover {
+    background: rgba(15, 23, 43, 1);
+}

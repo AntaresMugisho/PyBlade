@@ -1,0 +1,67 @@
+{#
+    The links to the other pages of a paginated list.
+
+    This is the one PyBlade draws unless a project has said otherwise. Export it
+    with `pyblade live:stubs --pagination` to take it over: once it is at
+    templates/stubs/pagination/tailwind.html it is used in place of this one,
+    and it is yours to restyle.
+
+    What it is given:
+        paginator      the page, with current_page(), last_page(), has_pages()...
+        on_each_side   how many page numbers to show either side of this one
+
+    The buttons call the paginator's own actions, so nothing else is needed to
+    make them work.
+#}
+@if(paginator.has_pages())
+    <nav role="navigation" aria-label="Pagination" class="flex items-center justify-between gap-2 py-3">
+        @if(paginator.on_first_page())
+            <span class="px-3 py-1.5 text-sm text-gray-400 select-none">&larr; Previous</span>
+        @else
+            <button
+                pb:click="previous_page"
+                pb:loading.attr="disabled"
+                rel="prev"
+                class="px-3 py-1.5 text-sm rounded border border-gray-300 hover:bg-gray-50
+                       disabled:opacity-50 disabled:cursor-not-allowed"
+            >&larr; Previous</button>
+        @endif
+
+        <span class="hidden sm:flex items-center gap-1">
+            @for(number in paginator.window(on_each_side))
+                @if(number)
+                    @if(number == paginator.current_page())
+                        <span
+                            aria-current="page"
+                            class="px-3 py-1.5 text-sm rounded bg-gray-900 text-white"
+                        >{{ number }}</span>
+                    @else
+                        <button
+                            pb:click="set_page({{ number }})"
+                            pb:loading.attr="disabled"
+                            class="px-3 py-1.5 text-sm rounded border border-gray-300 hover:bg-gray-50"
+                        >{{ number }}</button>
+                    @endif
+                @else
+                    <span class="px-2 text-sm text-gray-400 select-none">&hellip;</span>
+                @endif
+            @endfor
+        </span>
+
+        <span class="sm:hidden text-sm text-gray-500">
+            {{ paginator.current_page() }} / {{ paginator.last_page() }}
+        </span>
+
+        @if(paginator.on_last_page())
+            <span class="px-3 py-1.5 text-sm text-gray-400 select-none">Next &rarr;</span>
+        @else
+            <button
+                pb:click="next_page"
+                pb:loading.attr="disabled"
+                rel="next"
+                class="px-3 py-1.5 text-sm rounded border border-gray-300 hover:bg-gray-50
+                       disabled:opacity-50 disabled:cursor-not-allowed"
+            >Next &rarr;</button>
+        @endif
+    </nav>
+@endif

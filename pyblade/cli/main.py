@@ -31,6 +31,7 @@ DEFAULT_COMMANDS = {
         "make:component",
         "make:live",
         "make:template",
+        "live:stubs",
         "messages:make",
         "messages:compile",
         "tailwind:config",

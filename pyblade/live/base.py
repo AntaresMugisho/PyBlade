@@ -12,6 +12,7 @@ from pyblade.engine.exceptions import TemplateNotFoundError
 from pyblade.engine.template import Template
 from pyblade.config import settings
 
+from .mixins import ComponentMixin
 from .security import generate_checksum
 from django.utils.datastructures import MultiValueDict
 
@@ -430,11 +431,22 @@ class LiveComponent:
 
     @classmethod
     def _own_attributes(cls):
-        """The attributes a component declares, the ones of the base class left out."""
+        """The attributes a component declares, the ones of the base class left out.
+
+        What a component mixes in counts as its own only where the mixin says so,
+        by inheriting ComponentMixin. Everything else a component happens to
+        inherit from is left out: a component built on some other class of its own
+        would otherwise hand that whole class to the browser as state, and offer
+        its every method as an action.
+        """
         attributes = {}
 
         for klass in reversed(cls.__mro__):
-            if klass is LiveComponent or not issubclass(klass, LiveComponent):
+            # The two bases themselves declare the machinery, not the component
+            if klass is LiveComponent or klass is ComponentMixin:
+                continue
+
+            if not issubclass(klass, (LiveComponent, ComponentMixin)):
                 continue
 
             for name, value in vars(klass).items():
@@ -1159,6 +1171,13 @@ class LiveComponent:
         if instance._streams:
             response["streams"] = instance._streams
 
+        # What the address bar is to say about the page being looked at, and
+        # where to scroll once the new one is drawn
+        query = instance._pagination_answer()
+        if query is not None:
+            response["query"] = query["query"]
+            response["scroll"] = query["scroll"]
+
         # What the action returned, when it asked the client to go somewhere
         if isinstance(outcome, dict) and "redirect" in outcome:
             response["redirect"] = outcome["redirect"]
@@ -1353,6 +1372,21 @@ class LiveComponent:
                 files[name] = upload.as_file()
 
         return files
+
+    def _pagination_answer(self):
+        """What a paginated component wants said about the address bar.
+
+        Nothing at all for a component that does not paginate, so the answer
+        stays as small as it was for everything that came before this.
+        """
+        if not callable(getattr(self, "pagination_query", None)):
+            return None
+
+        query = self.pagination_query()
+        if not query:
+            return None
+
+        return {"query": query, "scroll": self.pagination_scroll()}
 
     def stream(self, to: str, content, replace: bool = False):
         """Send content to an element on the page, without waiting to be done.

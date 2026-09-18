@@ -693,7 +693,9 @@ export const Directives = {
             const tick = async () => {
                 // A server slower than the interval would otherwise be asked
                 // again before it has answered, and again, and again
-                if (inFlight || !seen) return;
+                // Told to wait, the ticks meanwhile are skipped rather than
+                // queued: they would all go out together once the wait was over
+                if (inFlight || !seen || component.quietFor?.() > 0) return;
 
                 inFlight = true;
                 try {

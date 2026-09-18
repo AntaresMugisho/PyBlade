@@ -83,6 +83,7 @@
             </div>
 
             {# File Info #}
+            @if(template_path)
             <div class="bg-slate-800/80 border-b border-slate-700/50 px-6 py-4">
                 <div class="flex items-center gap-6 text-sm">
                     <div class="flex items-center gap-2">
@@ -103,8 +104,10 @@
                     </div>
                 </div>
             </div>
+            @endif
 
             {# Code Preview #}
+            @if(code_lines)
             <div class="p-6">
                 <div class="bg-slate-900/80 rounded-xl border border-slate-700/50 overflow-hidden">
                     <div class="bg-slate-800/50 px-4 py-2 border-b border-slate-700/50 flex items-center gap-2">
@@ -140,6 +143,26 @@
                     </div>
                 </div>
             </div>
+            @endif
+
+            {# Where it came through, for an error that points at no template #}
+            @if(traceback)
+            <div class="p-6">
+                <div class="bg-slate-900/80 rounded-xl border border-slate-700/50 overflow-hidden">
+                    <div class="bg-slate-800/50 px-4 py-2 border-b border-slate-700/50 flex items-center gap-2">
+                        <div class="flex gap-1.5">
+                            <div class="w-3 h-3 rounded-full bg-red-500/80"></div>
+                            <div class="w-3 h-3 rounded-full bg-yellow-500/80"></div>
+                            <div class="w-3 h-3 rounded-full bg-green-500/80"></div>
+                        </div>
+                        <span class="text-xs text-slate-400 ml-2 font-mono">Traceback</span>
+                    </div>
+                    <div class="p-4 overflow-x-auto">
+                        <pre class="font-mono text-sm text-slate-300" id="traceback">{{ traceback }}</pre>
+                    </div>
+                </div>
+            </div>
+            @endif
 
             {# Footer  #}
             <div class="bg-slate-800/30 border-t border-slate-700/50 px-6 py-4">

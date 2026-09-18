@@ -2,6 +2,15 @@ import { Directives } from './directives.js';
 import { Idiomorph } from "../vendor/idiomorph.esm.js"
 import { applyKeys, morphCallbacks } from './morph.js';
 import { readLines } from './streaming.js';
+import { showErrorPage } from './errors.js';
+
+/**
+ * How many times a request refused for asking too often is sent again, having
+ * waited as long as it was told to, before the component gives up on it. Enough
+ * for a burst of clicks to get through; not so many that a server refusing for
+ * good is asked for ever.
+ */
+const RETRIES_WHEN_THROTTLED = 3;
 
 export class Component {
     constructor(id, element, snapshot, store) {
@@ -34,6 +43,10 @@ export class Component {
         };
         this.pendingUpdates = null;
         this.pendingUpdateTimer = null;
+
+        // What is waiting to be asked of the server, so that one request goes
+        // out at a time and each carries what the last answer brought back
+        this._queue = null;
 
         // The dirty properties as they were last told, so that they are only
         // told again when they have actually changed
@@ -84,7 +97,48 @@ export class Component {
         }, delay);
     }
 
-    async sendRequest(payload) {
+    /**
+     * Ask the server something, once whatever was asked before has been answered.
+     *
+     * A request carries the state the component last heard about, so two of them
+     * sent together both carry the older one: the second answer is worked out
+     * from the same state as the first and lands on top of it, and what the
+     * first did is lost. Clicking twice quickly counted once.
+     *
+     * So they queue. The next goes out when the last has answered, by which time
+     * the state it carries is the state that answer brought back.
+     */
+    sendRequest(payload) {
+        const waitingOn = this._queue;
+
+        // Whoever is last in the queue holds it until they have been answered
+        let answered;
+        const place = new Promise((resolve) => { answered = resolve; });
+        this._queue = place;
+
+        // With nothing in flight there is nothing to wait for, and a request
+        // held back even a tick is an interaction that felt slower than it was
+        const sending = waitingOn
+            ? waitingOn.then(() => this._send(payload))
+            : this._send(payload);
+
+        const done = () => {
+            // Nobody queued behind us, so the queue is empty again
+            if (this._queue === place) this._queue = null;
+            answered();
+        };
+
+        sending.then(done, done);
+
+        return sending;
+    }
+
+    async _send(payload, attempt = 0) {
+        // Told to wait by the server: a request sent now would only be refused
+        // again, and would count against us while it was
+        const wait = this.quietFor();
+        if (wait > 0) await new Promise(resolve => setTimeout(resolve, wait));
+
         const csrfToken = document.querySelector('script[data-csrf]')?.getAttribute('data-csrf');
 
         // What is being asked of the server, so that an element watching one
@@ -120,15 +174,39 @@ export class Component {
                 return this.failed({ status: 0, payload, error });
             }
 
-            if (!response.ok) return this.failed({ status: response.status, payload });
+            if (!response.ok) {
+                // Refused for asking too often. The server refuses before the
+                // action runs, so nothing was done and asking again cannot do it
+                // twice: the request waits out what it was told and goes again,
+                // rather than a click being lost for having been quick.
+                if (response.status === 429) {
+                    this.keepQuiet(response.headers.get('Retry-After'));
+
+                    if (attempt < RETRIES_WHEN_THROTTLED) return await this._send(payload, attempt + 1);
+                }
+
+                // While developing, a refusal comes back with the PyBlade error
+                // page in it, which is worth far more than the status alone
+                return this.failed({
+                    status: response.status,
+                    payload,
+                    answer: await this.readAnswer(response),
+                });
+            }
 
             // An action that answers as it goes says so with its content type:
             // its answer is a line of JSON at a time, the last of which is the
             // answer proper and the rest what it streamed on the way there.
             if (response.headers.get('Content-Type')?.includes('x-ndjson')) {
                 await readLines(response.body, (line) => {
-                    if (line.stream) this.streamTo(line.stream);
-                    else this.apply(ticket, line);
+                    if (line.stream) return this.streamTo(line.stream);
+
+                    // An action that went wrong half way through cannot answer
+                    // with a status any more: it says so in its last line, and
+                    // that line is a failure rather than a new state to apply
+                    if (line.error) return this.failed({ status: 500, payload, answer: line });
+
+                    this.apply(ticket, line);
                 });
                 return;
             }
@@ -168,7 +246,26 @@ export class Component {
      *             : 'Something went wrong. Try again.';
      *     });
      */
-    failed({ status, payload, error = null }) {
+    /**
+     * Stop asking for as long as the server said to.
+     *
+     * Refused for asking too often, the page keeps quiet rather than asking
+     * again at once: every request sent meanwhile would be refused too, and
+     * would count against it while it was.
+     */
+    keepQuiet(retryAfter) {
+        const seconds = Number.parseInt(retryAfter, 10);
+        const until = Date.now() + (Number.isFinite(seconds) && seconds > 0 ? seconds : 1) * 1000;
+
+        this._quietUntil = Math.max(this._quietUntil || 0, until);
+    }
+
+    /** How many milliseconds are left before the component may ask again. */
+    quietFor() {
+        return Math.max(0, (this._quietUntil || 0) - Date.now());
+    }
+
+    failed({ status, payload, error = null, answer = null }) {
         const detail = {
             id: this.id,
             action: payload?.action ?? null,
@@ -177,16 +274,39 @@ export class Component {
             // A session or a token that has gone stale is refused, and asking
             // again will be refused too until the page has been loaded afresh
             expired: status === 403,
+
+            // Refused for asking too often, and how long before asking again
+            throttled: status === 429,
+            retryIn: status === 429 ? this.quietFor() : 0,
             error,
+            message: answer?.error ?? null,
+
+            // The PyBlade error page, which the server sends while developing
+            // and never in production
+            page: answer?.page ?? null,
         };
 
         console.error(
             `PyBlade: ${detail.action || 'a request'} for ${this.id} was not answered `
-            + `(${status || 'no answer at all'}).`
+            + `(${status || 'no answer at all'}).`,
+            detail.message || ''
         );
 
+        // Said first, then shown: whatever the page makes of an error, it hears
+        // about it even if there is nowhere to show the error page
         this.errorCallbacks.forEach(cb => cb(detail));
         document.dispatchEvent(new CustomEvent('live:error', { detail, cancelable: true }));
+
+        if (detail.page) showErrorPage(detail.page);
+    }
+
+    /** What a refusal holds, where it holds anything a page can read. */
+    async readAnswer(response) {
+        try {
+            return await response.json();
+        } catch {
+            return null;
+        }
     }
 
     /** Watch for a request of this component's that came back wrong. */
@@ -194,7 +314,7 @@ export class Component {
         return this._register(this.errorCallbacks, callback, signal);
     }
 
-    update({ html, snapshot, events = [], streams = [], redirect = null }) {
+    update({ html, snapshot, events = [], streams = [], query = null, scroll = null, redirect = null }) {
         this.store.set(this.id, snapshot);
 
         // What has not been typed into is the server's to say, so that the
@@ -230,6 +350,11 @@ export class Component {
         // What the action streamed while there was nowhere to stream it to:
         // written now, all at once, rather than as it was written
         streams.forEach(chunk => this.streamTo(chunk));
+
+        // Which page of a paginated list is being looked at, so that the
+        // address bar says it and reloading the page comes back to it
+        if (query) this.writeQuery(query);
+        if (html && scroll !== null) this.scrollAfterUpdate(scroll);
 
         // What the server has answered for is no longer dirty
         this.refreshDirty();
@@ -405,6 +530,40 @@ export class Component {
      */
     streamTo(chunk) {
         this.streamUpdateCallbacks.forEach(cb => cb(chunk));
+    }
+
+    /**
+     * Say in the address bar what is being looked at.
+     *
+     * Written over rather than pushed: walking ten pages of a list should not
+     * put ten entries in the reader's history for the Back button to climb
+     * through, and reloading should still come back to the page they were on.
+     */
+    writeQuery(query) {
+        const url = new URL(window.location.href);
+
+        Object.entries(query).forEach(([name, value]) => {
+            if (value === null || value === undefined || value === '') url.searchParams.delete(name);
+            else url.searchParams.set(name, value);
+        });
+
+        if (url.href !== window.location.href) history.replaceState(history.state, '', url.href);
+    }
+
+    /**
+     * Go back to the top of what has just been drawn again.
+     *
+     * A reader who was at the bottom of page one is at the bottom of page two
+     * otherwise, looking at its last few rows and wondering what happened.
+     */
+    scrollAfterUpdate(scroll) {
+        if (scroll === false) return;
+
+        const target = typeof scroll === 'string'
+            ? (this.element.closest(scroll) || document.querySelector(scroll))
+            : this.element;
+
+        target?.scrollIntoView({ block: 'start', behavior: 'smooth' });
     }
 
     /**

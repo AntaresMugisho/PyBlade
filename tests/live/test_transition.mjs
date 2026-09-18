@@ -240,3 +240,23 @@ test('a poll stops when its binding is dropped', async () => {
 
     assert.equal(component.refreshes, stoppedAt);
 });
+
+test('a poll keeps quiet while the server has said to wait', async () => {
+    const component = { ...pollable(), quietFor: () => 5000 };
+    component.refresh = pollable().refresh.bind(component);
+    component.refreshes = 0;
+    const controller = new AbortController();
+
+    Directives.handlers.poll({
+        el: pollElement('pb:poll'),
+        expression: '',
+        component,
+        modifiers: Modifiers.from('pb:poll.50ms'),
+        signal: controller.signal,
+    });
+
+    await new Promise(r => setTimeout(r, 250));
+    controller.abort();
+
+    assert.equal(component.refreshes, 0);
+});
