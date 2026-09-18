@@ -7,7 +7,7 @@ from importlib import import_module
 
 from pyblade.config import settings
 
-__all__ = ["gettext", "ngettext", "pgettext", "npgettext", "pggetext"]
+__all__ = ["gettext", "ngettext", "pgettext", "npgettext", "pggetext", "current_language", "available_languages"]
 
 _BUILTIN_TRANSLATIONS = None
 
@@ -139,3 +139,32 @@ def npgettext(context: str, singular: str, plural: str, count: int) -> str:
 
 
 pggetext = pgettext
+
+
+def current_language() -> str:
+    """The language the page is being rendered in, as a code ("fr", "en-us").
+
+    Django's active language when PyBlade runs under Django, otherwise the
+    locale PyBlade is configured with.
+    """
+    return _get_default_locale()
+
+
+def available_languages() -> list:
+    """The languages the project offers, as (code, name) pairs.
+
+    Django's LANGUAGES under Django, each name translated into the language
+    being rendered, as Django's own get_available_languages does. Otherwise the
+    "languages" entry of pyblade.json, a list of [code, name] pairs, which is
+    empty when there is none.
+    """
+    if settings.framework == "django":
+        try:
+            from django.conf import settings as django_settings
+            from django.utils.translation import gettext as django_gettext
+
+            return [(code, str(django_gettext(name))) for code, name in django_settings.LANGUAGES]
+        except Exception:
+            pass
+
+    return [(str(code), str(name)) for code, name in (settings.languages or [])]

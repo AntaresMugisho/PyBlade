@@ -245,7 +245,8 @@ class TestTemplateInheritance(unittest.TestCase):
 
         result = self._render(template, context)
 
-        self.assertEqual(self.processor.cache.get(template, context), result)
+        # Kept with what it pushed, which is nothing here
+        self.assertEqual(self.processor.cache.get(template, context), (result, []))
 
     def test_circular_inheritance_is_reported(self):
         self._write("layouts.base", "@extends('layouts.app')")

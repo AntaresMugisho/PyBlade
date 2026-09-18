@@ -3,6 +3,7 @@ import { Idiomorph } from "../vendor/idiomorph.esm.js"
 import { applyKeys, morphCallbacks } from './morph.js';
 import { readLines } from './streaming.js';
 import { showErrorPage } from './errors.js';
+import { addPushes, runScripts } from './stacks.js';
 
 /**
  * How many times a request refused for asking too often is sent again, having
@@ -314,8 +315,12 @@ export class Component {
         return this._register(this.errorCallbacks, callback, signal);
     }
 
-    update({ html, snapshot, events = [], streams = [], query = null, scroll = null, redirect = null }) {
+    update({ html, snapshot, events = [], streams = [], pushes = [], query = null, scroll = null, redirect = null }) {
         this.store.set(this.id, snapshot);
+
+        // What the new markup pushed and the page does not hold yet -- a script
+        // it needs -- goes in first, so that it is there when the markup is
+        runScripts(addPushes(pushes));
 
         // What has not been typed into is the server's to say, so that the
         // page keeps up with a property an action changed

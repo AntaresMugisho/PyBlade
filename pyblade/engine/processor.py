@@ -4,7 +4,7 @@ Core template processing functionality.
 
 from typing import Any, Dict
 
-from . import loader
+from . import loader, stacks
 from .cache import TemplateCache
 from .exceptions import TemplateRenderError
 from .lexer import Lexer
@@ -56,6 +56,15 @@ class TemplateProcessor:
             TemplateRenderError: If there's an error during rendering
         """
 
+        # Whatever this template and what it renders push is kept for the whole
+        # of the render; the outermost one puts it where the stacks are.
+        with stacks.rendering() as (collection, outermost):
+            result = self._render(collection, template, context, inherit=inherit, layout=layout)
+
+            return collection.fill(result) if outermost else result
+
+    def _render(self, collection, template, context, inherit=True, layout=None):
+        """Render a template, pushing what it pushes into the collection."""
         self.context = context.copy() if context else {}
 
         # The context the cache key is built from, kept aside as rendering may
@@ -73,10 +82,17 @@ class TemplateProcessor:
         else:
             cache_key = template
 
-        # Check cache first
-        cached_result = self.cache.get(cache_key, cache_context)
-        if cached_result is not None:
-            return cached_result
+        # What was pushed is kept with the output: taken from the cache, a
+        # template still pushes what rendering it would have.
+        cached = self.cache.get(cache_key, cache_context)
+        if cached is not None:
+            result, pushes = cached
+            for stack, content in pushes:
+                collection.push(stack, content)
+
+            return result
+
+        pushed_before = len(collection.pushes)
 
         try:
             tokens = Lexer(template).tokenize()
@@ -101,7 +117,7 @@ class TemplateProcessor:
             result = "".join(output)
 
             # Save cache
-            self.cache.set(cache_key, cache_context, result)
+            self.cache.set(cache_key, cache_context, (result, collection.since(pushed_before)))
 
             return result
 

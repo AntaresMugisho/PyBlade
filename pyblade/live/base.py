@@ -7,7 +7,7 @@ import json
 import inspect
 from pprint import pprint # noqa
 
-from pyblade.engine import loader
+from pyblade.engine import loader, stacks
 from pyblade.engine.exceptions import TemplateNotFoundError
 from pyblade.engine.template import Template
 from pyblade.config import settings
@@ -1148,12 +1148,19 @@ class LiveComponent:
 
         # 8. Hooks. An action that asked not to render answers with its new
         # state alone, and the page is left as it is.
+        # What it pushes has no layout around it to land in here, so it is
+        # collected and sent along, for the page to add what it does not hold.
+        pushed = None
         if instance._skip_render:
             instance._rendered = None
         else:
-            instance.rendering()
-            instance.render()
-            instance.rendered(instance._rendered)
+            with stacks.collecting() as collection:
+                instance.rendering()
+                instance.render()
+                instance.rendered(instance._rendered)
+
+            instance._rendered = collection.fill(instance._rendered)
+            pushed = collection.pushes_for_client()
 
         # 9. Return the new HTML and the new serialized state for the frontend
         response = {
@@ -1161,6 +1168,9 @@ class LiveComponent:
             "snapshot": instance.serialize(),
             "events": instance._get_events(),
         }
+
+        if pushed:
+            response["pushes"] = pushed
 
         # What was wrong when it was checked, so the page can say so
         if instance.errors:

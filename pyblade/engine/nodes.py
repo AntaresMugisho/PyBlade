@@ -17,10 +17,10 @@ from pyblade.engine.exceptions import (
     TemplateNotFoundError,
     TemplateRenderError,
 )
-from pyblade.i18n import gettext, ngettext, npgettext, pgettext
+from pyblade.i18n import available_languages, current_language, gettext, ngettext, npgettext, pgettext
 from pyblade.utils import validate_single_root_node, snakebab_to_pascal, pascal_to_snake
 
-from . import loader
+from . import loader, stacks
 from .contexts import AttributesContext, CycleContext, LoopContext, SafeContent, SlotContent, SlotContext
 from .sandbox import SafeEvaluator
 
@@ -655,6 +655,85 @@ class YieldNode(Node):
         return content
 
 
+class StackNode(Node):
+    """Represents a @stack('name') directive: where what is pushed to it comes out.
+
+    What is pushed is only known once the whole page has rendered, so this
+    leaves a marker the outermost render fills in (see `stacks`).
+    """
+
+    def __init__(self, name, line=None, column=None):
+        super().__init__(line, column)
+        self.name = name
+
+    def __repr__(self):
+        return f"StackNode(name='{self.name}')"
+
+    def render(self, context):
+        return stacks.placeholder(self.eval(self.name, context))
+
+
+class PushNode(Node):
+    """Represents a @push('name')...@endpush block.
+
+    The content is rendered here, in the context it is written in, and handed to
+    the stack of that name. It is kept once: the same content pushed again, by a
+    component used twice on the page, comes out once.
+    """
+
+    def __init__(self, name, body, line=None, column=None):
+        super().__init__(line, column)
+        self.name = name
+        self.body = body
+
+    def __repr__(self):
+        return f"PushNode(name='{self.name}', body={self.body})"
+
+    def render(self, context):
+        output = []
+        for node in self.body:
+            rendered = node.render(context)
+            if rendered:
+                output.append(str(rendered))
+
+        stacks.push(self.eval(self.name, context), "".join(output))
+
+        return ""
+
+
+class PersistNode(Node):
+    """Represents a @persist('name')...@endpersist block.
+
+    What is inside is kept on the page as it is while the page changes around
+    it: a component being updated leaves it alone, and navigating to a page with
+    a @persist of the same name moves it there rather than drawing it again. A
+    video carries on playing, a call stays connected.
+
+    The server only marks it; keeping it is the client's (`morph.js`). The name
+    is on an attribute of its own rather than on a `pb:` directive, as there is
+    nothing to write by hand: the directive is the only way to ask for it.
+    """
+
+    def __init__(self, name, body, line=None, column=None):
+        super().__init__(line, column)
+        self.name = name
+        self.body = body
+
+    def __repr__(self):
+        return f"PersistNode(name='{self.name}', body={self.body})"
+
+    def render(self, context):
+        output = []
+        for node in self.body:
+            rendered = node.render(context)
+            if rendered:
+                output.append(str(rendered))
+
+        name = html_escape(str(self.eval(self.name, context)))
+
+        return f'<div data-pb-persist="{name}">{"".join(output)}</div>'
+
+
 class AutoescapeNode(Node):
     """Represents an @autoescape(True/False)...@endautoescape block.
 
@@ -1263,8 +1342,11 @@ class PybladeScriptsNode(Node):
         # and swallow the word after it
         token = html_escape(str(context.get("csrf_token", "")))
 
+        # Run once however many pages are navigated to: PyBlade itself is
+        # never started twice on a page
         return (
-            f'<script type="module" src="/pyblade/live/assets/js/" data-csrf="{token}" defer></script>'
+            f'<script type="module" src="/pyblade/live/assets/js/" data-csrf="{token}" defer '
+            f'data-navigate-once></script>'
         )
 
 
@@ -1603,6 +1685,57 @@ class NowNode(Node):
             context[self.as_name] = result
             return ""
         return result
+
+
+class LangNode(Node):
+    """Represents @lang, the code of the language the page is rendered in.
+
+        <html lang="@lang">
+        @lang(as CURRENT_LANGUAGE)
+
+    Written alone it writes the code; with a name it keeps it in that variable
+    and writes nothing.
+    """
+
+    def __init__(self, as_name=None, line=None, column=None):
+        super().__init__(line, column)
+        self.as_name = as_name
+
+    def __repr__(self):
+        return f"LangNode(as_name='{self.as_name}')"
+
+    def render(self, context):
+        code = current_language()
+
+        if self.as_name:
+            context[self.as_name] = code
+            return ""
+
+        return html_escape(str(code))
+
+
+class LanguagesNode(Node):
+    """Represents @languages, the languages the project offers as (code, name) pairs.
+
+        @languages(as LANGUAGES)
+        @for(language in LANGUAGES) {{ language[1] }} @endfor
+
+    A list has nothing to write, so it is always kept in a variable: the one
+    named, or `languages` when none is.
+    """
+
+    DEFAULT_NAME = "languages"
+
+    def __init__(self, as_name=None, line=None, column=None):
+        super().__init__(line, column)
+        self.as_name = as_name
+
+    def __repr__(self):
+        return f"LanguagesNode(as_name='{self.as_name}')"
+
+    def render(self, context):
+        context[self.as_name or self.DEFAULT_NAME] = available_languages()
+        return ""
 
 
 class RegroupNode(Node):

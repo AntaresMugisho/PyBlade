@@ -77,6 +77,8 @@ def validate_single_root_node(html_content: str):
     html_content = re.sub(r"<!--.*?-->", "", html_content, flags=re.DOTALL)
     html_content = re.sub(r"{#(.*?)#}", "", html_content, flags=re.DOTALL)
     html_content = re.sub(r"@comment\s*(?P<content>.*?)@endcomment", "", html_content, flags=re.DOTALL)
+    # What is pushed comes out where the stack is, not in the component
+    html_content = re.sub(r"@push\b.*?@endpush", "", html_content, flags=re.DOTALL)
 
     # Count tags
     tags = []

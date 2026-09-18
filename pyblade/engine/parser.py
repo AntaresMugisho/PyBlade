@@ -44,6 +44,11 @@ from .nodes import (
     SectionNode,
     SlotNode,
     SpacelessNode,
+    StackNode,
+    PersistNode,
+    LangNode,
+    LanguagesNode,
+    PushNode,
     StaticNode,
     StyleNode,
     SwitchNode,
@@ -174,6 +179,8 @@ class Parser:
         "endwith",
         "endblock",
         "endsection",
+        "endpush",
+        "endpersist",
         "enderror",
         "endspaceless",
         "endautoescape",
@@ -225,6 +232,16 @@ class Parser:
             return self._parse_section(args, token)
         elif name == "yield":
             return self._parse_yield(args, token)
+        elif name == "stack":
+            return self._parse_stack(args, token)
+        elif name == "push":
+            return self._parse_push(args, token)
+        elif name == "persist":
+            return self._parse_persist(args, token)
+        elif name == "lang":
+            return LangNode(self._parse_as_name(args, "@lang"), line=token.line, column=token.column)
+        elif name == "languages":
+            return LanguagesNode(self._parse_as_name(args, "@languages"), line=token.line, column=token.column)
         elif name == "block":
             return self._parse_block(args, token)
         elif name == "parent":
@@ -645,6 +662,39 @@ class Parser:
         # Parse arguments like @yield('content', 'Default content')
         name_expr, default_expr = self._parse_function_args(args_str)
         return YieldNode(name_expr, default_expr, line=token.line, column=token.column)
+
+    def _parse_stack(self, args_str, token):
+        """Parses a @stack('name') directive."""
+        name = self._extract_expression_from_args(args_str, "@stack")
+        return StackNode(name, line=token.line, column=token.column)
+
+    def _parse_push(self, args_str, token):
+        """Parses a @push('name')...@endpush block."""
+        name = self._extract_expression_from_args(args_str, "@push")
+        body = self._parse_until_directives(["@endpush"])
+        self.expect("DIRECTIVE", value_prefix="@endpush")
+        return PushNode(name, body, line=token.line, column=token.column)
+
+    def _parse_persist(self, args_str, token):
+        """Parses a @persist('name')...@endpersist block."""
+        name = self._extract_expression_from_args(args_str, "@persist")
+        body = self._parse_until_directives(["@endpersist"])
+        self.expect("DIRECTIVE", value_prefix="@endpersist")
+        return PersistNode(name, body, line=token.line, column=token.column)
+
+    def _parse_as_name(self, args_str, directive_name):
+        """The variable named by '(as NAME)', or None when nothing was written."""
+        if not args_str:
+            return None
+
+        match = re.match(r"^\(\s*as\s+([A-Za-z_][A-Za-z0-9_]*)\s*\)$", args_str.strip())
+        if not match:
+            raise DirectiveParsingError(
+                f"Invalid arguments for {directive_name}: '{args_str}'.",
+                help=f"Write {directive_name} alone, or {directive_name}(as NAME) to keep the value in a variable.",
+            )
+
+        return match.group(1)
 
     def _parse_component(self, args_str, token):
         """Parses an @component('name', data)...@endcomponent block."""
