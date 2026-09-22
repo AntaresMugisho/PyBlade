@@ -8,8 +8,12 @@ test-js:
 	node --test tests/live/*.mjs
 
 test-py:
-	pytest tests
+	uv run pytest tests
 
 test: test-py test-js
 
-.PHONY: build-js watch-js test-js test-py test
+pre-commit:
+	uv run pre-commit run --all-files
+
+
+.PHONY: build-js watch-js test-js test-py test pre-commit

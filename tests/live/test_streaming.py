@@ -9,6 +9,8 @@ all at once when the action returns.
 import json
 import unittest
 
+from django.test import override_settings
+
 from pyblade.live.base import LiveComponent
 from pyblade.live.decorators import streamed
 
@@ -133,6 +135,26 @@ class TestStreamingAsItHappens(unittest.TestCase):
 
         self.assertEqual(lines[0]["stream"]["content"], "one")
         self.assertIn("no good", lines[-1]["error"])
+
+    def test_in_production_what_went_wrong_stays_on_the_server(self):
+        def write(self):
+            raise ValueError("password=hunter2")
+
+        with override_settings(DEBUG=False), self.assertLogs("pyblade.live", level="ERROR") as logged:
+            lines = self._lines(component(write=streamed(write)))
+
+        self.assertNotIn("hunter2", json.dumps(lines[-1]))
+        self.assertEqual(lines[-1], {"error": "Something went wrong on the server."})
+        self.assertIn("hunter2", "\n".join(logged.output))
+
+    def test_in_production_a_refusal_still_says_why(self):
+        def write(self):
+            raise PermissionError("You can't do that.")
+
+        with override_settings(DEBUG=False):
+            lines = self._lines(component(write=streamed(write)))
+
+        self.assertEqual(lines[-1], {"error": "You can't do that."})
 
     def test_the_pieces_keep_the_order_they_were_streamed_in(self):
         def write(self):

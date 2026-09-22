@@ -268,6 +268,44 @@ class TestShowingAFileOnItsWay(UploadEndpointTestCase):
 
         self.assertIn("private", response["Cache-Control"])
 
+    def test_the_browser_is_told_not_to_guess_what_it_is(self):
+        response = self._get(self._token(self._upload()))
+
+        self.assertEqual(response["X-Content-Type-Options"], "nosniff")
+
+    def test_nothing_in_it_may_run(self):
+        response = self._get(self._token(self._upload()))
+
+        self.assertIn("sandbox", response["Content-Security-Policy"])
+        self.assertIn("default-src 'none'", response["Content-Security-Policy"])
+
+    def test_a_picture_is_shown(self):
+        response = self._get(self._token(self._upload(content_type="image/jpeg")))
+
+        self.assertFalse(response.get("Content-Disposition", "").startswith("attachment"))
+
+    def test_a_page_is_downloaded_rather_than_shown(self):
+        upload = self._upload(name="evil.html", content=b"<script>alert(1)</script>", content_type="text/html")
+
+        response = self._get(self._token(upload))
+
+        self.assertTrue(response["Content-Disposition"].startswith("attachment"))
+        self.assertIn("evil.html", response["Content-Disposition"])
+        self.assertEqual(response["Content-Type"], "application/octet-stream")
+
+    def test_an_svg_is_downloaded_too_since_it_can_hold_a_script(self):
+        upload = self._upload(name="logo.svg", content=b"<svg/>", content_type="image/svg+xml")
+
+        response = self._get(self._token(upload))
+
+        self.assertTrue(response["Content-Disposition"].startswith("attachment"))
+
+    def test_it_is_kept_under_a_name_that_says_nothing_of_what_it_is(self):
+        upload = self._upload(name="evil.html", content_type="text/html")
+
+        self.assertNotIn(".", upload.stored_name.rsplit("/", 1)[-1])
+        self.assertEqual(upload.name, "evil.html")
+
     def test_a_note_made_up_out_of_nothing_shows_nothing(self):
         from django.http import Http404
 

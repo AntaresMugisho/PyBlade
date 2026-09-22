@@ -615,6 +615,45 @@ class LiveComponent:
 
         return value
 
+    @classmethod
+    def _annotated_names(cls):
+        """The properties a component declares by their type alone, with no value yet."""
+        names = set()
+
+        for klass in cls.__mro__:
+            if klass is LiveComponent or klass is ComponentMixin:
+                continue
+
+            if issubclass(klass, (LiveComponent, ComponentMixin)):
+                names |= set(vars(klass).get("__annotations__", {}))
+
+        return {name for name in names if not cls._is_reserved(name)}
+
+    def _check_settable_from_client(self, name: str):
+        """Refuse a name the page may not set.
+
+        The page may set the properties the component holds -- declared on it,
+        set while it was alive, or declared by their type and not given a value
+        yet -- and nothing else. Setting anything else is what nobody writing a
+        component expects: a method set from the page is shadowed for the rest
+        of the request, and a name the component never had becomes one.
+        """
+        if self._is_reserved(name):
+            raise AttributeError(
+                f"'{name}' is not a property of the {type(self).__name__} component and cannot be set."
+            )
+
+        if name in self._get_state():
+            return
+
+        declared = getattr(type(self), name, None)
+        if name in self._annotated_names() and not callable(declared) and not isinstance(declared, property):
+            return
+
+        raise PermissionError(
+            f"'{name}' is not a property of the {type(self).__name__} component the page may set."
+        )
+
     def _set_property(self, name: str, value):
         """Set a property of the component, running the hooks that watch it.
 
@@ -1125,6 +1164,11 @@ class LiveComponent:
         # 3. What was typed into the form and not sent until now. Set the way
         # any property is, so that the hooks watching one run for it too.
         if isinstance(updates, dict):
+            # All of them checked before any is set, so that one refused leaves
+            # nothing half done and no hook run for the others
+            for name in updates:
+                instance._check_settable_from_client(name)
+
             for name, value in updates.items():
                 instance._set_property(name, cls._from_state(value))
 
@@ -1137,6 +1181,7 @@ class LiveComponent:
 
         # 5. If the action consists on updating a property (e.g., pb:model)
         elif action_name == "$set":
+            instance._check_settable_from_client(action_args[0])
             instance._set_property(action_args[0], cls._from_state(action_args[1]))
 
         # 6. An event another component emitted, come back to be handled here

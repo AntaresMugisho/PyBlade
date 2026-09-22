@@ -118,9 +118,25 @@ class TestInProduction(ErrorTestCase):
         with self.assertRaises(TypeError):
             self._post(action="crash")
 
-    def test_nothing_of_the_error_page_is_ever_sent(self):
-        """Whatever else it answers, the page is not for a stranger to read."""
-        self.assertNotIn("page", self._body(self._post()))
+    def test_a_value_error_of_the_component_is_left_to_the_framework_too(self):
+        """Not answered 404 with its message: what went wrong is for the logs."""
+        with self.assertRaises(ValueError):
+            self._post()
+
+    def test_a_component_that_cannot_be_found_is_not_found(self):
+        from pyblade.live.registry import ComponentNotFound
+
+        def missing(self):
+            raise ComponentNotFound("PyBlade Live Component 'secret.path.Thing' could not be resolved.")
+
+        self.component_class.explode_missing = missing
+        try:
+            response = self._post(action="explode_missing")
+        finally:
+            del self.component_class.explode_missing
+
+        self.assertEqual(response.status_code, 404)
+        self.assertNotIn("secret.path", response.content.decode())
 
 
 class TestAnActionThatAnswersAsItGoes(unittest.TestCase):

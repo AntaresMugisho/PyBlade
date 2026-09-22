@@ -1,4 +1,5 @@
 import json
+import logging
 import queue
 import threading
 from pathlib import Path
@@ -19,7 +20,20 @@ from .security import verify_snapshot
 from .throttle import stream_slots, throttled
 from .uploads import (MultipleFileField, REFERENCE_PREFIX, TemporaryUpload, store_temporarily,
                       sweep_if_due)
-from .registry import registry
+from .registry import ComponentNotFound, registry
+
+logger = logging.getLogger("pyblade.live")
+
+#: What the page is told about an error in production, where what went wrong
+#: is for the server's logs and not for whoever is looking at the page
+GENERIC_ERROR = "Something went wrong on the server."
+
+#: The types a preview is shown as rather than downloaded: pictures a browser
+#: draws and does nothing else with. SVG is not one of them: it can hold scripts.
+SHOWN_INLINE = frozenset({
+    "image/png", "image/jpeg", "image/gif", "image/webp", "image/avif", "image/bmp",
+    "image/x-icon", "image/vnd.microsoft.icon",
+})
 
 
 def serve_assets(request: HttpRequest, asset_type: str):
@@ -176,7 +190,22 @@ def preview_upload(request: HttpRequest, reference: str):
     except (FileNotFoundError, OSError):
         raise Http404("That file is no longer here.")
 
-    response = FileResponse(handle, content_type=upload.content_type)
+    # The type is what the browser that sent the file said it was, which is
+    # anybody's to say. It is shown on this site only when it is a picture a
+    # browser draws and nothing more; anything else -- a page, an SVG, a PDF --
+    # could run a script here, on the site's own address, so it is handed over
+    # to be downloaded instead.
+    if upload.content_type in SHOWN_INLINE:
+        response = FileResponse(handle, content_type=upload.content_type)
+    else:
+        response = FileResponse(
+            handle, content_type="application/octet-stream", as_attachment=True, filename=upload.name,
+        )
+
+    # And the browser is told to take the type at its word rather than guess
+    # it from the bytes, and to run nothing that is in it whatever it is
+    response["X-Content-Type-Options"] = "nosniff"
+    response["Content-Security-Policy"] = "default-src 'none'; img-src 'self'; sandbox"
 
     # A file on its way belongs to the reader who sent it and to nobody else,
     # least of all to a cache between them
@@ -292,9 +321,19 @@ def streamed_response(ComponentClass, state, action, params=None, **kwargs):
     if "error" in outcome:
         # A stream has already begun answering, so an error cannot be a status
         # code any more: it is the last line, with the page where there is one
-        answer = gone_wrong(outcome["error"]) if in_development() else {
-            "error": str(outcome["error"])
-        }
+        error = outcome["error"]
+
+        if in_development():
+            answer = gone_wrong(error)
+        elif isinstance(error, PermissionError):
+            # A refusal is said out loud, as the 403 of an ordinary action is
+            answer = {"error": str(error)}
+        else:
+            # An ordinary action that fails ends in Django's own 500, which
+            # tells the page nothing and logs the rest. A stream has already
+            # begun answering, so it does the same by hand.
+            logger.error("A streamed action failed.", exc_info=error)
+            answer = {"error": GENERIC_ERROR}
 
         yield json.dumps(answer) + "\n"
     else:
@@ -389,9 +428,11 @@ def update_component(request: HttpRequest) -> JsonResponse:
         if in_development():
             return JsonResponse(gone_wrong(err), status=500)
 
-        # A component the registry does not know is not a server error
-        if isinstance(err, ValueError):
-            return JsonResponse({"error": str(err)}, status=404)
+        # A component the registry does not know is not a server error. Only
+        # that: a ValueError the component raises itself is an error like any
+        # other, and its message is for the logs, not for the page.
+        if isinstance(err, ComponentNotFound):
+            return JsonResponse({"error": "That component could not be found."}, status=404)
 
         raise
 

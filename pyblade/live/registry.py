@@ -2,6 +2,14 @@ import importlib
 from typing import Type, Dict, Any
 
 
+class ComponentNotFound(ValueError):
+    """A live component the registry cannot resolve.
+
+    A ValueError still, for whatever caught one before, but a class of its own
+    so that it can be told apart from a ValueError a component raises itself.
+    """
+
+
 class LiveComponentRegistry:
     """
     Central registry for PyBlade Live components.
@@ -29,7 +37,7 @@ class LiveComponentRegistry:
 
         :param class_path: Full Python path of the component class.
         :return: The resolved Python class object.
-        :raises ValueError: If the class or module cannot be imported.
+        :raises ComponentNotFound: If the class or module cannot be imported.
         """
         # 1. Fast lookup from memory cache
         if class_path in self._components:
@@ -45,7 +53,7 @@ class LiveComponentRegistry:
             self._components[class_path] = cls
             return cls
         except (ValueError, ImportError, AttributeError) as err:
-            raise ValueError(f"PyBlade Live Component '{class_path}' could not be resolved.") from err
+            raise ComponentNotFound(f"PyBlade Live Component '{class_path}' could not be resolved.") from err
 
 
 # Global singleton instance

@@ -251,8 +251,10 @@ def store_temporarily(uploaded_file):
     what a browser calls a file is the browser's to choose, and two readers
     sending 'photo.jpg' are sending two different photos.
     """
-    suffix = Path(uploaded_file.name or "").suffix
-    stored_name = f"{TEMPORARY_DIRECTORY}/{uuid4().hex}{suffix}"
+    # Nor does it keep the extension the file came with: a storage served from
+    # the site's own address would otherwise serve evil.html as a page. What
+    # the file was called travels on the note, and is what it is saved as.
+    stored_name = f"{TEMPORARY_DIRECTORY}/{uuid4().hex}"
 
     saved_name = default_storage.save(stored_name, uploaded_file)
 

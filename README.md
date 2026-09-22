@@ -1,120 +1,165 @@
-# PyBlade
+<p align="center">
+  <a href="https://pyblade.com"><img src="https://raw.githubusercontent.com/antaresmugisho/pybladedocs/main/public/images/pyblade.png" width="280" height="280" alt="PyBlade Logo"/></a>
+</p>
 
-**PyBlade** is a lightweight, flexible, and efficient template engine for Python, inspired by Laravel's Blade syntax. It makes transitioning from Laravel to Django seamless by offering familiar features like components (inspired by **Laravel Livewire**) and a simple, intuitive syntax. Designed primarily for **Django** projects, PyBlade allows developers to create dynamic, interactive templates with ease, while maintaining robust security measures.
+<h1 align="center">PyBlade</h1>
 
-## Roadmap
+<div align="center"> 
 
-- [x] Basic template rendering with variable interpolation
-- [x] Support for conditionals and loops
-- [x] Template inheritance, partials, and slots
-- [x] Integration with Django
-- [x] Components similar to Laravel Livewire
-- [x] Security measures
-- [ ] Full documentation
+**_The reactive template engine for Python web frameworks._**
 
-## Features
+</div>
 
-- **Familiar Blade-Like Syntax**: Intuitive `@`-based directives for conditions, loops, and variable interpolation.
-- **Component Support**: Fully functional component system inspired by Laravel Livewire, enabling developers to create reusable, dynamic components with real-time interactivity.
-- **Easy Django Integration**: A powerful alternative to Django's default templating engine, while maintaining seamless integration.
-- **Lightweight and Fast**: Optimized for performance and simplicity.
-- **Security-Focused**: Enhanced security features including:
-  - Automatic escaping of variables
-  - Safe expression evaluation
-  - Protection against XSS attacks
-  - CSRF protection for components
-  - Secure attribute handling
-- **Ideal for Laravel Developers**: Designed to help Laravel developers easily understand and adapt to Django's ecosystem.
+<div align="center">
 
-## Documentation
+  ![GitHub License](https://img.shields.io/github/license/antaresmugisho/pyblade)
+  [![PyPI](https://img.shields.io/pypi/v/pyblade.svg?color=yellow)](https://pypi.org/project/pyblade/)
+  [![Downloads](https://pepy.tech/badge/pyblade)](https://pepy.tech/project/pyblade)
+  ![GitHub Stars](https://img.shields.io/github/stars/antaresmugisho/pyblade)
 
-Comprehensive documentation is available at [docs.pyblade.dev](https://docs.pyblade.dev).
+</div>
 
+PyBlade is a lightweight, reactive template engine for Python. It brings reusable UI components and server-driven interactivity to your web apps using Python and HTML, without requiring a frontend framework.
+
+> **Beta:** PyBlade is still experimental. APIs may change between releases and it is not yet recommended for production applications.
 
 ## Installation
 
-Install PyBlade via pip:
+Install PyBlade from PyPI:
 
 ```bash
 pip install pyblade
 ```
 
-## File Extension
+PyBlade integrates into your existing Python web application rather than replacing your application framework.
 
-PyBlade uses the standard `.html` file extension for templates, making it compatible with existing web development tools and workflows while maintaining familiar syntax highlighting and editor features.
+## CLI
 
+PyBlade includes a CLI for common development tasks:
 
-## IDE Support
-
-### Available Now
-- [**PyBlade IntelliSense**](https://marketplace.visualstudio.com/items?itemName=antares.pyblade-intellisense) in the VS Code marketplace with support of:
-  - Syntax highlighting
-  - Snippets
-  - Auto-completion for directives and components
-
-### Coming Soon
-- **JetBrains IDEs** (PyCharm, WebStorm, etc.)
-- **Sublime Text**
-- **Atom**
-
-## Basic Usage
-
-```html
-<!-- template.html -->
-@extends('layouts.base')
-
-@section('content')
-    <h1>Welcome, {{ user.name }}!</h1>
-
-    @if(posts)
-        @for(post in posts)
-            <article>
-                <h2>{{ post.title }}</h2>
-                <p>{{ post.content }}</p>
-            </article>
-        @endfor
-    @else
-        <p>No posts found.</p>
-    @endif
-
-    <!-- Interactive Component Example -->
-    @component('like-button', post_id=post.id)
-        <span>Like this post</span>
-    @endcomponent
-@endsection
+```bash
+pyblade init
+pyblade serve
+pyblade make:template
+pyblade make:component
+pyblade make:livecomponent
 ```
 
-## Security
+To see the available commands and options, run `pyblade --help` or `pyblade <COMMAND> --help`.
 
-At PyBlade, we take security seriously. The template engine will automatically escape output unless explicitly marked as safe. This helps protect against **Cross-Site Scripting (XSS)** and ensures that user-generated content is handled securely. Additional features, such as CSRF token support and other security best practices, will be incorporated to ensure that your Django applications remain secure.
+See the [CLI documentation](https://docs.pyblade.com/cli) for more details.
+
+
+## Templates
+
+PyBlade templates are regular `.html` files with additional syntax for layouts, conditions, loops, and components.
+
+### Layouts
+
+```html
+@extends('layouts.base')
+
+@block('content')
+    <h1>Hello, {{ user.name }}!</h1>
+@endblock
+```
+
+### Conditions
+
+```html
+@if(user.is_authenticated)
+    <p>Welcome back, {{ user.name }}.</p>
+@else
+    <p>Please sign in.</p>
+@endif
+```
+
+### Loops
+
+```html
+@for(post in posts)
+    <article>
+        <h2>{{ post.title }}</h2>
+    </article>
+@empty
+    <p>No posts found.</p>
+@endfor
+```
+
+### Components
+
+Reusable components as well as live components can be rendered directly from templates:
+
+```html
+<pb-user-profile :user="user" />
+```
+
+They can also be invoked with the component directive:
+
+```html
+@component('user-profile', {'user': user})
+```
+
+
+## Framework Integration
+
+PyBlade is designed to work with Python web frameworks and can be introduced into an existing application.
+
+Only django is fully supported for now, we will add other frameworks support incrementally.
+
+<!-- Framework-specific setup, configuration, and integration details are available in the [documentation](https://docs.pyblade.com/framework-integration). -->
+
+
+## Editor Support
+
+[PyBlade IntelliSense for VS Code](https://marketplace.visualstudio.com/items?itemName=antares.pyblade-intellisense) provides:
+
+* Syntax highlighting
+* Snippets
+* Directive completion
+* Component completion
+
+Additional editor integrations are planned.
+
+
+## Project Status
+
+PyBlade is currently in beta.
+
+The template engine, component system, CLI, Live Components, and framework integrations are actively evolving. APIs and conventions may change before the first stable release.
+
+If you want to follow the project, report a bug, request a feature, or share feedback, visit the [GitHub repository](https://github.com/antaresmugisho/pyblade) or [PyBlade Feedback](https://feedback.pyblade.com).
 
 ## Contributing
 
-Contributions are welcome! PyBlade is an open-source project, and we invite developers from both the Django and Laravel communities to collaborate. Please refer to the [Contributing Guide](docs/docs/CONTRIBUTING.md) for more information.
+Contributions are welcome, including bug reports, fixes, documentation, examples, editor tooling, and new ideas.
 
-PyBlade is open source and welcomes contributions! Here's how you can help:
+Before contributing, please read:
 
-- **Core Development**: Visit our [PyBlade GitHub repository](https://github.com/antaresmugisho/pyblade)
-- **IDE Extensions**: Help develop extensions for various editors
-    - [PyBlade IntelliSense for VS Code](https://github.com/antaresmugisho/pybladeintellisense-vscode)
-    - [PyBlade IntelliSense for Sublime Text](https://github.com/antaresmugisho/pybladeintellisense-sublime)
-    - [PyBlade IntelliSense for JetBrains IDEs](https://github.com/antaresmugisho/pybladeintellisense-jetbrains)
-    - [PyBlade IntelliSense for Atom](https://github.com/antaresmugisho/pybladeintellisense-atom)
-- **Documentation**: Improve our docs from the [core repository](https://github.com/antaresmugisho/pyblade)
-- **Bug Reports**: Submit issues on GitHub
-- **Feature Requests**: Share your ideas through GitHub discussions
+* [Contributing Guide](CONTRIBUTING.md)
+* [Code of Conduct](CODE_OF_CONDUCT.md)
+* [Security Policy](SECURITY.md)
+
+You can also contribute to the wider PyBlade ecosystem:
+
+- [PyBlade Documentation](https://github.com/AntaresMugisho/PyBladeDocs), the source for [docs.pyblade.com](https://docs.pyblade.com)
+
+- [PyBlade IntelliSense for VS Code](https://github.com/antaresmugisho/pybladeintellisense-vscode)
+- [PyBlade IntelliSense for Sublime Text](https://github.com/antaresmugisho/pybladeintellisense-sublime)
+- [PyBlade IntelliSense for JetBrains IDEs](https://github.com/antaresmugisho/pybladeintellisense-jetbrains)
+- [PyBlade IntelliSense for Atom](https://github.com/antaresmugisho/pybladeintellisense-atom)
 
 
-## License
-
-This project is licensed under the **MIT License** – see the [LICENSE](LICENSE) file for details.
+If you discover a security vulnerability, please follow the [Security Policy](SECURITY.md) instead of opening a public issue.
 
 ## Acknowledgements
 
-- Inspired by Laravel's Blade template engine and Livewire components.
-- Thanks to the Python, Django, and Laravel communities for their ongoing support of open-source projects.
-- Special thanks to [Michael Dimchuk](https://github.com/michaeldimchuk) for graciously releasing the
-name **PyBlade** on PyPI for this project. Your kindness and support for the open-source community are truly appreciated!
+PyBlade's template syntax is inspired by [Laravel Blade](https://laravel.com/docs/blade), while its Live Components are inspired by [Livewire](https://livewire.laravel.com).
 
----
-Let's bring the power of Blade-like templating and Livewire-like interactivity to Django ! 🚀
+PyBlade builds on ideas and work from the Python, Django, and Laravel communities.
+
+Special thanks to [Michael Dimchuk](https://github.com/michaeldimchuk) for graciously releasing the **PyBlade** name on PyPI for this project.
+
+## License
+
+PyBlade is licensed under the [BSD 3-Clause License](LICENSE).
