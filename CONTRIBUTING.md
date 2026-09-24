@@ -154,6 +154,11 @@ Configuration is read through `pyblade.config.config`, from a project's `pyblade
 has a default in `pyblade/config.py`, so add one there before reading it anywhere else, and a key
 that names a place on disk comes back as a `Path`.
 
+The project is found by looking for that file upwards from the working directory. A server is not
+started from the directory the project is in, so when that turns up nothing PyBlade falls back to
+`$PYBLADE_ROOT`, and then to what the framework says (Django's `BASE_DIR`). Use `config.root`
+rather than `Path.cwd()` for anything that has to resolve against the project.
+
 A Django project may also write a `PYBLADE` dictionary in its settings, which wins over the file.
 PyBlade reads it only once Django is configured and reads it again until then, because PyBlade is
 imported well before `django.setup()` runs. Never read a framework's settings at import time.

@@ -11,24 +11,19 @@ is, so that importing PyBlade before `django.setup()` -- which the CLI, a
 management command and the test suite all do -- cannot fail on it.
 """
 
-import sys
+import os
+import tomllib
 from contextlib import contextmanager
 from copy import deepcopy
 from pathlib import Path
 
-if sys.version_info >= (3, 11):
-    import tomllib
-else:  # pragma: no cover - only reached on Pythons older than tomllib
-    try:
-        import tomli as tomllib
-    except ModuleNotFoundError:
-        tomllib = None
-
+#: Where a project says it is, for when nothing else can work it out.
+ROOT_VARIABLE = "PYBLADE_ROOT"
 
 #: The files a project may describe itself in, in the order they are looked for.
 CONFIG_FILES = ("pyblade.toml", "pyproject.toml")
 
-#: What a project gets without saying anything.
+#: What a project gets by default.
 DEFAULTS = {
     "project": {
         "name": "",
@@ -42,15 +37,13 @@ DEFAULTS = {
         "js_package_manager": "",
     },
     "paths": {
-        "core": "",
         "settings": "",
         "templates": "templates",
         "components": "components",
         "commands": "management/commands",
     },
-    "live": {
-        "classes_dir": "live",
-        "templates_dir": "live",
+    "live_components": {
+        "own_folder": True,
         "paginator": "",
         "throttle": {
             "enabled": True,
@@ -73,7 +66,6 @@ DEFAULTS = {
 #: Keys whose value names a place on disk, and so is handed over as a Path.
 PATH_KEYS = frozenset(
     {
-        "paths.core",
         "paths.settings",
         "paths.templates",
         "paths.components",
@@ -81,8 +73,6 @@ PATH_KEYS = frozenset(
         "paths.root",
         "paths.stubs",
         "i18n.directory",
-        "live.classes_dir",
-        "live.templates_dir",
     }
 )
 
@@ -95,7 +85,6 @@ MOVED = {
     "pyblade_version": "project.pyblade_version",
     "framework": "stack.framework",
     "css_framework": "stack.css_framework",
-    "core_dir": "paths.core",
     "settings_path": "paths.settings",
     "root_dir": "paths.root",
     "stubs_dir": "paths.stubs",
@@ -113,8 +102,8 @@ COMMENTS = {
     "project": "What this project is called.",
     "stack": "What it is built with.",
     "paths": "Where its parts are, relative to this file.",
-    "live": "Live components.",
-    "live.throttle": "How much a single client may ask for. See the docs before relaxing these.",
+    "live_components": "Live components. own_folder puts each one's class and template in a folder of its own.",
+    "live_components.throttle": "How much a single client may ask for. See the docs before relaxing these.",
     "i18n": "Languages and translations.",
 }
 
@@ -166,13 +155,6 @@ def _plant(data: dict, dotted: str, value) -> None:
 
 def _read_toml(path: Path) -> dict:
     """The TOML file at `path`, read."""
-    if tomllib is None:  # pragma: no cover - only on Pythons older than tomllib
-        raise RuntimeError(
-            f"Reading {path.name} needs a TOML parser, which Python "
-            f"{sys.version_info.major}.{sys.version_info.minor} has not got. "
-            "Install 'tomli', or move to Python 3.11 or later."
-        )
-
     with open(path, "rb") as file:
         return tomllib.load(file)
 
@@ -257,6 +239,10 @@ class Config:
         # What this run has said, which wins over both and is never written
         self._runtime = {}
 
+        # Whether the project has been looked for somewhere other than the
+        # working directory, which can only be done once a framework is up
+        self._looked_again = False
+
         self.load()
 
     # READING
@@ -269,12 +255,70 @@ class Config:
 
     @property
     def root(self) -> Path:
-        """The directory the project lives in."""
+        """The directory the project lives in.
+
+        Worked out from the file describing it, which is looked for upwards
+        from the working directory -- except that a project is not always run
+        from its own directory. A WSGI server, a systemd unit with a
+        WorkingDirectory of its own, a cron job: none of them start where the
+        project is, and a root of '/' would send every template lookup
+        somewhere silly. So the working directory is only one of the answers.
+        """
         runtime = _dig(self._runtime, "paths.root", None)
         if runtime:
             return Path(runtime)
 
-        return self._file_path.parent if self._file_path else Path.cwd()
+        named = os.getenv(ROOT_VARIABLE)
+        if named:
+            return Path(named)
+
+        self._look_again()
+
+        if self._file_path:
+            return self._file_path.parent
+
+        return self._framework_root() or Path.cwd()
+
+    def _framework_root(self) -> Path | None:
+        """Where the framework that is serving thinks the project is.
+
+        Django works this out for itself and writes it into every settings file
+        it generates, which makes it the one thing on a running server that
+        certainly knows. Asked only once Django can answer, as everything of
+        Django's is.
+        """
+        try:
+            from django.conf import settings as django_settings
+
+            if not django_settings.configured:
+                return None
+
+            base = getattr(django_settings, "BASE_DIR", None)
+        except Exception:
+            return None
+
+        return Path(base) if base else None
+
+    def _look_again(self) -> None:
+        """Look for the project somewhere other than the working directory.
+
+        Only ever does anything when the working directory turned nothing up
+        and something else can say where to look, so an ordinary run never pays
+        for it.
+        """
+        if self._file_path is not None or self._explicit is not None or self._looked_again:
+            return
+
+        for start in (os.getenv(ROOT_VARIABLE), self._framework_root()):
+            if not start:
+                continue
+
+            found = find_config_file(start)
+            if found:
+                self._file_path = found
+                self._looked_again = True
+                self.load()
+                return
 
     def read(self, dotted: str):
         """What the configuration says at a dotted key.
@@ -284,6 +328,8 @@ class Config:
         """
         if dotted == "paths.root":
             return self.root
+
+        self._look_again()
 
         if dotted == "paths.stubs":
             return Path(__file__).parent / "cli" / "stubs"
@@ -436,6 +482,7 @@ class Config:
         """Read everything again, forgetting what the framework had said."""
         self._framework = {}
         self._framework_raw = None
+        self._looked_again = False
         self._file_path = self._explicit or find_config_file()
         self.load()
 
@@ -569,6 +616,3 @@ def _dump_value(value) -> str:
 
 
 config = Config()
-
-#: The name this was known by before the tables; the very same configuration.
-settings = config

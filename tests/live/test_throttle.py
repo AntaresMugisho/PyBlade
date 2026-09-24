@@ -39,7 +39,9 @@ class ThrottleTestCase(unittest.TestCase):
 
     def configure(self, **options):
         """Say what this project allows, for the length of the test."""
-        self._stack.enter_context(config.override({f"live.throttle.{key}": value for key, value in options.items()}))
+        self._stack.enter_context(
+            config.override({f"live_components.throttle.{key}": value for key, value in options.items()})
+        )
 
     def post(self, address="10.0.0.1", body="{}", **extra):
         return self.requests.post(

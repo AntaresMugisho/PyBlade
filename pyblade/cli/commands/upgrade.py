@@ -1,5 +1,6 @@
-from pyblade.cli import BaseCommand
-from pyblade.utils import get_version, run_command
+from pyblade.cli import BaseCommand, packages
+from pyblade.config import config
+from pyblade.utils import get_version
 
 
 class Command(BaseCommand):
@@ -16,11 +17,23 @@ class Command(BaseCommand):
     def handle(self, **kwargs):
         """Execute the 'pyblade upgrade' command"""
 
+        manager = packages.python_manager(config.root)
+        command = packages.python_upgrade_command(manager, ["pyblade"])
+
+        if command is None:
+            self.error(
+                "PyBlade has no environment it may upgrade itself in.\n"
+                " Activate the virtualenv this project uses, or upgrade it with whatever installed it."
+            )
+            return
+
         version_before = get_version()
-        try:
-            run_command("pip install --upgrade pyblade")
-        except Exception as e:
-            self.error(f"Failed to upgrade PyBlade: {e}")
+
+        with self.status(f"Upgrading PyBlade with {manager}..."):
+            result = packages.install(command, cwd=config.root)
+
+        if result.returncode != 0:
+            self.error(f"`{packages.as_typed(command)}` failed:\n{result.stderr.strip()}")
             return
 
         version_after = get_version()

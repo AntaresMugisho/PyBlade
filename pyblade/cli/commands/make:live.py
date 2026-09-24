@@ -11,6 +11,7 @@ class Command(BaseCommand):
     """
 
     name = "make:live"
+    aliases = ["make:livecomponent"]
 
     def config(self):
         """Setup command arguments and options here"""
@@ -28,16 +29,17 @@ class Command(BaseCommand):
         name = pascal_to_snake(kwargs.get("name"))
         path, component_name = split_dotted_path(name)
 
-        classes_dir = Path(config.paths.components, config.live.classes_dir, path)
-        templates_dir = Path(config.paths.components, config.live.templates_dir, path)
+        # A component of any size grows a stylesheet, a test, a partial. Keeping
+        # its class and its template together in a folder of its own leaves
+        # somewhere for those to go; a project that would rather have them side
+        # by side in the components directory says so.
+        folder = component_name if config.live_components.own_folder else ""
 
-        # Ensure live directories exist
-        classes_dir.mkdir(parents=True, exist_ok=True)
-        templates_dir.mkdir(parents=True, exist_ok=True)
+        component_dir = Path(config.paths.components, path, folder)
+        component_dir.mkdir(parents=True, exist_ok=True)
 
-        # Create component path
-        html_file = templates_dir / f"{component_name}.html"
-        python_file = classes_dir / f"{component_name}.py"
+        html_file = component_dir / f"{component_name}.html"
+        python_file = component_dir / f"{component_name}.py"
 
         # Check for existing files
         if html_file.exists() or python_file.exists():

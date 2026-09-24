@@ -37,7 +37,7 @@ from pyblade.config import DEFAULTS as _SCHEMA
 from pyblade.config import config
 
 #: What a project gets without saying anything, kept with the rest of the schema
-DEFAULTS = _SCHEMA["live"]["throttle"]
+DEFAULTS = _SCHEMA["live_components"]["throttle"]
 
 _PERIODS = {"second": 1, "minute": 60, "hour": 3600, "day": 86400}
 _RATE = re.compile(r"^\s*(\d+)\s*/\s*(second|minute|hour|day)s?\s*$", re.IGNORECASE)
@@ -53,7 +53,7 @@ def _now():
 
 def option(name):
     """What the project says about one part of this, or what it gets without saying."""
-    return config.live.throttle.get(name, DEFAULTS[name])
+    return config.live_components.throttle.get(name, DEFAULTS[name])
 
 
 def parse_rate(rate):

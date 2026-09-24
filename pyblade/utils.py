@@ -39,7 +39,17 @@ def run_command(command: list[str] | str, cwd: Path | None = None) -> None:
 
 
 def pascal_to_snake(string: str) -> str:
-    """Convert a PascalCased string to snake_cased string"""
+    """Convert a PascalCased string to snake_cased string.
+
+    A dotted name is a path, so each part of it is converted on its own: run
+    together, the dot reads as the character before a word and the part after
+    it comes out with an underscore in front ('shop._cart_total').
+    """
+    return ".".join(_word_to_snake(part) for part in string.split("."))
+
+
+def _word_to_snake(string: str) -> str:
+    """One part of a name, PascalCased or kebab-cased, as snake_case."""
     s1 = re.sub(r"(.)([A-Z][a-z]+)", r"\1_\2", string)
     return re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", s1).lower().replace("-", "_")
 

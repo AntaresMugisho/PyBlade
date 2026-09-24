@@ -20,7 +20,7 @@ console = Console()
 DEFAULT_COMMANDS = {
     "Project commands": [
         "init",
-        "serve",
+        "dev",
         # "deploy"
     ],
     "PyBlade commands": [

@@ -1,16 +1,23 @@
-from pyblade.cli import BaseCommand
+import os
+import subprocess
+
+from pyblade.cli import BaseCommand, packages, tailwind
 from pyblade.cli.django_base import run_django_command
+from pyblade.config import config
 
 
 class Command(BaseCommand):
     """
-    Start a lightweight web server for development.
+    Start the development server, and build your stylesheet as you work.
     """
 
-    name = "serve"
+    name = "dev"
     django_name = "runserver"
 
-    _default_host = "127.0.0.1"
+    # What it used to be called, kept so that muscle memory still works
+    aliases = ["serve"]
+
+    _default_host = "localhost"
     _default_port = 8000
 
     def config(self):
@@ -46,6 +53,7 @@ class Command(BaseCommand):
         self.add_flag("--force-color", help="Force colorization of the command output")
         self.add_flag("--traceback", help="Raise on CommandError exceptions")
         self.add_flag("--skip-checks", help="Skip system checks")
+        self.add_flag("--no-css", help="Don't build the Tailwind stylesheet while the server runs")
 
     def handle(self, **kwargs):
         try:
@@ -83,7 +91,42 @@ class Command(BaseCommand):
             if no_color:
                 command.append("--no-color")
 
-            run_django_command(command)
+            watcher = None if kwargs.get("no_css") else self._watch_stylesheet()
+
+            try:
+                run_django_command(command)
+            finally:
+                if watcher:
+                    watcher.terminate()
 
         except Exception as e:
             self.error(str(e))
+
+    def _watch_stylesheet(self):
+        """Build the Tailwind stylesheet, and go on building it as templates change.
+
+        Started only in the process the developer started, never in the one
+        Django's reloader spawns: that one is replaced on every code change,
+        and a watcher replaced with it would miss what happened in between.
+        """
+        if os.environ.get("RUN_MAIN") == "true":
+            return None
+
+        root = config.root
+
+        if not tailwind.is_configured(root):
+            return None
+
+        manager = packages.js_manager(root)
+        command = tailwind.build_command(manager, watch=True)
+
+        if command is None:
+            self.warning(
+                "No JavaScript package manager was found, so your stylesheet will not be built.\n"
+                " Run [blue]pyblade tailwind:config[/blue], or start the server with --no-css."
+            )
+            return None
+
+        self.success(f"Watching your templates and building {tailwind.OUTPUT}.", bold=False)
+
+        return subprocess.Popen(command, cwd=root)

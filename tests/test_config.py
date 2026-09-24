@@ -11,10 +11,12 @@ suite do.
 """
 
 import json
+import os
 import shutil
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from django.test import override_settings
 
@@ -44,15 +46,14 @@ class TestWhatAProjectGetsWithoutSayingAnything(ConfigTestCase):
         self.assertEqual(config.paths.templates, Path("templates"))
         self.assertEqual(config.paths.components, Path("components"))
         self.assertEqual(config.i18n.locale, "en")
-        self.assertEqual(config.live.classes_dir, Path("live"))
-        self.assertEqual(config.live.throttle.actions, "120/minute")
+        self.assertEqual(config.live_components.throttle.actions, "120/minute")
 
     def test_a_key_naming_a_place_comes_back_as_a_path(self):
         self.assertIsInstance(self.config().paths.templates, Path)
 
     def test_a_place_the_project_never_named_is_nothing_rather_than_here(self):
         """Path('') is the current directory, which is not what 'unset' means."""
-        self.assertIsNone(self.config().paths.core)
+        self.assertIsNone(self.config().paths.settings)
 
     def test_a_setting_pyblade_has_never_had_says_so(self):
         with self.assertRaises(AttributeError) as caught:
@@ -148,8 +149,8 @@ class TestWritingTheFile(ConfigTestCase):
         config = self.config()
         config.project.name = "shop"
         config.stack.framework = "django"
-        config.live.throttle.enabled = False
-        config.live.throttle.max_streams = 4
+        config.live_components.throttle.enabled = False
+        config.live_components.throttle.max_streams = 4
         config.i18n.languages = ["en", "fr"]
         config.save()
 
@@ -157,16 +158,16 @@ class TestWritingTheFile(ConfigTestCase):
 
         self.assertEqual(again.project.name, "shop")
         self.assertEqual(again.stack.framework, "django")
-        self.assertIs(again.live.throttle.enabled, False)
-        self.assertEqual(again.live.throttle.max_streams, 4)
+        self.assertIs(again.live_components.throttle.enabled, False)
+        self.assertEqual(again.live_components.throttle.max_streams, 4)
         self.assertEqual(again.i18n.languages, ["en", "fr"])
 
     def test_a_path_is_written_as_the_text_of_a_path(self):
         config = self.config()
-        config.paths.core = Path("shop")
+        config.paths.settings = Path("shop/settings.py")
         config.save()
 
-        self.assertIn('core = "shop"', (self.root / "pyblade.toml").read_text())
+        self.assertIn('settings = "shop/settings.py"', (self.root / "pyblade.toml").read_text())
 
     def test_pyblade_will_not_rewrite_a_pyproject_it_does_not_own(self):
         self.write("pyproject.toml", '[project]\nname = "x"\n\n[tool.pyblade.i18n]\nlocale = "fr"\n')
@@ -349,3 +350,82 @@ print(json.dumps({"before": before, "after": after}))
 
         # After: what the project's settings say, picked up without a reload
         self.assertEqual(read["after"], {"locale": "sw", "debug": True})
+
+
+class TestFindingAProjectFromOutsideIt(ConfigTestCase):
+    """A project is not always run from its own directory.
+
+    A WSGI server, a systemd unit with a WorkingDirectory of its own, a cron
+    job: none of them start where the project is. Walking up from the working
+    directory finds nothing, and a root of '/' would send every template lookup
+    somewhere silly. So something else has to be able to say where to look.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.write("pyblade.toml", '[project]\nname = "shop"\n\n[i18n]\nlocale = "fr"\n')
+
+        # Somewhere that is not, and has nothing above it that is, a project
+        self.elsewhere = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.elsewhere, ignore_errors=True)
+
+        cwd = os.getcwd()
+        os.chdir(self.elsewhere)
+        self.addCleanup(os.chdir, cwd)
+
+    def test_without_help_there_is_nothing_to_find(self):
+        self.assertEqual(Config().root, self.elsewhere)
+
+    def test_the_project_may_say_where_it_is(self):
+        with mock.patch.dict(os.environ, {"PYBLADE_ROOT": str(self.root)}):
+            self.assertEqual(Config().root, self.root)
+
+    def test_and_what_it_says_is_read_not_merely_pointed_at(self):
+        with mock.patch.dict(os.environ, {"PYBLADE_ROOT": str(self.root)}):
+            config = Config()
+
+            self.assertEqual(config.project.name, "shop")
+            self.assertEqual(config.i18n.locale, "fr")
+
+    def test_django_knows_where_the_project_is_and_is_believed(self):
+        """It works BASE_DIR out for itself and writes it into every settings file."""
+        with override_settings(BASE_DIR=self.root):
+            config = Config()
+
+            self.assertEqual(config.root, self.root)
+            self.assertEqual(config.project.name, "shop")
+
+    def test_what_the_project_says_beats_what_django_says(self):
+        other = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, other, ignore_errors=True)
+        (other / "pyblade.toml").write_text('[project]\nname = "other"\n')
+
+        with override_settings(BASE_DIR=self.root), mock.patch.dict(os.environ, {"PYBLADE_ROOT": str(other)}):
+            self.assertEqual(Config().root, other)
+
+    def test_a_config_made_before_django_was_up_still_finds_it(self):
+        """Which is every config: PyBlade is imported long before django.setup()."""
+        config = Config()
+        self.assertEqual(config.root, self.elsewhere)
+
+        with override_settings(BASE_DIR=self.root):
+            self.assertEqual(config.root, self.root)
+            self.assertEqual(config.project.name, "shop")
+
+
+class TestTheWorkingDirectoryStillComesFirst(ConfigTestCase):
+    def setUp(self):
+        super().setUp()
+        self.write("pyblade.toml", '[project]\nname = "here"\n')
+
+        cwd = os.getcwd()
+        os.chdir(self.root)
+        self.addCleanup(os.chdir, cwd)
+
+    def test_a_project_found_where_the_command_was_run_is_the_one_used(self):
+        somewhere_else = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, somewhere_else, ignore_errors=True)
+        (somewhere_else / "pyblade.toml").write_text('[project]\nname = "elsewhere"\n')
+
+        with override_settings(BASE_DIR=somewhere_else):
+            self.assertEqual(Config().project.name, "here")
