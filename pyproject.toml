@@ -1,11 +1,27 @@
 [project]
 name = "PyBlade"
-version = "0.2.1"
+version = "0.3.0"
 description = "PyBlade is a lightweight, reactive template engine for Python. It brings reusable UI components and server-driven interactivity to your web apps using Python and HTML, without requiring a frontend framework."
-author = { name = "Antares Mugisho", email = "hi@antaresmugisho.com" }
-license = { file = "LICENSE" }
+authors = [{ name = "Antares Mugisho", email = "hi@antaresmugisho.com" }]
+license = "BSD-3-Clause"
+license-files = ["LICENSE"]
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
+keywords = ["python", "templates", "engine", "django", "spa", "ssr", "cli"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Web Environment",
+    "Framework :: Django",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
+    "Topic :: Security",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Text Processing :: Markup :: HTML",
+]
 dependencies = [
     "questionary>=2.0.1,<3",
     "colorama>=0.4.6,<1",
@@ -21,6 +37,12 @@ dev = [
     "django>=5.1.2,<6",
     "flask>=3.0.3,<4",
 ]
+
+[project.urls]
+Homepage = "https://www.pyblade.com"
+Documentation = "https://docs.pyblade.com"
+Repository = "https://github.com/antaresmugisho/pyblade"
+Issues = "https://github.com/antaresmugisho/pyblade/issues"
 
 [project.scripts]
 pyblade = "pyblade.cli.main:cli"
