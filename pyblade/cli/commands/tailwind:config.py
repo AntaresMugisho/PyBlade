@@ -1,7 +1,7 @@
 from pyblade.cli import BaseCommand
 from pyblade.cli.exceptions import CommandError
 from pyblade.config import Config
-from pyblade.utils import get_project_root, run_command
+from pyblade.utils import run_command
 
 
 class Command(BaseCommand):
@@ -14,9 +14,10 @@ class Command(BaseCommand):
 
     def handle(self, **kwargs):
         """Execute the 'pyblade tailwind:config' command"""
-        self.settings = Config(config_file="pyblade.json")
+        self.settings = Config()
 
-        self.settings.css_framework = "TailwindCSS 4"
+        self.settings.stack.css_framework = "tailwindcss"
+        self.settings.stack.css_framework_version = "4"
 
         with self.status("Installing Tailwind CSS 4...") as status:
             self._npm_install("tailwindcss")
@@ -30,8 +31,8 @@ class Command(BaseCommand):
     def _configure_tailwind(self):
         """Configures Tailwind CSS for the project."""
 
-        stubs_path = self.settings.stubs_dir
-        root_dir = get_project_root()
+        stubs_path = self.settings.paths.stubs
+        root_dir = self.settings.root
 
         input_css = root_dir / "static/css/input.css"
         input_css.parent.mkdir(parents=True, exist_ok=True)
@@ -57,6 +58,6 @@ class Command(BaseCommand):
     def _npm_install(self, package: str):
         """Installs an NPM package using npm"""
         try:
-            return run_command(["npm", "install", package], get_project_root())
+            return run_command(["npm", "install", package], self.settings.root)
         except CommandError as e:
             self.error(e.stderr)

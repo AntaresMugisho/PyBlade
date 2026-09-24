@@ -5,7 +5,7 @@ import locale as _locale
 import os
 from importlib import import_module
 
-from pyblade.config import settings
+from pyblade.config import config
 
 __all__ = [
     "available_languages",
@@ -23,7 +23,7 @@ _BUILTIN_TRANSLATIONS = None
 def _get_default_locale() -> str:
 
     # Use django default locale if available
-    if settings.framework == "django":
+    if config.stack.framework == "django":
         try:
             from django.utils.translation import get_language
 
@@ -32,7 +32,7 @@ def _get_default_locale() -> str:
             pass
 
     # Fallback to the default locale from settings or environment variable
-    value = getattr(settings, "default_locale", None)
+    value = config.i18n.locale
     if value:
         return str(value)
 
@@ -43,8 +43,8 @@ def _get_builtin_translations():
     global _BUILTIN_TRANSLATIONS
 
     if _BUILTIN_TRANSLATIONS is None:
-        domain = os.getenv("PYBLADE_TRANSLATION_DOMAIN", settings.translation_domain or "pyblade")
-        localedir = os.getenv("PYBLADE_LOCALE_DIR", settings.locale_dir or "locale")
+        domain = os.getenv("PYBLADE_TRANSLATION_DOMAIN", config.i18n.domain or "pyblade")
+        localedir = os.getenv("PYBLADE_LOCALE_DIR", config.i18n.directory or "locale")
         locale = _get_default_locale()
 
         try:
@@ -163,10 +163,10 @@ def available_languages() -> list:
 
     Django's LANGUAGES under Django, each name translated into the language
     being rendered, as Django's own get_available_languages does. Otherwise the
-    "languages" entry of pyblade.json, a list of [code, name] pairs, which is
-    empty when there is none.
+    `languages` entry of [i18n], a list of [code, name] pairs, which is empty
+    when there is none.
     """
-    if settings.framework == "django":
+    if config.stack.framework == "django":
         try:
             from django.conf import settings as django_settings
             from django.utils.translation import gettext as django_gettext
@@ -175,4 +175,4 @@ def available_languages() -> list:
         except Exception:
             pass
 
-    return [(str(code), str(name)) for code, name in (settings.languages or [])]
+    return [(str(code), str(name)) for code, name in (config.i18n.languages or [])]

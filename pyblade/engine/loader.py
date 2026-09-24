@@ -4,7 +4,7 @@ Template file loading functionality.
 
 from pathlib import Path
 
-from pyblade.config import settings
+from pyblade.config import config
 
 from .exceptions import TemplateNotFoundError
 from .template import Template
@@ -43,12 +43,12 @@ class TemplateLoader:
         The ones that were configured come first, then the templates directory
         the project declares. A template may well be rendered before any backend
         has been built and told the loader where to look, as one is when a live
-        component is rendered as a page of its own, and pyblade.json says where
-        the templates of the project are.
+        component is rendered as a page of its own, and [paths] templates says
+        where the templates of the project are.
         """
         directories = list(self._template_dirs)
 
-        declared = Path(settings.templates_dir)
+        declared = Path(config.paths.templates)
         if declared not in directories and declared.is_dir():
             directories.append(declared)
 

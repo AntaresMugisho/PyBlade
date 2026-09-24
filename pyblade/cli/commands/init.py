@@ -6,7 +6,7 @@ from questionary import Choice
 from pyblade.cli import BaseCommand
 from pyblade.cli.exceptions import CommandError
 from pyblade.config import Config
-from pyblade.utils import get_project_root, get_version, run_command
+from pyblade.utils import get_version, run_command
 
 _SETTINGS_PATERN = re.compile(
     r"\"\"\"(?P<banner>.*?)\"\"\"\s*.*?\s*INSTALLED_APPS\s=\s\[\s*(?P<installed_apps>.*?)\s*\]\s*.*?\s*MIDDLEWARE\s=\s\[\s*(?P<middleware>.*?)\s*\]\s*.*?\s*TEMPLATES\s=\s*\[\s*(?P<templates>\{.*?\},)\n\]",
@@ -114,21 +114,20 @@ class Command(BaseCommand):
     def _configure_pyblade(self):
         """Configures PyBlade for the project."""
 
-        self.settings = Config(config_file=Path(self.project.name, "pyblade.json"))
+        self.settings = Config(config_file=Path(self.project.name, "pyblade.toml"))
 
-        self.settings.name = self.project.name
-        self.settings.core_dir = self.project.name
-        self.settings.settings_path = f"{self.settings.core_dir}/settings.py"
-        self.settings.framework = self.project.framework
-        self.settings.css_framework = self.project.css_framework
-        self.settings.pyblade_version = get_version()
+        self.settings.project.name = self.project.name
+        self.settings.project.pyblade_version = get_version()
+        self.settings.stack.framework = self.project.framework
+        self.settings.stack.css_framework = self.project.css_framework
+        self.settings.paths.core = self.project.name
+        self.settings.paths.settings = f"{self.project.name}/settings.py"
         self.settings.save()
 
-        # Update without saving to prevent absolute path in a file that might be pubished
-        # on a different server
+        # Said for this run only, so that no absolute path reaches a file that
+        # might be published on a different machine
 
-        self.settings.root_dir = Path(self.project.name)
-        self.settings.settings_path = self.settings.root_dir / self.settings.core_dir / "settings.py"
+        self.settings.paths.root = Path(self.project.name)
 
         # Create directories
         directories = [
@@ -138,7 +137,7 @@ class Command(BaseCommand):
         ]
 
         for directory in directories:
-            Path(self.settings.root_dir, directory).mkdir(parents=True, exist_ok=True)
+            Path(self.settings.root, directory).mkdir(parents=True, exist_ok=True)
 
         # Configure PyBlade in settings.py if it's a django project
         if self.project.framework == "django":
@@ -171,14 +170,16 @@ class Command(BaseCommand):
         },"BACKEND": "pyblade.backends.PyBladeEngine",
     },
     """
-                with open(self.settings.settings_path, "r") as file:
+                settings_file = self.settings.root / self.settings.paths.settings
+
+                with open(settings_file, "r") as file:
                     settings = file.read()
 
                 match = re.search(_SETTINGS_PATERN, settings)
                 if match:
                     new_temp_settings = settings.replace(match.group("templates"), new_temp_settings)
 
-                with open(self.settings.settings_path, "w") as file:
+                with open(settings_file, "w") as file:
                     file.write(new_temp_settings)
 
                 self.success("PyBlade Engine has been configured successfully.")
@@ -188,10 +189,10 @@ class Command(BaseCommand):
     def _configure_bootstrap(self):
         """Configures Bootstrap 5 for the project."""
 
-        stubs_path = Path(self.settings.stubs_dir)
-        settings_path = Path(self.settings.settings_path)
+        stubs_path = self.settings.paths.stubs
+        settings_path = self.settings.root / self.settings.paths.settings
 
-        if self.settings.framework.lower() == "django":
+        if self.settings.stack.framework.lower() == "django":
             # Update settings.py
             try:
                 with open(settings_path, "r") as file:
@@ -205,7 +206,7 @@ class Command(BaseCommand):
                 with open(stubs_path / "bootstrap_layout.html.stub", "r") as file:
                     base_template = file.read()
 
-                with open(self.settings.root_dir / "templates/layout.html", "w") as file:
+                with open(self.settings.root / "templates/layout.html", "w") as file:
                     file.write(base_template)
 
             except Exception as e:
@@ -217,8 +218,8 @@ class Command(BaseCommand):
     def _configure_tailwind(self):
         """Configures Tailwind CSS for the project."""
 
-        stubs_path = self.settings.stubs_dir
-        root_dir = get_project_root()
+        stubs_path = self.settings.paths.stubs
+        root_dir = self.settings.root
 
         input_css = root_dir / "static/css/input.css"
         input_css.parent.mkdir(parents=True, exist_ok=True)
@@ -251,6 +252,6 @@ class Command(BaseCommand):
     def _npm_install(self, package: str):
         """Installs an NPM package using npm"""
         try:
-            return run_command(["npm", "install", package], self.settings.root_dir)
+            return run_command(["npm", "install", package], self.settings.root)
         except CommandError as e:
             self.error(e.stderr)

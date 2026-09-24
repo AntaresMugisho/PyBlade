@@ -1,7 +1,7 @@
 import traceback
 from pathlib import Path
 
-from pyblade.config import settings
+from pyblade.config import config
 from pyblade.engine.exceptions import PyBladeException
 
 from . import loader
@@ -65,7 +65,7 @@ class PyBlade:
         try:
             template = self._processor.render(template, context, inherit=inherit, layout=layout)
         except PyBladeException as exc:
-            if settings.DEBUG:
+            if config.DEBUG:
                 if exc.template:
                     template = exc.template.content
                     template_path = exc.template.path

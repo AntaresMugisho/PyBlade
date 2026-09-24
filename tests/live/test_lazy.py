@@ -308,7 +308,7 @@ class TestASkeletonOfItsOwn(unittest.TestCase):
         import tempfile
         from pathlib import Path
 
-        from pyblade.config import settings
+        from pyblade.config import config
         from pyblade.engine import loader
 
         self.root = Path(tempfile.mkdtemp())
@@ -322,16 +322,12 @@ class TestASkeletonOfItsOwn(unittest.TestCase):
         self._saved_dirs = list(loader._default_loader._template_dirs)
         loader._default_loader.add_directories([self.templates])
 
-        self._saved = settings._data.get("templates_dir")
-        settings._data["templates_dir"] = str(self.templates)
+        overrides = config.override({"paths.templates": str(self.templates)})
+        overrides.__enter__()
 
         self._cleanup = lambda: (
             setattr(loader._default_loader, "_template_dirs", self._saved_dirs),
-            (
-                settings._data.__setitem__("templates_dir", self._saved)
-                if self._saved is not None
-                else settings._data.pop("templates_dir", None)
-            ),
+            overrides.__exit__(None, None, None),
             shutil.rmtree(self.root, ignore_errors=True),
         )
 

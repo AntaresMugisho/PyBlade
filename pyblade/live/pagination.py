@@ -12,7 +12,7 @@ page a live component is on, how that survives a round trip, what the links look
 like, and what the address bar says about it.
 """
 
-from pyblade.config import settings
+from pyblade.config import config
 from pyblade.engine import loader
 from pyblade.engine.contexts import SafeContent
 from pyblade.engine.template import Template
@@ -36,7 +36,7 @@ def _default_template_source():
     The same file the `live:stubs --pagination` command copies into a project,
     so what a project starts from is exactly what it was getting already.
     """
-    path = settings.stubs_dir / "pagination" / f"{DEFAULT_TEMPLATE}.html.stub"
+    path = config.paths.stubs / "pagination" / f"{DEFAULT_TEMPLATE}.html.stub"
 
     return path.read_text(encoding="utf-8"), path
 

@@ -13,9 +13,10 @@ import re
 import shutil
 import tempfile
 import unittest
+from contextlib import ExitStack
 from pathlib import Path
 
-from pyblade.config import settings
+from pyblade.config import config
 from pyblade.engine import loader
 from pyblade.engine.exceptions import TemplateNotFoundError
 from pyblade.live.base import LiveComponent
@@ -40,17 +41,14 @@ class LayoutTestCase(unittest.TestCase):
         self._saved_dirs = list(loader._default_loader._template_dirs)
         loader._default_loader.add_directories([self.templates_dir])
 
-        self._saved_settings = {key: settings._data.get(key) for key in ("templates_dir", "components_dir")}
-        settings._data["templates_dir"] = str(self.templates_dir)
-        settings._data["components_dir"] = str(self.components_dir)
+        stack = ExitStack()
+        self.addCleanup(stack.close)
+        stack.enter_context(
+            config.override({"paths.templates": str(self.templates_dir), "paths.components": str(self.components_dir)})
+        )
 
     def tearDown(self):
         loader._default_loader._template_dirs = self._saved_dirs
-        for key, value in self._saved_settings.items():
-            if value is None:
-                settings._data.pop(key, None)
-            else:
-                settings._data[key] = value
         shutil.rmtree(self.root, ignore_errors=True)
 
     def _write(self, name, content, directory=None):

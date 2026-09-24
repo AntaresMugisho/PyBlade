@@ -1,9 +1,10 @@
 import shutil
 import tempfile
 import unittest
+from contextlib import ExitStack
 from pathlib import Path
 
-from pyblade.config import settings
+from pyblade.config import config
 from pyblade.engine.nodes import ComponentNode
 
 
@@ -13,16 +14,13 @@ class ComponentResolutionTestCase(unittest.TestCase):
     def setUp(self):
         self.components_dir = Path(tempfile.mkdtemp())
 
-        self._saved_components_dir = settings._data.get("components_dir")
-        settings._data["components_dir"] = str(self.components_dir)
+        stack = ExitStack()
+        self.addCleanup(stack.close)
+        stack.enter_context(config.override({"paths.components": str(self.components_dir)}))
 
         self.node = ComponentNode("'unused'")
 
     def tearDown(self):
-        if self._saved_components_dir is None:
-            settings._data.pop("components_dir", None)
-        else:
-            settings._data["components_dir"] = self._saved_components_dir
         shutil.rmtree(self.components_dir, ignore_errors=True)
 
     def _write(self, name, content=""):

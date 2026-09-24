@@ -5,9 +5,10 @@ import sys
 import tempfile
 import textwrap
 import unittest
+from contextlib import ExitStack
 from pathlib import Path
 
-from pyblade.config import settings
+from pyblade.config import config
 from pyblade.live import LiveComponent
 
 
@@ -509,8 +510,9 @@ class LiveProjectTestCase(unittest.TestCase):
         os.chdir(self.project_dir)
         sys.path.insert(0, str(self.project_dir))
 
-        self._saved_components_dir = settings._data.get("components_dir")
-        settings._data["components_dir"] = "components"
+        stack = ExitStack()
+        self.addCleanup(stack.close)
+        stack.enter_context(config.override({"paths.components": "components"}))
 
         self._saved_dirs = list(loader._default_loader._template_dirs)
         loader._default_loader.add_directories([self.project_dir])
@@ -531,10 +533,6 @@ class LiveProjectTestCase(unittest.TestCase):
         for name in [name for name in sys.modules if name.startswith("components")]:
             del sys.modules[name]
 
-        if self._saved_components_dir is None:
-            settings._data.pop("components_dir", None)
-        else:
-            settings._data["components_dir"] = self._saved_components_dir
         shutil.rmtree(self.project_dir, ignore_errors=True)
 
     def write_component(self, body, template=None, name="counter"):
@@ -791,8 +789,9 @@ class TestTemplateName(unittest.TestCase):
         self.components_dir = Path(tempfile.mkdtemp())
         (self.components_dir / "live").mkdir()
 
-        self._saved_components_dir = settings._data.get("components_dir")
-        settings._data["components_dir"] = str(self.components_dir)
+        stack = ExitStack()
+        self.addCleanup(stack.close)
+        stack.enter_context(config.override({"paths.components": str(self.components_dir)}))
 
         sys.path.insert(0, str(self.components_dir.parent))
         self.package = self.components_dir.name
@@ -802,10 +801,6 @@ class TestTemplateName(unittest.TestCase):
         for name in [name for name in sys.modules if name.startswith(self.package)]:
             del sys.modules[name]
 
-        if self._saved_components_dir is None:
-            settings._data.pop("components_dir", None)
-        else:
-            settings._data["components_dir"] = self._saved_components_dir
         shutil.rmtree(self.components_dir, ignore_errors=True)
 
     def _write_component(self):

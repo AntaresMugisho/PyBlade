@@ -1,5 +1,5 @@
 from pyblade.cli import BaseCommand
-from pyblade.config import settings
+from pyblade.config import config
 from pyblade.utils import get_project_root
 
 
@@ -32,7 +32,7 @@ class Command(BaseCommand):
                 )
                 return
 
-        stubs_dir = settings.stubs_dir / "commands"
+        stubs_dir = config.paths.stubs / "commands"
         cmd_template = stubs_dir / "command.py.stub"
 
         if not cmd_template.exists():

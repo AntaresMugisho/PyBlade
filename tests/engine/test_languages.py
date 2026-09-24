@@ -7,11 +7,12 @@
 """
 
 import unittest
+from contextlib import ExitStack
 
 from django.test import override_settings
 from django.utils import translation
 
-from pyblade.config import settings
+from pyblade.config import config
 from pyblade.engine.processor import TemplateProcessor
 
 
@@ -19,15 +20,13 @@ class LanguagesTestCase(unittest.TestCase):
     framework = None
 
     def setUp(self):
-        self._saved = {key: settings._data.get(key) for key in ("framework", "default_locale", "languages")}
-        settings._data["framework"] = self.framework
+        self._stack = ExitStack()
+        self.addCleanup(self._stack.close)
+        self.override({"stack.framework": self.framework or ""})
 
-    def tearDown(self):
-        for key, value in self._saved.items():
-            if value is None:
-                settings._data.pop(key, None)
-            else:
-                settings._data[key] = value
+    def override(self, values):
+        """Say something different about the project, for the length of the test."""
+        self._stack.enter_context(config.override(values))
 
     def _render(self, template, context=None):
         return TemplateProcessor().render(template, context or {})
@@ -63,19 +62,19 @@ class TestWithDjango(LanguagesTestCase):
 
 class TestWithoutAFramework(LanguagesTestCase):
     def test_lang_is_the_locale_pyblade_is_configured_with(self):
-        settings._data["default_locale"] = "sw"
+        self.override({"i18n.locale": "sw"})
 
         self.assertEqual(self._render("@lang"), "sw")
 
     def test_languages_are_read_from_the_configuration(self):
-        settings._data["languages"] = [["en", "English"], ["sw", "Kiswahili"]]
+        self.override({"i18n.languages": [["en", "English"], ["sw", "Kiswahili"]]})
 
         html = self._render("@languages@for(language in languages){{ language[0] }}:{{ language[1] }} @endfor")
 
         self.assertEqual(html, "en:English sw:Kiswahili ")
 
     def test_languages_are_none_when_the_configuration_names_none(self):
-        settings._data.pop("languages", None)
+        self.override({"i18n.languages": []})
 
         self.assertEqual(self._render("@languages{{ len(languages) }}"), "0")
 

@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from pyblade.cli import BaseCommand
-from pyblade.config import settings
+from pyblade.config import config
 from pyblade.utils import pascal_to_snake, snakebab_to_pascal, split_dotted_path
 
 
@@ -28,8 +28,8 @@ class Command(BaseCommand):
         name = pascal_to_snake(kwargs.get("name"))
         path, component_name = split_dotted_path(name)
 
-        classes_dir = Path(settings.components_dir, settings.live.classes_dir, path)
-        templates_dir = Path(settings.components_dir, settings.live.templates_dir, path)
+        classes_dir = Path(config.paths.components, config.live.classes_dir, path)
+        templates_dir = Path(config.paths.components, config.live.templates_dir, path)
 
         # Ensure live directories exist
         classes_dir.mkdir(parents=True, exist_ok=True)
@@ -49,7 +49,7 @@ class Command(BaseCommand):
                 )
                 return
 
-        stubs_dir = settings.stubs_dir / "live"
+        stubs_dir = config.paths.stubs / "live"
 
         if not kwargs.get("inline"):
             python_stub = stubs_dir / "component.py.stub"

@@ -7,6 +7,7 @@ traceback instead.
 """
 
 import unittest
+from contextlib import ExitStack
 from pathlib import Path
 
 from pyblade.engine.exceptions import TemplateRenderError
@@ -92,21 +93,20 @@ class TestWhenItIsShown(unittest.TestCase):
     """
 
     def setUp(self):
-        from pyblade.config import settings
+        from pyblade.config import config
 
-        self.settings = settings
-        self.saved = settings._data.get("framework")
+        self.settings = config
+        self._stack = ExitStack()
+        self.addCleanup(self._stack.close)
 
-    def tearDown(self):
-        if self.saved is None:
-            self.settings._data.pop("framework", None)
-        else:
-            self.settings._data["framework"] = self.saved
+    def says(self, framework):
+        """Let the project say which framework it is built on, for this test."""
+        self._stack.enter_context(self.settings.override({"stack.framework": framework}))
 
     def test_a_project_that_says_it_is_django(self):
         from django.test import override_settings
 
-        self.settings._data["framework"] = "django"
+        self.says("django")
 
         with override_settings(DEBUG=True):
             self.assertIs(self.settings.DEBUG, True)
@@ -118,7 +118,7 @@ class TestWhenItIsShown(unittest.TestCase):
         """Django is answering, and is in development: so are we."""
         from django.test import override_settings
 
-        self.settings._data.pop("framework", None)
+        self.says("")
 
         with override_settings(DEBUG=True):
             self.assertIs(self.settings.DEBUG, True)
@@ -126,7 +126,7 @@ class TestWhenItIsShown(unittest.TestCase):
     def test_and_is_not_in_development_when_that_framework_is_not(self):
         from django.test import override_settings
 
-        self.settings._data.pop("framework", None)
+        self.says("")
 
         with override_settings(DEBUG=False):
             self.assertIs(self.settings.DEBUG, False)

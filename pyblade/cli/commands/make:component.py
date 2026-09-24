@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from pyblade.cli import BaseCommand
-from pyblade.config import settings
+from pyblade.config import config
 from pyblade.utils import pascal_to_snake, split_dotted_path
 
 
@@ -28,7 +28,7 @@ class Command(BaseCommand):
             self.error("You are not allowed to create a 'slot' component at the root level.")
             return
 
-        components_dir = Path(settings.components_dir, path)
+        components_dir = Path(config.paths.components, path)
         components_dir.mkdir(parents=True, exist_ok=True)
 
         component_file = components_dir / f"{component_name}.html"
@@ -41,7 +41,7 @@ class Command(BaseCommand):
             )
             return
 
-        html_stub = settings.stubs_dir / "templates/component.html.stub"
+        html_stub = config.paths.stubs / "templates/component.html.stub"
         if not html_stub.exists():
             self.error("Component stub not found.")
             return

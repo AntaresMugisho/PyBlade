@@ -15,9 +15,10 @@ import sys
 import tempfile
 import textwrap
 import unittest
+from contextlib import ExitStack
 from pathlib import Path
 
-from pyblade.config import settings
+from pyblade.config import config
 from pyblade.engine import loader
 from pyblade.live.registry import registry
 
@@ -53,9 +54,9 @@ class NestingTestCase(unittest.TestCase):
         self._saved_dirs = list(loader._default_loader._template_dirs)
         loader._default_loader.add_directories([self.root])
 
-        self._saved = {key: settings._data.get(key) for key in ("templates_dir", "components_dir")}
-        settings._data["templates_dir"] = "templates"
-        settings._data["components_dir"] = "components"
+        stack = ExitStack()
+        self.addCleanup(stack.close)
+        stack.enter_context(config.override({"paths.templates": "templates", "paths.components": "components"}))
 
         self.write_child()
         self.write_parent()
@@ -71,11 +72,6 @@ class NestingTestCase(unittest.TestCase):
         for name in [name for name in sys.modules if name.startswith("components")]:
             del sys.modules[name]
 
-        for key, value in self._saved.items():
-            if value is None:
-                settings._data.pop(key, None)
-            else:
-                settings._data[key] = value
         shutil.rmtree(self.root, ignore_errors=True)
 
     def _write(self, name, content):

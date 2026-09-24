@@ -9,7 +9,7 @@ from rich.console import Console
 from rich.table import Table
 
 from pyblade.cli import BaseCommand
-from pyblade.config import settings
+from pyblade.config import config, find_config_file
 from pyblade.utils import get_project_root, get_version
 
 from .django_base import DjangoCommand
@@ -57,7 +57,7 @@ def load_commands():
                 console.print(f"[red]Failed to load PyBlade Command {cmd_name}: {e!s}[/red]")
 
     # Load Django commands if the project is based on Django Framework
-    if settings.framework and settings.framework == "django":
+    if config.stack.framework and config.stack.framework == "django":
         commands = load_django_commands()
         if commands:
             _CACHED_COMMANDS["Django commands"] = commands
@@ -71,11 +71,11 @@ def load_django_commands():
     django_commands = []
 
     root_dir = get_project_root()
-    if not (root_dir / "pyblade.json").exists():
+    if find_config_file(root_dir) is None:
         return []
 
     sys.path.insert(0, str(root_dir))  # MUST BE PASSED AS STRING
-    settings_path_wo_ext = os.path.splitext(settings.settings_path)[0]
+    settings_path_wo_ext = os.path.splitext(config.paths.settings)[0]
     settings_module = settings_path_wo_ext.replace("/", ".")
     os.environ["DJANGO_SETTINGS_MODULE"] = settings_module
     try:
@@ -109,7 +109,7 @@ def load_custom_commands():
     """Load custom commands from the project."""
     try:
         # Look for custom commands in multiple the management/commands folder
-        custom_commands_dir = Path(settings.commands_dir)
+        custom_commands_dir = Path(config.paths.commands)
         if custom_commands_dir.exists():
             for cmd_name in find_commands(custom_commands_dir):
                 try:

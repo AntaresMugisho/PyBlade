@@ -1,11 +1,8 @@
 [project]
 name = "PyBlade"
 version = "0.2.1"
-description = "PyBlade is a lightweight template engine for Python, initially designed for Django. Inspired by Laravel's Blade and Livewire, it simplifies dynamic template creation with developer-friendly @-based directives and component support, all while prioritizing security."
-authors = [
-    { name = "AntaresMugisho", email = "hi@antaresmugisho.com" },
-    { name = "Prince Lulinda", email = "princelulinda@gmail.com" },
-]
+description = "PyBlade is a lightweight, reactive template engine for Python. It brings reusable UI components and server-driven interactivity to your web apps using Python and HTML, without requiring a frontend framework."
+author = { name = "Antares Mugisho", email = "hi@antaresmugisho.com" }
 license = { file = "LICENSE" }
 readme = "README.md"
 requires-python = ">=3.10"
@@ -32,8 +29,6 @@ pyblade = "pyblade.cli.main:cli"
 line-length = 120
 
 [tool.ruff.lint]
-# What the project checked before ruff replaced them: pyflakes and pycodestyle,
-# which flake8 ran, and import order, which isort did. Formatting is ruff's own.
 select = ["E", "W", "F", "I"]
 ignore = ["E203"]  # Whitespace before ':', which the formatter puts there itself
 

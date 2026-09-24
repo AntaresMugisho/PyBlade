@@ -7,7 +7,7 @@ from pprint import pprint  # noqa
 import polib
 
 from pyblade.cli import BaseCommand
-from pyblade.config import settings
+from pyblade.config import config
 from pyblade.engine.lexer import Lexer
 from pyblade.engine.nodes import BlockTranslateNode, CommentNode, TranslateNode
 from pyblade.engine.parser import Parser
@@ -53,7 +53,7 @@ class Command(BaseCommand):
             "-d",
             help="The gettext domain to use (default: 'django' for django projects or 'pyblade' for other frameworks)",
             required=False,
-            default="django" if settings.framework == "django" else "pyblade",
+            default="django" if config.stack.framework == "django" else "pyblade",
         )
 
         self.add_option(
@@ -92,10 +92,10 @@ class Command(BaseCommand):
         if not locale_dir:
             self.error("Unable to find a locale path to store translations.")
 
-            if settings.framework == "django":
+            if config.stack.framework == "django":
                 self.tip("Make sure the 'LOCALE_PATHS' setting is configured in your Django settings.")
             else:
-                self.tip("Make sure the 'locale' directory exists or 'locale_dir' setting is set in pyblade.json")
+                self.tip("Make sure the 'locale' directory exists, or set 'directory' under [i18n] in pyblade.toml")
             return
 
         # Create the locale dir if not exists
@@ -164,7 +164,7 @@ class Command(BaseCommand):
         locale_paths = None
 
         # Find locale paths from Django settings
-        if settings.framework == "django":
+        if config.stack.framework == "django":
             try:
                 from django.conf import settings as django_settings
 
@@ -174,8 +174,8 @@ class Command(BaseCommand):
                 pass
 
         # Fallback to the default 'locale' dir for other frameworks
-        # or use the value in pyblade.json
-        default_locale_dir = settings.locale_dir
+        # or use the value in pyblade.toml
+        default_locale_dir = config.i18n.directory
         if default_locale_dir != Path(""):
             return Path(default_locale_dir)
         return None

@@ -15,10 +15,12 @@ the business of whatever stands in front of the application -- a load balancer,
 a CDN, a firewall. This is about the cheap abuse an application can see, and
 about PyBlade not handing anyone a lever longer than the one they came with.
 
-Everything is read from pyblade.json, under "live" > "throttle", and can be
+Everything is read from pyblade.toml, under [live.throttle], and can be
 switched off there:
 
-    "live": {"throttle": {"actions": "120/minute", "uploads": "20/minute"}}
+    [live.throttle]
+    actions = "120/minute"
+    uploads = "20/minute"
 
 The counts are kept in Django's cache. The default one lives in the memory of
 each process, so a project run on several workers counts per worker until it is
@@ -31,17 +33,11 @@ import threading
 import time
 from functools import wraps
 
-from pyblade.config import settings
+from pyblade.config import DEFAULTS as _SCHEMA
+from pyblade.config import config
 
-#: What a project gets without saying anything
-DEFAULTS = {
-    "enabled": True,
-    "actions": "120/minute",
-    "uploads": "20/minute",
-    "max_body": "1mb",
-    "max_streams": 16,
-    "trust_forwarded": False,
-}
+#: What a project gets without saying anything, kept with the rest of the schema
+DEFAULTS = _SCHEMA["live"]["throttle"]
 
 _PERIODS = {"second": 1, "minute": 60, "hour": 3600, "day": 86400}
 _RATE = re.compile(r"^\s*(\d+)\s*/\s*(second|minute|hour|day)s?\s*$", re.IGNORECASE)
@@ -57,9 +53,7 @@ def _now():
 
 def option(name):
     """What the project says about one part of this, or what it gets without saying."""
-    configured = settings._data.get("live", {}).get("throttle", {})
-
-    return configured.get(name, DEFAULTS[name]) if isinstance(configured, dict) else DEFAULTS[name]
+    return config.live.throttle.get(name, DEFAULTS[name])
 
 
 def parse_rate(rate):

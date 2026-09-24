@@ -148,7 +148,22 @@ look at what it did and run it again.
 | `pyblade/cli/`                 | The `pyblade` command line                                                               |
 | `tests/engine/`, `tests/live/` | The tests, split the same way                                                            |
 
-Configuration is read from `pyblade.toml` through `pyblade.config.config`.
+Configuration is read through `pyblade.config.config`, from a project's `pyblade.toml` or the
+`[tool.pyblade]` table of its `pyproject.toml`. Its tables are `[project]`, `[stack]`, `[paths]`,
+`[live]` and `[i18n]`, reached by name: `config.paths.templates`, `config.i18n.locale`. Every key
+has a default in `pyblade/config.py`, so add one there before reading it anywhere else, and a key
+that names a place on disk comes back as a `Path`.
+
+A Django project may also write a `PYBLADE` dictionary in its settings, which wins over the file.
+PyBlade reads it only once Django is configured and reads it again until then, because PyBlade is
+imported well before `django.setup()` runs. Never read a framework's settings at import time.
+
+In a test, say something different with the context manager rather than by reaching inside:
+
+```python
+with config.override({"paths.templates": str(tmp_dir)}):
+    ...
+```
 
 ## Writing code
 

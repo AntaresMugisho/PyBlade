@@ -1,9 +1,10 @@
 import shutil
 import tempfile
 import unittest
+from contextlib import ExitStack
 from pathlib import Path
 
-from pyblade.config import settings
+from pyblade.config import config
 from pyblade.engine import loader
 from pyblade.engine.exceptions import TemplateRenderError
 from pyblade.engine.processor import TemplateProcessor
@@ -20,17 +21,14 @@ class TestTemplateInheritance(unittest.TestCase):
         self._saved_dirs = list(loader._default_loader._template_dirs)
         loader._default_loader.add_directories([self.templates_dir])
 
-        self._saved_components_dir = settings._data.get("components_dir")
-        settings._data["components_dir"] = str(self.components_dir)
+        stack = ExitStack()
+        self.addCleanup(stack.close)
+        stack.enter_context(config.override({"paths.components": str(self.components_dir)}))
 
         self.processor = TemplateProcessor()
 
     def tearDown(self):
         loader._default_loader._template_dirs = self._saved_dirs
-        if self._saved_components_dir is None:
-            settings._data.pop("components_dir", None)
-        else:
-            settings._data["components_dir"] = self._saved_components_dir
         shutil.rmtree(self.templates_dir, ignore_errors=True)
 
     def _write(self, name, content, directory=None):

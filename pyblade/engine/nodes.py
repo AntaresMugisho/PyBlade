@@ -5,7 +5,7 @@ from html import escape as html_escape
 from pathlib import Path
 from pprint import pformat
 
-from pyblade.config import settings
+from pyblade.config import config
 from pyblade.engine.exceptions import (
     BreakLoopError,
     ComponentNotFoundError,
@@ -977,7 +977,7 @@ class ComponentNode(Node):
 
         parts = name.replace(".", "/").split("/")
         component_name = parts[-1]
-        components_dir = settings.components_dir
+        components_dir = config.paths.components
         parent = components_dir.joinpath(*parts[:-1])
 
         # The name the component is known by once normalized, e.g. 'user-profile' -> 'user_profile'
@@ -1026,7 +1026,7 @@ class ComponentNode(Node):
         it received: it does not see the variables of the template that calls it.
         The slots do, as they were written there, hence the binding.
         """
-        template = loader.load_template(name, [settings.components_dir])
+        template = loader.load_template(name, [config.paths.components])
 
         if not validate_single_root_node(template.content):
             raise TemplateRenderError(
@@ -1429,7 +1429,7 @@ class StaticNode(Node):
         except Exception as exc:
             self._raise(exc)
 
-        if settings.framework == "django":
+        if config.stack.framework == "django":
             try:
                 from django.conf import settings as dj_settings
 
@@ -1943,7 +1943,7 @@ class DebugNode(Node):
         We avoid including private/special keys
         """
 
-        if not settings.DEBUG:
+        if not config.DEBUG:
             return ""
 
         public_items = {k: v for k, v in sorted(context.items()) if not str(k).startswith("__")}

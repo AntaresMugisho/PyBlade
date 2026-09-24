@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from pyblade.cli import BaseCommand
-from pyblade.config import settings
+from pyblade.config import config
 
 #: What may be exported, and where each thing goes once it is
 STUBS = {
@@ -38,8 +38,8 @@ class Command(BaseCommand):
             self._export(STUBS[name], force=kwargs.get("force"))
 
     def _export(self, stub, force=False):
-        source_dir = settings.stubs_dir / stub["source"]
-        target_dir = Path(settings.templates_dir) / stub["target"]
+        source_dir = config.paths.stubs / stub["source"]
+        target_dir = Path(config.paths.templates) / stub["target"]
         target_dir.mkdir(parents=True, exist_ok=True)
 
         for source_name, target_name in stub["files"].items():

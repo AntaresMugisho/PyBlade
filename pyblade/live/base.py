@@ -10,7 +10,7 @@ from uuid import uuid4
 
 from django.utils.datastructures import MultiValueDict
 
-from pyblade.config import settings
+from pyblade.config import config
 from pyblade.engine import loader, stacks
 from pyblade.engine.exceptions import PyBladeException, TemplateNotFoundError
 from pyblade.engine.renderer import error_page
@@ -200,7 +200,7 @@ class LiveComponent:
         name = template_name or self.get_template_name()
 
         try:
-            template = loader.load_template(name, [settings.components_dir])
+            template = loader.load_template(name, [config.paths.components])
         except TemplateNotFoundError:
             raise TemplateNotFoundError(f"No template named {name}" if template_name else f"No component named {name}")
 
@@ -337,7 +337,7 @@ class LiveComponent:
         if name is None:
             raise TemplateNotFoundError(
                 f"Could not tell which template the {type(self).__name__} component renders. "
-                f"Components are looked for in {Path(settings.components_dir).resolve()}."
+                f"Components are looked for in {Path(config.paths.components).resolve()}."
             )
 
         return name
@@ -388,7 +388,7 @@ class LiveComponent:
             return None
 
         try:
-            relative = Path(module_file).resolve().with_suffix("").relative_to(Path(settings.components_dir).resolve())
+            relative = Path(module_file).resolve().with_suffix("").relative_to(Path(config.paths.components).resolve())
         except ValueError:
             return None
 

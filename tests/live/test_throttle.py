@@ -7,11 +7,12 @@ up the server's threads by asking for streamed actions all at once.
 """
 
 import unittest
+from contextlib import ExitStack
 from unittest import mock
 
 from django.test import RequestFactory
 
-from pyblade.config import settings
+from pyblade.config import config
 from pyblade.live import throttle
 from pyblade.live.throttle import (
     client_of,
@@ -32,19 +33,13 @@ def endpoint(request):
 class ThrottleTestCase(unittest.TestCase):
     def setUp(self):
         self.requests = RequestFactory()
-        self._saved = settings._data.get("live")
+        self._stack = ExitStack()
+        self.addCleanup(self._stack.close)
         self.configure()
 
-    def tearDown(self):
-        if self._saved is None:
-            settings._data.pop("live", None)
-        else:
-            settings._data["live"] = self._saved
-
     def configure(self, **options):
-        live = dict(self._saved or {})
-        live["throttle"] = options
-        settings._data["live"] = live
+        """Say what this project allows, for the length of the test."""
+        self._stack.enter_context(config.override({f"live.throttle.{key}": value for key, value in options.items()}))
 
     def post(self, address="10.0.0.1", body="{}", **extra):
         return self.requests.post(

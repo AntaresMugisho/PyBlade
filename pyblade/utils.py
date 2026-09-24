@@ -50,15 +50,17 @@ def snakebab_to_pascal(string: str) -> str:
 
 
 def get_project_root():
-    """Find the project root directory by looking for pyblade.json."""
-    current = Path.cwd()
+    """The directory of the project the current one is inside.
 
-    for directory in [current, *current.parents]:
-        if (directory / "pyblade.json").exists():
-            return directory
+    Found by the file the project describes itself in: a pyblade.toml, or a
+    pyproject.toml holding a [tool.pyblade] table.
+    """
+    from pyblade.config import find_config_file
 
-    # Falback to CWD if no pyblade.json file was found
-    return current
+    found = find_config_file()
+
+    # Fall back to the working directory when nothing describes a project here
+    return found.parent if found else Path.cwd()
 
 
 def validate_single_root_node(html_content: str):

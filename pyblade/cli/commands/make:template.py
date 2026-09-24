@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from pyblade.cli import BaseCommand
-from pyblade.config import settings
+from pyblade.config import config
 from pyblade.utils import split_dotted_path
 
 
@@ -24,7 +24,7 @@ class Command(BaseCommand):
         name = kwargs.get("name")
         path, template_name = split_dotted_path(name)
 
-        p = Path(settings.templates_dir, path)
+        p = Path(config.paths.templates, path)
         p.mkdir(parents=True, exist_ok=True)
 
         html_path = p / f"{template_name}.html"
@@ -38,7 +38,7 @@ class Command(BaseCommand):
                 )
                 return
 
-        stubs_path = settings.stubs_dir / "templates"
+        stubs_path = config.paths.stubs / "templates"
         template_stub = stubs_path / "template.html.stub"
 
         if not template_stub.exists():

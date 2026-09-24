@@ -9,10 +9,7 @@ setup(
     name="PyBlade",
     packages=["pyblade"],
     version="0.2.1",
-    license="MIT",
-    description="PyBlade is a lightweight template engine for Python, initially designed for Django. Inspired by "
-    "Laravel's Blade and Livewire, it simplifies dynamic template creation with developer-friendly @-based "
-    "directives and component support, all while prioritizing security.",
+    license="BSD",
     url="https://github.com/antaresmugisho/pyblade",
     download_url="https://github.com/antaresmugisho/pyblade/archive/refs/tags/v0.2.1-alpha.tar.gz",
     long_description=long_description,
@@ -24,7 +21,7 @@ setup(
         "Development Status :: 3 - Alpha",
         "Environment :: Web Environment",
         "Intended Audience :: Developers",
-        "License :: OSI Approved :: MIT License",
+        "License :: OSI Approved :: BSD 3 Clause License",
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
