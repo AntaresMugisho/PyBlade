@@ -5,7 +5,6 @@ from pyblade.engine.exceptions import DirectiveParsingError
 from pyblade.engine.processor import TemplateProcessor
 
 
-
 class TestDirectives(unittest.TestCase):
     def setUp(self):
         self.processor = TemplateProcessor()
@@ -157,7 +156,12 @@ class TestDirectives(unittest.TestCase):
         <input @checked(is_checked)>
         <input @autocomplete(auto_val)>
         """
-        context = {"is_selected": True, "is_required": False, "is_checked": True, "auto_val": "off"}
+        context = {
+            "is_selected": True,
+            "is_required": False,
+            "is_checked": True,
+            "auto_val": "off",
+        }
         output = self._render(template, context)
         self.assertIn("selected", output)
         self.assertNotIn("required", output)
@@ -203,6 +207,55 @@ class TestDirectives(unittest.TestCase):
         template = "Hello {# This is a comment #} World"
         self.assertEqual(self._render(template).strip(), "Hello  World")
 
+    def test_comment_inside_a_directive(self):
+        template = "@if(True){# explaining the branch #}yes@endif"
+        self.assertEqual(self._render(template).strip(), "yes")
+
+    def test_comment_inside_a_loop(self):
+        template = "@for(number in [1, 2]){# each one #}{{ number }}@endfor"
+        self.assertEqual(self._render(template).strip(), "12")
+
+    def test_comment_alone_inside_a_directive(self):
+        template = "@if(True){# nothing but a comment #}@endif"
+        self.assertEqual(self._render(template).strip(), "")
+
+    def test_comment_inside_a_branch_that_is_not_taken(self):
+        template = "@if(False){# hidden #}no@else{# shown #}yes@endif"
+        self.assertEqual(self._render(template).strip(), "yes")
+
+    def test_an_escaped_directive_is_written_as_it_stands(self):
+        """Two @ signs escape a directive, as @{{ }} escapes a variable."""
+        self.assertEqual(self._render("@@if").strip(), "@if")
+
+    def test_an_escaped_directive_keeps_what_was_written_after_it(self):
+        self.assertEqual(self._render("@@if(user.is_admin)").strip(), "@if(user.is_admin)")
+
+    def test_a_whole_block_may_be_escaped(self):
+        template = "@@if(True)yes@@endif"
+        self.assertEqual(self._render(template).strip(), "@if(True)yes@endif")
+
+    def test_two_at_signs_on_their_own_are_one(self):
+        self.assertEqual(self._render("write @@ here").strip(), "write @ here")
+
+    def test_an_escaped_directive_beside_a_real_one(self):
+        template = "@if(True)write @@if to write an if@endif"
+        self.assertEqual(self._render(template).strip(), "write @if to write an if")
+
+    def test_an_escaped_directive_inside_a_block(self):
+        template = "@for(number in [1])@@for {{ number }}@endfor"
+        self.assertEqual(self._render(template).strip(), "@for 1")
+
+    def test_what_is_escaped_is_text_rather_than_markup(self):
+        """It is written out, not run: nothing of it reaches the parser."""
+        self.assertEqual(self._render("@@csrf").strip(), "@csrf")
+
+    def test_the_escape_for_a_variable_still_works(self):
+        self.assertEqual(self._render("@{{ name }}").strip(), "{{ name }}")
+
+    def test_comment_nested_two_directives_deep(self):
+        template = "@if(True)@for(number in [1]){# deep #}{{ number }}@endfor@endif"
+        self.assertEqual(self._render(template).strip(), "1")
+
     def test_section_yield_inheritance(self):
         # Test @section and @yield directives (Laravel Blade style)
         template = """
@@ -235,16 +288,16 @@ class TestDirectives(unittest.TestCase):
         template = '<input type="checkbox" @checked(checked)>'
         result = self._render(template, {"checked": True})
         self.assertIn("checked", result)
-        
+
         result = self._render(template, {"checked": False})
         self.assertNotIn("checked", result)
 
     def test_selected_directive(self):
         # Test @selected directive
-        template = '<option @selected(selected)>Option</option>'
+        template = "<option @selected(selected)>Option</option>"
         result = self._render(template, {"selected": True})
         self.assertIn("selected", result)
-        
+
         result = self._render(template, {"selected": False})
         self.assertNotIn("selected", result)
 
@@ -253,7 +306,7 @@ class TestDirectives(unittest.TestCase):
         template = '<input type="text" @required(required)>'
         result = self._render(template, {"required": True})
         self.assertIn("required", result)
-        
+
         result = self._render(template, {"required": False})
         self.assertNotIn("required", result)
 
@@ -263,7 +316,7 @@ class TestDirectives(unittest.TestCase):
         class MockField:
             def __str__(self):
                 return '<input type="text" name="username" id="id_username">'
-        
+
         template = '@field(form.username, class="form-control", placeholder="Enter username")'
         result = self._render(template, {"form": {"username": MockField()}})
         self.assertIn('class="form-control"', result)
@@ -274,18 +327,18 @@ class TestDirectives(unittest.TestCase):
         class MockField:
             def __str__(self):
                 return '<input type="text" name="email" class="default-class" id="id_email">'
-        
+
         template = '@field(form.email, class+="extra-class")'
         result = self._render(template, {"form": {"email": MockField()}})
-        self.assertIn('extra-class', result)
-        self.assertIn('default-class', result)
+        self.assertIn("extra-class", result)
+        self.assertIn("default-class", result)
 
     def test_error_directive_with_django_form(self):
         # Test @error directive with Django-style form errors
         class MockForm:
             def __init__(self):
                 self.errors = {"email": ["This field is required."]}
-        
+
         template = """
         @error(form.email)
             <small class="text-red-500">{{ message }}</small>
@@ -321,16 +374,16 @@ class TestDirectives(unittest.TestCase):
         template = '<input type="text" @autofocus(should_focus)>'
         result = self._render(template, {"should_focus": True})
         self.assertIn("autofocus", result)
-        
+
         result = self._render(template, {"should_focus": False})
         self.assertNotIn("autofocus", result)
 
     def test_multiple_directive(self):
         # Test @multiple directive
-        template = '<select @multiple(allow_multiple)>'
+        template = "<select @multiple(allow_multiple)>"
         result = self._render(template, {"allow_multiple": True})
         self.assertIn("multiple", result)
-        
+
         result = self._render(template, {"allow_multiple": False})
         self.assertNotIn("multiple", result)
 
@@ -339,16 +392,16 @@ class TestDirectives(unittest.TestCase):
         template = '<input type="text" @readonly(is_readonly)>'
         result = self._render(template, {"is_readonly": True})
         self.assertIn("readonly", result)
-        
+
         result = self._render(template, {"is_readonly": False})
         self.assertNotIn("readonly", result)
 
     def test_disabled_directive(self):
         # Test @disabled directive
-        template = '<button @disabled(is_disabled)>Click</button>'
+        template = "<button @disabled(is_disabled)>Click</button>"
         result = self._render(template, {"is_disabled": True})
         self.assertIn("disabled", result)
-        
+
         result = self._render(template, {"is_disabled": False})
         self.assertNotIn("disabled", result)
 
@@ -356,7 +409,15 @@ class TestDirectives(unittest.TestCase):
 class TestAttributeDirectives(unittest.TestCase):
     """@checked, @selected, @disabled and the like, which render an HTML attribute."""
 
-    ATTRIBUTES = ("checked", "selected", "disabled", "readonly", "required", "multiple", "autofocus")
+    ATTRIBUTES = (
+        "checked",
+        "selected",
+        "disabled",
+        "readonly",
+        "required",
+        "multiple",
+        "autofocus",
+    )
 
     def setUp(self):
         self.processor = TemplateProcessor()
@@ -391,7 +452,10 @@ class TestAttributeDirectives(unittest.TestCase):
         self.assertEqual(self._render(template, {"show": True, "locked": False}), "<input>")
 
     def test_inside_a_condition_without_parentheses(self):
-        self.assertEqual(self._render("@if(show)<input@checked>@endif", {"show": True}), "<input checked>")
+        self.assertEqual(
+            self._render("@if(show)<input@checked>@endif", {"show": True}),
+            "<input checked>",
+        )
 
 
 class TestDirectivesInsideBlocks(unittest.TestCase):

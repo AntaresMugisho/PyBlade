@@ -119,7 +119,11 @@ class TestAlongsideTheOtherActions(unittest.TestCase):
         def save(self):
             self.order.append(self.title)
 
-        cls = component(order=[], save=save, updating=lambda self, p, v: self.order.append("updating"))
+        cls = component(
+            order=[],
+            save=save,
+            updating=lambda self, p, v: self.order.append("updating"),
+        )
 
         result = send(cls, action="save", updates={"title": "Hello"})
 

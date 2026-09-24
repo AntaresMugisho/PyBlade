@@ -17,13 +17,12 @@ from unittest import mock
 
 from django import forms
 from django.core.exceptions import ValidationError
+from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import override_settings
 
-from pyblade.live.base import LiveComponent
-from django.core.files.storage import default_storage
-
 from pyblade.live import uploads as uploads_module
+from pyblade.live.base import LiveComponent
 from pyblade.live.uploads import (
     MAX_AGE,
     MaxFileSize,
@@ -59,7 +58,7 @@ class TestRefusingWhatIsTooBig(unittest.TestCase):
     def test_a_size_may_be_written_the_way_people_write_sizes(self):
         self.assertEqual(MaxFileSize("500kb").max_bytes, 500 * 1024)
         self.assertEqual(MaxFileSize("2mb").max_bytes, 2 * 1024 * 1024)
-        self.assertEqual(MaxFileSize("1gb").max_bytes, 1024 ** 3)
+        self.assertEqual(MaxFileSize("1gb").max_bytes, 1024**3)
 
     def test_a_number_of_bytes_may_be_given_outright(self):
         self.assertEqual(MaxFileSize(4096).max_bytes, 4096)
@@ -259,7 +258,10 @@ class TestAFilePropertyOfAComponent(UploadTestCase):
         upload = store_temporarily(a_file(name="note.txt", content=b"hello"))
         cls = self._component(
             caption="",
-            rules={"photo": forms.FileField(), "caption": forms.CharField(max_length=5)},
+            rules={
+                "photo": forms.FileField(),
+                "caption": forms.CharField(max_length=5),
+            },
         )
         instance = cls("pb-test")
         instance.photo = upload
@@ -285,17 +287,19 @@ class TestSeeingTheFileBeforeItIsKept(UploadTestCase):
     def test_what_the_page_is_given_is_the_note_it_already_holds(self):
         upload = store_temporarily(a_file(name="holiday.png"))
 
-        self.assertIn(upload.reference[len("pyblade-upload:"):], upload.url)
+        self.assertIn(upload.reference[len("pyblade-upload:") :], upload.url)
 
     def test_a_template_may_show_it_without_a_directive_of_its_own(self):
         """The property holds a real file, so a preview is an ordinary img."""
         upload = store_temporarily(a_file(name="holiday.png"))
-        cls = type("Uploader", (LiveComponent,), {
-            "photo": None,
-            "render": lambda self: self.render_inline(
-                '<img src="{{ photo.url }}">', context={"photo": self.photo}
-            ),
-        })
+        cls = type(
+            "Uploader",
+            (LiveComponent,),
+            {
+                "photo": None,
+                "render": lambda self: self.render_inline('<img src="{{ photo.url }}">', context={"photo": self.photo}),
+            },
+        )
         instance = cls("pb-test")
         instance.photo = upload
 
@@ -335,58 +339,83 @@ class TestAskingForSeveralFiles(UploadTestCase):
         self.assertEqual(field.clean([], None), [])
 
     def test_a_property_holding_several_files_travels_as_several_notes(self):
-        uploads = [store_temporarily(a_file("one.txt")), store_temporarily(a_file("two.txt"))]
-        cls = type("Uploader", (LiveComponent,), {
-            "photos": [],
-            "render": lambda self: self.render_inline("<div>x</div>", context={}),
-        })
+        uploads = [
+            store_temporarily(a_file("one.txt")),
+            store_temporarily(a_file("two.txt")),
+        ]
+        cls = type(
+            "Uploader",
+            (LiveComponent,),
+            {
+                "photos": [],
+                "render": lambda self: self.render_inline("<div>x</div>", context={}),
+            },
+        )
         instance = cls("pb-test")
         instance.photos = uploads
 
-        self.assertEqual(
-            instance._get_state()["photos"], [upload.reference for upload in uploads]
-        )
+        self.assertEqual(instance._get_state()["photos"], [upload.reference for upload in uploads])
 
     def test_the_component_is_handed_the_files_again(self):
-        uploads = [store_temporarily(a_file("one.txt")), store_temporarily(a_file("two.txt"))]
-        cls = type("Uploader", (LiveComponent,), {
-            "photos": [],
-            "render": lambda self: self.render_inline("<div>x</div>", context={}),
-        })
+        uploads = [
+            store_temporarily(a_file("one.txt")),
+            store_temporarily(a_file("two.txt")),
+        ]
+        cls = type(
+            "Uploader",
+            (LiveComponent,),
+            {
+                "photos": [],
+                "render": lambda self: self.render_inline("<div>x</div>", context={}),
+            },
+        )
 
-        instance = cls.deserialize({
-            "_id": "pb-test", "photos": [upload.reference for upload in uploads]
-        })
+        instance = cls.deserialize({"_id": "pb-test", "photos": [upload.reference for upload in uploads]})
 
         self.assertEqual([photo.name for photo in instance.photos], ["one.txt", "two.txt"])
 
     def test_a_list_of_ordinary_text_is_left_as_it_is(self):
-        cls = type("Uploader", (LiveComponent,), {
-            "tags": [],
-            "render": lambda self: self.render_inline("<div>x</div>", context={}),
-        })
+        cls = type(
+            "Uploader",
+            (LiveComponent,),
+            {
+                "tags": [],
+                "render": lambda self: self.render_inline("<div>x</div>", context={}),
+            },
+        )
 
         instance = cls.deserialize({"_id": "pb-test", "tags": ["one", "two"]})
 
         self.assertEqual(instance.tags, ["one", "two"])
 
     def test_the_files_are_given_to_the_form_that_checks_them(self):
-        cls = type("Uploader", (LiveComponent,), {
-            "photos": [],
-            "rules": {"photos": MultipleFileField()},
-            "render": lambda self: self.render_inline("<div>x</div>", context={}),
-        })
+        cls = type(
+            "Uploader",
+            (LiveComponent,),
+            {
+                "photos": [],
+                "rules": {"photos": MultipleFileField()},
+                "render": lambda self: self.render_inline("<div>x</div>", context={}),
+            },
+        )
         instance = cls("pb-test")
-        instance.photos = [store_temporarily(a_file("one.txt")), store_temporarily(a_file("two.txt"))]
+        instance.photos = [
+            store_temporarily(a_file("one.txt")),
+            store_temporarily(a_file("two.txt")),
+        ]
 
         self.assertIs(instance.validate(), True)
 
     def test_one_file_the_rules_refuse_refuses_the_lot(self):
-        cls = type("Uploader", (LiveComponent,), {
-            "photos": [],
-            "rules": {"photos": MultipleFileField(validators=[MaxFileSize("1kb")])},
-            "render": lambda self: self.render_inline("<div>x</div>", context={}),
-        })
+        cls = type(
+            "Uploader",
+            (LiveComponent,),
+            {
+                "photos": [],
+                "rules": {"photos": MultipleFileField(validators=[MaxFileSize("1kb")])},
+                "render": lambda self: self.render_inline("<div>x</div>", context={}),
+            },
+        )
         instance = cls("pb-test")
         instance.photos = [
             store_temporarily(a_file("one.txt")),
@@ -397,11 +426,15 @@ class TestAskingForSeveralFiles(UploadTestCase):
         self.assertIn("too big", instance.errors["photos"][0])
 
     def test_the_property_still_holds_the_files_after_they_are_checked(self):
-        cls = type("Uploader", (LiveComponent,), {
-            "photos": [],
-            "rules": {"photos": MultipleFileField()},
-            "render": lambda self: self.render_inline("<div>x</div>", context={}),
-        })
+        cls = type(
+            "Uploader",
+            (LiveComponent,),
+            {
+                "photos": [],
+                "rules": {"photos": MultipleFileField()},
+                "render": lambda self: self.render_inline("<div>x</div>", context={}),
+            },
+        )
         instance = cls("pb-test")
         instance.photos = [store_temporarily(a_file("one.txt"))]
 
@@ -410,13 +443,21 @@ class TestAskingForSeveralFiles(UploadTestCase):
         self.assertIsInstance(instance.photos[0], TemporaryUpload)
 
     def test_a_template_may_show_them_all(self):
-        uploads = [store_temporarily(a_file("one.png")), store_temporarily(a_file("two.png"))]
-        cls = type("Uploader", (LiveComponent,), {
-            "photos": [],
-            "render": lambda self: self.render_inline(
-                "@for(photo in photos)<img src=\"{{ photo.url }}\">@endfor", context={}
-            ),
-        })
+        uploads = [
+            store_temporarily(a_file("one.png")),
+            store_temporarily(a_file("two.png")),
+        ]
+        cls = type(
+            "Uploader",
+            (LiveComponent,),
+            {
+                "photos": [],
+                "render": lambda self: self.render_inline(
+                    '@for(photo in photos)<img src="{{ photo.url }}">@endfor',
+                    context={},
+                ),
+            },
+        )
         instance = cls("pb-test")
         instance.photos = uploads
 
@@ -432,10 +473,13 @@ class TestANoteTheClientHandsBack(UploadTestCase):
     def _component(self, **body):
         body.setdefault("photo", None)
         body.setdefault("photos", [])
-        body.setdefault("render", lambda self: self.render_inline(
-            '<div><img src="{{ photo.url }}">@for(p in photos)<img src="{{ p.url }}">@endfor</div>',
-            context={},
-        ))
+        body.setdefault(
+            "render",
+            lambda self: self.render_inline(
+                '<div><img src="{{ photo.url }}">@for(p in photos)<img src="{{ p.url }}">@endfor</div>',
+                context={},
+            ),
+        )
         return type("Uploader", (LiveComponent,), body)
 
     def test_one_set_from_the_page_is_the_file(self):
@@ -447,11 +491,16 @@ class TestANoteTheClientHandsBack(UploadTestCase):
         self.assertIn(f'src="{upload.url}"', answer["html"])
 
     def test_several_set_from_the_page_are_the_files(self):
-        uploads = [store_temporarily(a_file("one.png")), store_temporarily(a_file("two.png"))]
+        uploads = [
+            store_temporarily(a_file("one.png")),
+            store_temporarily(a_file("two.png")),
+        ]
         cls = self._component()
 
         answer = cls.update_component(
-            {"_id": "pb-test"}, "$set", ["photos", [upload.reference for upload in uploads]]
+            {"_id": "pb-test"},
+            "$set",
+            ["photos", [upload.reference for upload in uploads]],
         )
 
         for upload in uploads:
@@ -461,9 +510,7 @@ class TestANoteTheClientHandsBack(UploadTestCase):
         upload = store_temporarily(a_file(name="holiday.png"))
         cls = self._component()
 
-        answer = cls.update_component(
-            {"_id": "pb-test"}, "$refresh", [], updates={"photo": upload.reference}
-        )
+        answer = cls.update_component({"_id": "pb-test"}, "$refresh", [], updates={"photo": upload.reference})
 
         self.assertIn(f'src="{upload.url}"', answer["html"])
 

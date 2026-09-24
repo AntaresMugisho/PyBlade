@@ -81,7 +81,10 @@ class TestComponentTags(ComponentTestCase):
 
     def test_valueless_attribute_is_a_true_prop(self):
         # @disabled renders its own leading space, hence no space before it
-        self._component("button", '@props({"disabled": False})<button@disabled(disabled)>Go</button>')
+        self._component(
+            "button",
+            '@props({"disabled": False})<button@disabled(disabled)>Go</button>',
+        )
 
         self.assertEqual(self._render("<pb-button disabled />"), "<button disabled>Go</button>")
         self.assertEqual(self._render("<pb-button />"), "<button>Go</button>")
@@ -96,7 +99,10 @@ class TestComponentTags(ComponentTestCase):
     def test_paired_component_content_becomes_the_default_slot(self):
         self._component("card", '<div class="card">{{ slot }}</div>')
 
-        self.assertEqual(self._render("<pb-card>Content</pb-card>"), '<div class="card">Content</div>')
+        self.assertEqual(
+            self._render("<pb-card>Content</pb-card>"),
+            '<div class="card">Content</div>',
+        )
 
     def test_component_template_must_have_a_single_root_node(self):
         self._component("broken", "<h1>Title</h1><p>Content</p>")
@@ -124,7 +130,10 @@ class TestBoundAttributes(ComponentTestCase):
     def test_a_bound_value_is_evaluated_in_the_context_of_the_caller(self):
         self._component("badge", "<span>{{ count }}</span>")
 
-        self.assertEqual(self._render('<pb-badge :count="a + b" />', {"a": 2, "b": 3}), "<span>5</span>")
+        self.assertEqual(
+            self._render('<pb-badge :count="a + b" />', {"a": 2, "b": 3}),
+            "<span>5</span>",
+        )
 
     def test_a_bound_value_may_be_single_quoted(self):
         self._component("badge", "<span>{{ count }}</span>")
@@ -186,7 +195,10 @@ class TestComponentProps(ComponentTestCase):
         self.assertEqual(result, '<div class="error">Boom</div>')
 
     def test_attributes_bag_is_not_escaped(self):
-        self._component("alert", '@props({"type": "info"})<div class="{{ type }}"{{ attributes }}>Body</div>')
+        self._component(
+            "alert",
+            '@props({"type": "info"})<div class="{{ type }}"{{ attributes }}>Body</div>',
+        )
 
         result = self._render('<pb-alert type="error" id="main" />')
 
@@ -206,7 +218,10 @@ class TestComponentProps(ComponentTestCase):
         self.assertEqual(self._render("<pb-alert disabled=False />"), "<div>Body</div>")
 
     def test_props_are_left_out_of_the_attributes_bag(self):
-        self._component("alert", '@props({"type": "info"})<div class="{{ type }}"{!! attributes !!}>Body</div>')
+        self._component(
+            "alert",
+            '@props({"type": "info"})<div class="{{ type }}"{!! attributes !!}>Body</div>',
+        )
 
         result = self._render('<pb-alert type="error" id="main" />')
 
@@ -268,7 +283,10 @@ class TestSlots(ComponentTestCase):
     def test_slot_directive_without_a_name_fills_the_default_slot(self):
         self._component("card", "<div>{{ slot }}</div>")
 
-        self.assertEqual(self._render("<pb-card>@slot Content @endslot</pb-card>"), "<div>Content</div>")
+        self.assertEqual(
+            self._render("<pb-card>@slot Content @endslot</pb-card>"),
+            "<div>Content</div>",
+        )
 
     def test_named_slot_with_a_pb_slot_tag(self):
         self._component("layout", self.LAYOUT)
@@ -311,7 +329,10 @@ class TestSlots(ComponentTestCase):
             <main>Content</main>
         </pb-layout>"""
 
-        self.assertEqual(self._render(template), "<div><h1>Dashboard</h1><main><main>Content</main></main></div>")
+        self.assertEqual(
+            self._render(template),
+            "<div><h1>Dashboard</h1><main><main>Content</main></main></div>",
+        )
 
     def test_slot_keeps_template_nodes_instead_of_rendered_html(self):
         nodes = self._parse("<pb-card>Hello {{ user.name }}</pb-card>")
@@ -412,19 +433,19 @@ class TestInheritanceSlots(ComponentTestCase):
         self._component("card", '<div class="card">{{ slot }}</div>')
         self._write("layouts.base", "<html><h1>{{ title }}</h1><main>{{ slot }}</main></html>")
 
-        child = (
-            "@extends('layouts.base')"
-            "<pb-slot:title>Dashboard</pb-slot:title>"
-            "<pb-card>{{ name }}</pb-card>"
-        )
+        child = "@extends('layouts.base')<pb-slot:title>Dashboard</pb-slot:title><pb-card>{{ name }}</pb-card>"
 
         result = self._render(child, {"name": "Antares"})
 
-        self.assertEqual(result, '<html><h1>Dashboard</h1><main><div class="card">Antares</div></main></html>')
+        self.assertEqual(
+            result,
+            '<html><h1>Dashboard</h1><main><div class="card">Antares</div></main></html>',
+        )
 
 
 if __name__ == "__main__":
     unittest.main()
+
 
 class TestAssetDirectives(ComponentTestCase):
     """@pbscripts and @pbstyles, which bring the live assets onto a page."""

@@ -11,8 +11,6 @@ class Command(BaseCommand):
 
     def config(self):
         """Setup command arguments and options here"""
-        ...
 
     def handle(self, **kwargs):
         """Execute the 'pyblade deploy' command"""
-        ...

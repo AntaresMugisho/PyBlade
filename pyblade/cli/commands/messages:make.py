@@ -118,8 +118,10 @@ class Command(BaseCommand):
         elif locale:
             locales_to_process = locale.split(",")
 
-        self.info(f"Processing {len(locales_to_process)} locale{'' if len(locales_to_process) == 1 else 's'}: \
-{', '.join(locales_to_process)}")
+        self.info(
+            f"Processing {len(locales_to_process)} locale{'' if len(locales_to_process) == 1 else 's'}: \
+{', '.join(locales_to_process)}"
+        )
 
         # Get project root directory
         project_root = get_project_root()
@@ -241,7 +243,7 @@ class Command(BaseCommand):
                     if comment_line:
                         # Look for translation directives on the same line or next few lines
                         # This will not work for long multiline comments, we should find a better way to do this
-                        for offset in range(0, 4):  # Check current line and next 3 lines
+                        for offset in range(4):  # Check current line and next 3 lines
                             target_line = comment_line + offset
                             if target_line in translation_directives:
                                 comments[target_line] = comment
@@ -421,7 +423,10 @@ class Command(BaseCommand):
                 if metadata.get("msgid_plural"):
                     entry.msgid_plural = metadata["msgid_plural"]
                     if isinstance(metadata.get("msgstr"), list):
-                        entry.msgstr_plural = {0: metadata["msgstr"][0], 1: metadata["msgstr"][1]}
+                        entry.msgstr_plural = {
+                            0: metadata["msgstr"][0],
+                            1: metadata["msgstr"][1],
+                        }
             else:
                 # Create new entry
                 entry = polib.POEntry(
@@ -438,7 +443,10 @@ class Command(BaseCommand):
                 if metadata.get("msgid_plural"):
                     entry.msgid_plural = metadata["msgid_plural"]
                     if isinstance(metadata.get("msgstr"), list):
-                        entry.msgstr_plural = {0: metadata["msgstr"][0], 1: metadata["msgstr"][1]}
+                        entry.msgstr_plural = {
+                            0: metadata["msgstr"][0],
+                            1: metadata["msgstr"][1],
+                        }
                 po.append(entry)
 
         po.save(str(po_file))

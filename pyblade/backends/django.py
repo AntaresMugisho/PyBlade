@@ -1,14 +1,23 @@
+from django.template import TemplateDoesNotExist
 from django.template.backends.base import BaseEngine
 from django.template.backends.utils import csrf_input_lazy, csrf_token_lazy
 from django.utils.functional import cached_property
 from django.utils.module_loading import import_string
 
 from pyblade import PyBlade
+from pyblade.engine.exceptions import TemplateNotFoundError
 from pyblade.engine.template import Template as PyBladeTemplate
 
 
-class PyBladeEngine(BaseEngine):
+class TemplateNotFoundHere(TemplateNotFoundError, TemplateDoesNotExist):
+    """A template this engine has not got.
 
+    Both what PyBlade calls it and what Django calls it, so that whichever of
+    the two is being caught, it is caught.
+    """
+
+
+class PyBladeEngine(BaseEngine):
     app_dirname = "templates"
 
     def __init__(self, params):
@@ -27,8 +36,13 @@ class PyBladeEngine(BaseEngine):
 
         try:
             return Template(self.engine.get_template(template_name), self)
-        except Exception as e:
-            raise e
+        except TemplateNotFoundError as error:
+            # Django asks each of its engines in turn, and an engine without
+            # the template says so by raising TemplateDoesNotExist. Raised as
+            # both, so that a template held by another engine is still reached
+            # and Django still shows where it looked, while code catching
+            # PyBlade's own exception goes on working.
+            raise TemplateNotFoundHere(str(error)) from error
 
     @cached_property
     def template_context_processors(self):

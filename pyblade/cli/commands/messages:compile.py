@@ -83,8 +83,10 @@ class Command(BaseCommand):
         else:
             locales_to_process = self._get_all_locales(locale_dir)
 
-        self.info(f"Processing {len(locales_to_process)} locale{'' if len(locales_to_process) == 1 else 's'}: \
-{', '.join(locales_to_process)}")
+        self.info(
+            f"Processing {len(locales_to_process)} locale{'' if len(locales_to_process) == 1 else 's'}: \
+{', '.join(locales_to_process)}"
+        )
 
         # Process each locale
         compiled_count = 0

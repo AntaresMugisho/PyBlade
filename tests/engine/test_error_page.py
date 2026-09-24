@@ -82,3 +82,51 @@ class TestAnErrorFromAnAction(unittest.TestCase):
         page = error_page(ValueError("<script>alert('x')</script>"))
 
         self.assertNotIn("<script>alert", page)
+
+
+class TestWhenItIsShown(unittest.TestCase):
+    """The page is for whoever is writing the code, and only for them.
+
+    Which means the question "are we developing?" has to be answered correctly,
+    including for a project that never said which framework it is built on.
+    """
+
+    def setUp(self):
+        from pyblade.config import settings
+
+        self.settings = settings
+        self.saved = settings._data.get("framework")
+
+    def tearDown(self):
+        if self.saved is None:
+            self.settings._data.pop("framework", None)
+        else:
+            self.settings._data["framework"] = self.saved
+
+    def test_a_project_that_says_it_is_django(self):
+        from django.test import override_settings
+
+        self.settings._data["framework"] = "django"
+
+        with override_settings(DEBUG=True):
+            self.assertIs(self.settings.DEBUG, True)
+
+        with override_settings(DEBUG=False):
+            self.assertIs(self.settings.DEBUG, False)
+
+    def test_a_project_that_never_said_which_framework_it_is(self):
+        """Django is answering, and is in development: so are we."""
+        from django.test import override_settings
+
+        self.settings._data.pop("framework", None)
+
+        with override_settings(DEBUG=True):
+            self.assertIs(self.settings.DEBUG, True)
+
+    def test_and_is_not_in_development_when_that_framework_is_not(self):
+        from django.test import override_settings
+
+        self.settings._data.pop("framework", None)
+
+        with override_settings(DEBUG=False):
+            self.assertIs(self.settings.DEBUG, False)

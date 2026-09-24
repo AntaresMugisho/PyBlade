@@ -104,7 +104,15 @@ class TestComponentSurface(unittest.TestCase):
 
         self.assertEqual(
             set(snapshot),
-            {"id", "class", "state", "listeners", "confirmations", "errors", "checksum"},
+            {
+                "id",
+                "class",
+                "state",
+                "listeners",
+                "confirmations",
+                "errors",
+                "checksum",
+            },
         )
         self.assertEqual(snapshot["state"], {"count": 0, "label": "clicks"})
         self.assertEqual(snapshot["listeners"], {})
@@ -128,7 +136,13 @@ class TestClientActions(unittest.TestCase):
         self.assertEqual(result["snapshot"]["state"]["count"], 5)
 
     def test_calling_a_method_of_the_base_class_is_refused(self):
-        for name in ("serialize", "render_template", "get_template_name", "redirect", "deserialize"):
+        for name in (
+            "serialize",
+            "render_template",
+            "get_template_name",
+            "redirect",
+            "deserialize",
+        ):
             with self.subTest(method=name):
                 with self.assertRaises(AttributeError):
                     self._update(name)
@@ -155,15 +169,22 @@ class TestClientActions(unittest.TestCase):
     def test_refreshing_re_renders_without_calling_anything(self):
         result = self._update("$refresh")
 
-        self.assertEqual(result["html"], "<div pb:id=\"pb-test\">0</div>")
+        self.assertEqual(result["html"], '<div pb:id="pb-test">0</div>')
 
 
 class TestMagicActions(unittest.TestCase):
     """The actions a component calls on itself: reset, pull, toggle, set."""
 
     def _component(self, **body):
-        body.setdefault("render", lambda self: self.render_inline("<div>{{ count }}</div>", context={}))
-        return type("Magic", (LiveComponent,), {"count": 0, "label": "clicks", "tags": ["a"], **body})("pb-test")
+        body.setdefault(
+            "render",
+            lambda self: self.render_inline("<div>{{ count }}</div>", context={}),
+        )
+        return type(
+            "Magic",
+            (LiveComponent,),
+            {"count": 0, "label": "clicks", "tags": ["a"], **body},
+        )("pb-test")
 
     def test_reset_restores_a_property_to_what_the_class_declares(self):
         component = self._component()
@@ -294,7 +315,10 @@ class TestServerToClient(unittest.TestCase):
 
     def _update(self, action, body, state=None):
         body.setdefault("count", 0)
-        body.setdefault("render", lambda self: self.render_inline("<div>{{ count }}</div>", context={}))
+        body.setdefault(
+            "render",
+            lambda self: self.render_inline("<div>{{ count }}</div>", context={}),
+        )
         cls = type("Talker", (LiveComponent,), body)
         return cls.update_component({"_id": "pb-test", **(state or {})}, action)
 
@@ -370,7 +394,10 @@ class TestInitialRendering(unittest.TestCase):
     """The first rendering of a component, on the server."""
 
     def _component(self, **body):
-        body.setdefault("render", lambda self: self.render_inline("<div>{{ count }}</div>", context={}))
+        body.setdefault(
+            "render",
+            lambda self: self.render_inline("<div>{{ count }}</div>", context={}),
+        )
         return type("Greeter", (LiveComponent,), {"count": 0, **body})
 
     def test_class_defaults_make_up_the_initial_state(self):
@@ -607,8 +634,10 @@ class TestAsView(LiveProjectTestCase):
         response = view(self._request())
 
         self.assertRegex(response.content.decode(), r"""<div pb:id="pb-[^"]+" pb:snapshot='{""")
-        self.assertIn(b'&quot;class&quot;: &quot;components.live.counter.Counter&quot;'
-                      .replace(b"&quot;", b'"'), response.content)
+        self.assertIn(
+            b"&quot;class&quot;: &quot;components.live.counter.Counter&quot;".replace(b"&quot;", b'"'),
+            response.content,
+        )
 
     def test_the_layout_the_template_extends_wraps_the_page(self):
         self.write_template(
@@ -625,7 +654,10 @@ class TestAsView(LiveProjectTestCase):
 
     def test_the_snapshot_sits_inside_the_page(self):
         """After </html> a browser has to put it back, and a parser may drop it."""
-        self.write_template("layouts.app", "<!DOCTYPE html><html><body><div pb:root>{{ slot }}</div></body></html>")
+        self.write_template(
+            "layouts.app",
+            "<!DOCTYPE html><html><body><div pb:root>{{ slot }}</div></body></html>",
+        )
         self.write_component("count = 1", '@extends("layouts.app")\n<div>{{ count }}</div>')
 
         content = self.load_component().as_view()(self._request()).content.decode()
@@ -635,7 +667,8 @@ class TestAsView(LiveProjectTestCase):
     def test_a_page_is_given_a_csrf_token(self):
         """Without one, every action the page sends back is refused."""
         self.write_template(
-            "layouts.app", "<!DOCTYPE html><html><body>@pbscripts<div pb:root>{{ slot }}</div></body></html>"
+            "layouts.app",
+            "<!DOCTYPE html><html><body>@pbscripts<div pb:root>{{ slot }}</div></body></html>",
         )
         self.write_component("count = 1", '@extends("layouts.app")\n<div>{{ count }}</div>')
 
@@ -653,7 +686,10 @@ class TestAsView(LiveProjectTestCase):
 
     def test_an_action_answers_with_the_component_and_not_the_page(self):
         """The client morphs the answer into the component, not into the document."""
-        self.write_template("layouts.app", "<!DOCTYPE html><html><body><div pb:root>{{ slot }}</div></body></html>")
+        self.write_template(
+            "layouts.app",
+            "<!DOCTYPE html><html><body><div pb:root>{{ slot }}</div></body></html>",
+        )
         self.write_component(
             """
             count = 0
@@ -776,14 +812,12 @@ class TestTemplateName(unittest.TestCase):
         (self.components_dir / "__init__.py").write_text("")
         (self.components_dir / "live" / "__init__.py").write_text("")
         (self.components_dir / "live" / "counter.py").write_text(
-            textwrap.dedent(
-                """
+            textwrap.dedent("""
                 from pyblade import live
 
                 class Counter(live.LiveComponent):
                     count = 0
-                """
-            )
+                """)
         )
         (self.components_dir / "live" / "counter.html").write_text("<div>{{ count }}</div>")
 
@@ -808,8 +842,10 @@ class TestTemplateName(unittest.TestCase):
         cls = self._write_component()
 
         self.assertNotIn("template_name", cls("pb-test").serialize()["state"])
-        self.assertEqual(cls.update_component({"count": 2, "_id": "pb-test"}, "$refresh")["html"],
-                         '<div pb:id="pb-test">2</div>')
+        self.assertEqual(
+            cls.update_component({"count": 2, "_id": "pb-test"}, "$refresh")["html"],
+            '<div pb:id="pb-test">2</div>',
+        )
 
 
 if __name__ == "__main__":

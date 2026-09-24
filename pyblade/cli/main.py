@@ -54,7 +54,7 @@ def load_commands():
                 click_cmd = register(cmd)
                 _CACHED_COMMANDS.setdefault(category, []).append(click_cmd)
             except (ImportError, AttributeError) as e:
-                console.print(f"[red]Failed to load PyBlade Command {cmd_name}: {str(e)}[/red]")
+                console.print(f"[red]Failed to load PyBlade Command {cmd_name}: {e!s}[/red]")
 
     # Load Django commands if the project is based on Django Framework
     if settings.framework and settings.framework == "django":
@@ -118,9 +118,9 @@ def load_custom_commands():
                     click_cmd = register(cmd)
                     _CACHED_COMMANDS.setdefault("Custom Commands", []).append(click_cmd)
                 except Exception as e:
-                    console.print(f"[red]Failed to load custom command {cmd_name}: {str(e)}[/red]")
+                    console.print(f"[red]Failed to load custom command {cmd_name}: {e!s}[/red]")
     except Exception as e:
-        console.print(f"[red]Error while loading custom commands: {str(e)}[/red]")
+        console.print(f"[red]Error while loading custom commands: {e!s}[/red]")
 
 
 def load_command(module_dir, cmd_name):
@@ -171,7 +171,6 @@ class CommandGroup(click.Group):
         table.add_column("Command", justify="left")
         table.add_column("Description", justify="left")
         for category, commands in _CACHED_COMMANDS.items():
-
             table.add_row(f"\n[yellow]{category}[/yellow]")
             for cmd in commands:
                 table.add_row(f"  [blue]{cmd.name}[/blue]", cmd.help)

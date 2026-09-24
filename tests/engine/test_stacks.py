@@ -7,7 +7,6 @@ twice on a page does not bring its script twice.
 import re
 
 from pyblade.engine import stacks
-
 from tests.engine.test_components import ComponentTestCase
 
 
@@ -23,12 +22,7 @@ class TestStacks(ComponentTestCase):
         self.assertEqual(visible(html), "<head><script>a</script></head><p>body</p>")
 
     def test_pushes_come_out_in_the_order_they_are_made(self):
-        html = self._render(
-            "@stack('s')"
-            "@push('s')<i>1</i>@endpush"
-            "@push('s')<i>2</i>@endpush"
-            "@push('s')<i>3</i>@endpush"
-        )
+        html = self._render("@stack('s')@push('s')<i>1</i>@endpush@push('s')<i>2</i>@endpush@push('s')<i>3</i>@endpush")
 
         self.assertEqual(visible(html), "<i>1</i><i>2</i><i>3</i>")
 
@@ -46,7 +40,10 @@ class TestStacks(ComponentTestCase):
         self.assertEqual(visible(self._render("<head>@stack('styles')</head>")), "<head></head>")
 
     def test_a_push_to_a_stack_that_is_nowhere_is_dropped(self):
-        self.assertEqual(visible(self._render("@push('nowhere')<i>x</i>@endpush<p>ok</p>")), "<p>ok</p>")
+        self.assertEqual(
+            visible(self._render("@push('nowhere')<i>x</i>@endpush<p>ok</p>")),
+            "<p>ok</p>",
+        )
 
     def test_a_push_renders_with_the_context_it_is_written_in(self):
         html = self._render("@stack('s')@push('s')<i>{{ name }}</i>@endpush", {"name": "Ada"})
@@ -65,14 +62,16 @@ class TestStacks(ComponentTestCase):
         )
 
         html = self._render(
-            "@extends('layouts.base')"
-            "@block('content')<p>page</p>@push('scripts')<script>page</script>@endpush@endblock"
+            "@extends('layouts.base')@block('content')<p>page</p>@push('scripts')<script>page</script>@endpush@endblock"
         )
 
         self.assertEqual(visible(html), "<head><script>page</script></head><body><p>page</p></body>")
 
     def test_a_component_used_twice_pushes_its_script_once(self):
-        self._component("chart", "<canvas></canvas>@push('scripts')<script src=\"/chart.js\"></script>@endpush")
+        self._component(
+            "chart",
+            "<canvas></canvas>@push('scripts')<script src=\"/chart.js\"></script>@endpush",
+        )
 
         html = self._render("<head>@stack('scripts')</head><pb-chart /><pb-chart />")
 
@@ -114,9 +113,16 @@ class TestCollecting(ComponentTestCase):
             html = self._render("<div>@push('scripts')<script>a</script>@endpush</div>")
 
         self.assertEqual(html, "<div></div>")
-        self.assertEqual(collector.pushes_for_client(), [
-            {"stack": "scripts", "key": stacks.key_of("<script>a</script>"), "html": "<script>a</script>"},
-        ])
+        self.assertEqual(
+            collector.pushes_for_client(),
+            [
+                {
+                    "stack": "scripts",
+                    "key": stacks.key_of("<script>a</script>"),
+                    "html": "<script>a</script>",
+                },
+            ],
+        )
 
     def test_the_pushes_read_back_are_kept_once(self):
         with stacks.collecting() as collector:

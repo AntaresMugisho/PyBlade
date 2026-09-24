@@ -26,10 +26,16 @@ class TestScript(unittest.TestCase):
     def test_the_script_is_rendered_inert(self):
         html = render("@script<script>$pb.save()</script>@endscript")
 
-        self.assertRegex(html, r'^<template pb:script="[0-9a-f]+"><script>\$pb\.save\(\)</script></template>$')
+        self.assertRegex(
+            html,
+            r'^<template pb:script="[0-9a-f]+"><script>\$pb\.save\(\)</script></template>$',
+        )
 
     def test_it_renders_with_the_context_it_is_written_in(self):
-        self.assertIn("console.log(3)", render("@script<script>console.log({{ n }})</script>@endscript", {"n": 3}))
+        self.assertIn(
+            "console.log(3)",
+            render("@script<script>console.log({{ n }})</script>@endscript", {"n": 3}),
+        )
 
     def test_the_key_does_not_change_with_what_it_renders(self):
         template = "@script<script>console.log({{ n }})</script>@endscript"
@@ -47,15 +53,21 @@ class TestScript(unittest.TestCase):
 
 
 def component(template):
-    return type("Scripted", (LiveComponent,), {
-        "count": 0,
-        "render": lambda self: self.render_inline(template, context={}),
-    })
+    return type(
+        "Scripted",
+        (LiveComponent,),
+        {
+            "count": 0,
+            "render": lambda self: self.render_inline(template, context={}),
+        },
+    )
 
 
 class TestScriptInALiveComponent(unittest.TestCase):
     def test_a_script_written_after_the_root_is_moved_inside_it(self):
-        html = component("<div><b>{{ count }}</b></div>\n\n@script\n<script>$pb.count</script>\n@endscript\n").render_initial()
+        html = component(
+            "<div><b>{{ count }}</b></div>\n\n@script\n<script>$pb.count</script>\n@endscript\n"
+        ).render_initial()
 
         root_end = html.rindex("</div>")
         self.assertLess(html.index("<template pb:script="), root_end)
@@ -64,7 +76,10 @@ class TestScriptInALiveComponent(unittest.TestCase):
     def test_a_script_written_inside_the_root_stays_where_it_is(self):
         html = component("<div><b>{{ count }}</b>@script<script>x()</script>@endscript</div>").render_initial()
 
-        self.assertRegex(html, r"<b>0</b><template pb:script=\"[0-9a-f]+\"><script>x\(\)</script></template></div>$")
+        self.assertRegex(
+            html,
+            r"<b>0</b><template pb:script=\"[0-9a-f]+\"><script>x\(\)</script></template></div>$",
+        )
 
     def test_the_update_carries_the_script_too(self):
         cls = component("<div>{{ count }}</div>@script<script>x()</script>@endscript")

@@ -11,8 +11,8 @@ import json
 import os
 import re
 import shutil
-import tempfile
 import sys
+import tempfile
 import textwrap
 import unittest
 from pathlib import Path
@@ -84,13 +84,23 @@ class NestingTestCase(unittest.TestCase):
         path.write_text(textwrap.dedent(content).strip() + "\n", encoding="utf-8")
 
     def write_child(self, body="count = 0", template='<div id="child">{{ count }}</div>'):
-        self._write("child.py", f"from pyblade import LiveComponent\n\n\nclass Child(LiveComponent):\n"
-                                f"{textwrap.indent(textwrap.dedent(body).strip(), '    ')}\n")
+        self._write(
+            "child.py",
+            f"from pyblade import LiveComponent\n\n\nclass Child(LiveComponent):\n"
+            f"{textwrap.indent(textwrap.dedent(body).strip(), '    ')}\n",
+        )
         self._write("child.html", template)
 
-    def write_parent(self, template='<div id="parent">{{ title }}<pb-child /></div>', body="title = 'p'"):
-        self._write("parent.py", f"from pyblade import LiveComponent\n\n\nclass Parent(LiveComponent):\n"
-                                 f"{textwrap.indent(textwrap.dedent(body).strip(), '    ')}\n")
+    def write_parent(
+        self,
+        template='<div id="parent">{{ title }}<pb-child /></div>',
+        body="title = 'p'",
+    ):
+        self._write(
+            "parent.py",
+            f"from pyblade import LiveComponent\n\n\nclass Parent(LiveComponent):\n"
+            f"{textwrap.indent(textwrap.dedent(body).strip(), '    ')}\n",
+        )
         self._write("parent.html", template)
 
     def parent_class(self):
@@ -102,9 +112,9 @@ class NestingTestCase(unittest.TestCase):
 
     def rerender(self, known=(), state=None, action="$refresh"):
         """What the parent answers an action with."""
-        return self.parent_class().update_component(
-            {"_id": "parent-1", **(state or {})}, action, [], known=known
-        )["html"]
+        return self.parent_class().update_component({"_id": "parent-1", **(state or {})}, action, [], known=known)[
+            "html"
+        ]
 
 
 class TestIdentity(NestingTestCase):

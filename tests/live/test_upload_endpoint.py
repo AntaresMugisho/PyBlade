@@ -20,8 +20,8 @@ from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import RequestFactory, override_settings
 
-from pyblade.live.base import LiveComponent
 from pyblade.live import uploads as uploads_module
+from pyblade.live.base import LiveComponent
 from pyblade.live.registry import registry
 from pyblade.live.uploads import MaxFileSize, MultipleFileField, TemporaryUpload
 from pyblade.live.views import upload_file
@@ -72,17 +72,21 @@ class UploadEndpointTestCase(unittest.TestCase):
         return snapshot
 
     def _post(self, file, property_name="photo", snapshot=None):
-        request = self.requests.post("/pyblade/live/upload/", {
-            "file": file if isinstance(file, list) else [file],
-            "property": property_name,
-            "snapshot": json.dumps(snapshot if snapshot is not None else self._snapshot()),
-        })
+        request = self.requests.post(
+            "/pyblade/live/upload/",
+            {
+                "file": file if isinstance(file, list) else [file],
+                "property": property_name,
+                "snapshot": json.dumps(snapshot if snapshot is not None else self._snapshot()),
+            },
+        )
 
         return upload_file(request)
 
     def _body(self, response):
-        return json.loads(b"".join(response).decode() if hasattr(response, "streaming_content")
-                          else response.content.decode())
+        return json.loads(
+            b"".join(response).decode() if hasattr(response, "streaming_content") else response.content.decode()
+        )
 
 
 class TestSendingAFile(UploadEndpointTestCase):
@@ -140,10 +144,13 @@ class TestRefusingWhatShouldNotBeKept(UploadEndpointTestCase):
         self.assertEqual(response.status_code, 422)
 
     def test_a_request_carrying_no_file_is_refused(self):
-        request = self.requests.post("/pyblade/live/upload/", {
-            "property": "photo",
-            "snapshot": json.dumps(self._snapshot()),
-        })
+        request = self.requests.post(
+            "/pyblade/live/upload/",
+            {
+                "property": "photo",
+                "snapshot": json.dumps(self._snapshot()),
+            },
+        )
 
         self.assertEqual(upload_file(request).status_code, 400)
 
@@ -160,10 +167,13 @@ class TestWhoMaySend(UploadEndpointTestCase):
         self.assertEqual(response.status_code, 400)
 
     def test_a_request_with_no_snapshot_at_all_is_refused(self):
-        request = self.requests.post("/pyblade/live/upload/", {
-            "file": SimpleUploadedFile("note.txt", b"hello"),
-            "property": "photo",
-        })
+        request = self.requests.post(
+            "/pyblade/live/upload/",
+            {
+                "file": SimpleUploadedFile("note.txt", b"hello"),
+                "property": "photo",
+            },
+        )
 
         self.assertEqual(upload_file(request).status_code, 400)
 
@@ -185,27 +195,39 @@ class TestSendingSeveralFilesAtOnce(UploadEndpointTestCase):
     """One choosing is one request, so what comes back is one list."""
 
     def test_every_file_comes_back(self):
-        body = self._body(self._post(
-            [SimpleUploadedFile("one.txt", b"a"), SimpleUploadedFile("two.txt", b"b")],
-            property_name="photos",
-        ))
+        body = self._body(
+            self._post(
+                [
+                    SimpleUploadedFile("one.txt", b"a"),
+                    SimpleUploadedFile("two.txt", b"b"),
+                ],
+                property_name="photos",
+            )
+        )
 
         self.assertEqual([file["name"] for file in body["files"]], ["one.txt", "two.txt"])
 
     def test_each_note_holds_its_own_file(self):
-        body = self._body(self._post(
-            [SimpleUploadedFile("one.txt", b"a"), SimpleUploadedFile("two.txt", b"b")],
-            property_name="photos",
-        ))
+        body = self._body(
+            self._post(
+                [
+                    SimpleUploadedFile("one.txt", b"a"),
+                    SimpleUploadedFile("two.txt", b"b"),
+                ],
+                property_name="photos",
+            )
+        )
 
-        kept = [TemporaryUpload.from_reference(file["reference"]).open().read()
-                for file in body["files"]]
+        kept = [TemporaryUpload.from_reference(file["reference"]).open().read() for file in body["files"]]
 
         self.assertEqual(kept, [b"a", b"b"])
 
     def test_one_file_the_rules_refuse_refuses_the_lot(self):
         response = self._post(
-            [SimpleUploadedFile("one.txt", b"a"), SimpleUploadedFile("big.txt", b"x" * 4000)],
+            [
+                SimpleUploadedFile("one.txt", b"a"),
+                SimpleUploadedFile("big.txt", b"x" * 4000),
+            ],
             property_name="photos",
         )
 
@@ -214,7 +236,10 @@ class TestSendingSeveralFilesAtOnce(UploadEndpointTestCase):
 
     def test_nothing_of_a_refused_lot_is_kept(self):
         self._post(
-            [SimpleUploadedFile("one.txt", b"a"), SimpleUploadedFile("big.txt", b"x" * 4000)],
+            [
+                SimpleUploadedFile("one.txt", b"a"),
+                SimpleUploadedFile("big.txt", b"x" * 4000),
+            ],
             property_name="photos",
         )
 
@@ -229,7 +254,6 @@ class TestSendingSeveralFilesAtOnce(UploadEndpointTestCase):
 
         self.assertEqual(response.status_code, 422)
         self.assertIn("one file", self._body(response)["errors"][0])
-
 
 
 class TestShowingAFileOnItsWay(UploadEndpointTestCase):
@@ -248,7 +272,7 @@ class TestShowingAFileOnItsWay(UploadEndpointTestCase):
     def _token(self, upload):
         from pyblade.live.uploads import REFERENCE_PREFIX
 
-        return upload.reference[len(REFERENCE_PREFIX):]
+        return upload.reference[len(REFERENCE_PREFIX) :]
 
     def test_the_file_is_handed_over(self):
         upload = self._upload(content=b"a picture")
@@ -285,7 +309,11 @@ class TestShowingAFileOnItsWay(UploadEndpointTestCase):
         self.assertFalse(response.get("Content-Disposition", "").startswith("attachment"))
 
     def test_a_page_is_downloaded_rather_than_shown(self):
-        upload = self._upload(name="evil.html", content=b"<script>alert(1)</script>", content_type="text/html")
+        upload = self._upload(
+            name="evil.html",
+            content=b"<script>alert(1)</script>",
+            content_type="text/html",
+        )
 
         response = self._get(self._token(upload))
 

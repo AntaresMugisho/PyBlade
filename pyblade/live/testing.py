@@ -90,9 +90,7 @@ class LiveTest:
         property holding a file is the file here too, not the note it travels
         as.
         """
-        return self.component_class.deserialize(
-            dict(self.state) | {"_id": self.snapshot["id"]}
-        )
+        return self.component_class.deserialize(dict(self.state) | {"_id": self.snapshot["id"]})
 
     # DRIVING IT
     def set(self, name, value):
@@ -140,17 +138,13 @@ class LiveTest:
 
     def assert_sees(self, text):
         if not self.sees(text):
-            raise AssertionError(
-                f"The {self._name} component does not show {text!r}.\n\n{self.html}"
-            )
+            raise AssertionError(f"The {self._name} component does not show {text!r}.\n\n{self.html}")
 
         return self
 
     def assert_does_not_see(self, text):
         if self.sees(text):
-            raise AssertionError(
-                f"The {self._name} component shows {text!r} and should not.\n\n{self.html}"
-            )
+            raise AssertionError(f"The {self._name} component shows {text!r} and should not.\n\n{self.html}")
 
         return self
 
@@ -183,8 +177,7 @@ class LiveTest:
     def assert_redirected_to(self, href):
         if self.redirected_to != href:
             raise AssertionError(
-                f"The {self._name} component sent the reader to "
-                f"{self.redirected_to or 'nowhere'}, not to {href}."
+                f"The {self._name} component sent the reader to {self.redirected_to or 'nowhere'}, not to {href}."
             )
 
         return self
@@ -192,9 +185,7 @@ class LiveTest:
     def assert_emitted(self, event):
         if not any(emitted["name"] == event for emitted in self.emitted):
             emitted = ", ".join(one["name"] for one in self.emitted) or "nothing"
-            raise AssertionError(
-                f"The {self._name} component emitted {emitted}, not {event!r}."
-            )
+            raise AssertionError(f"The {self._name} component emitted {emitted}, not {event!r}.")
 
         return self
 

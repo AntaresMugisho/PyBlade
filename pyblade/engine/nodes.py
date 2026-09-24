@@ -1,11 +1,9 @@
-import importlib
-from pathlib import Path
+import fnmatch
 import random
 import re
 from html import escape as html_escape
-from pprint import pformat, pprint
-
-from questionary.prompts.path import path
+from pathlib import Path
+from pprint import pformat
 
 from pyblade.config import settings
 from pyblade.engine.exceptions import (
@@ -17,11 +15,25 @@ from pyblade.engine.exceptions import (
     TemplateNotFoundError,
     TemplateRenderError,
 )
-from pyblade.i18n import available_languages, current_language, gettext, ngettext, npgettext, pgettext
-from pyblade.utils import validate_single_root_node, snakebab_to_pascal, pascal_to_snake
+from pyblade.i18n import (
+    available_languages,
+    current_language,
+    gettext,
+    ngettext,
+    npgettext,
+    pgettext,
+)
+from pyblade.utils import pascal_to_snake, snakebab_to_pascal, validate_single_root_node
 
 from . import loader, stacks
-from .contexts import AttributesContext, CycleContext, LoopContext, SafeContent, SlotContent, SlotContext
+from .contexts import (
+    AttributesContext,
+    CycleContext,
+    LoopContext,
+    SafeContent,
+    SlotContent,
+    SlotContext,
+)
 from .sandbox import SafeEvaluator
 
 # The name under which the content of a component or of a child template is available.
@@ -88,8 +100,7 @@ class Node:
     _quick_fix_messages = {
         "AttributeError": "The object does not have the attribute "
         "you are trying to access. Make sure it is spelled correctly.",
-        "SyntaxError": "There is a syntax error in your expression. "
-        "Check your template syntax near the reported line.",
+        "SyntaxError": "There is a syntax error in your expression. Check your template syntax near the reported line.",
         "NameError": "The variable is not available in the current template context. "
         "Verify its spelling or use the @debug directive to inspect the context.",
         "TypeError": "An operation is being applied to an incompatible type.",
@@ -150,7 +161,7 @@ class TextNode(Node):
         self.content = content
 
     def __repr__(self):
-        return f"TextNode(content='{repr(self.content)}')"
+        return f"TextNode(content='{self.content!r}')"
 
     def render(self, context):
         return self.content
@@ -195,7 +206,7 @@ class VarNode(Node):
 
 
 # DIRECTIVES
-# ------------------------------------------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------------
 
 
 class IfNode(Node):
@@ -324,6 +335,73 @@ class AuthNode(Node):
         if self.else_body:
             return "".join(node.render(context) for node in self.else_body)
         return ""
+
+
+class ActiveNode(Node):
+    """Represents an @active('...')...@endactive block.
+
+    Renders what is inside it while the reader is on the page it names, and
+    what follows an @else while they are anywhere else:
+
+        <li class="@active('dashboard')is-active@endactive">
+
+    Where the reader is may be named either way round. A name is the name of
+    the route, as Django resolved it, with or without its namespace; anything
+    starting with a slash is the path itself. Either may be written with a `*`
+    where anything will do, which is what the parent of a menu needs -- lit for
+    every page beneath it, not only for its own.
+    """
+
+    def __init__(self, patterns, body, else_body=None, line=None, column=None):
+        super().__init__(line, column)
+        self.patterns = patterns  # The expression the patterns are written as
+        self.body = body
+        self.else_body = else_body
+
+    def __repr__(self):
+        return f"ActiveNode(patterns='{self.patterns}', body={self.body}, else_body={self.else_body})"
+
+    def render(self, context):
+        try:
+            patterns = self.eval(f"({self.patterns},)", context)
+        except Exception as exc:
+            self._raise(exc)
+
+        request = context.get("request")
+
+        if any(self._matches(str(pattern), request) for pattern in patterns):
+            return "".join(node.render(context) for node in self.body)
+
+        if self.else_body:
+            return "".join(node.render(context) for node in self.else_body)
+
+        return ""
+
+    @staticmethod
+    def _matches(pattern, request):
+        """Whether a pattern is where the reader is.
+
+        Nothing is where the reader is when nothing is being served: a template
+        rendered with no request behind it is not on any page.
+        """
+        if request is None:
+            return False
+
+        if pattern.startswith("/"):
+            return fnmatch.fnmatchcase(getattr(request, "path", "") or "", pattern)
+
+        resolved = getattr(request, "resolver_match", None)
+        if resolved is None:
+            return False
+
+        # Matched against the whole name and against the short one, so that a
+        # route in a namespace answers to 'blog:index' and to 'index' alike
+        names = [
+            getattr(resolved, "view_name", None),
+            getattr(resolved, "url_name", None),
+        ]
+
+        return any(name and fnmatch.fnmatchcase(name, pattern) for name in names)
 
 
 class GuestNode(Node):
@@ -513,12 +591,12 @@ class IncludeNode(Node):
             return template.render(new_context)
 
         except TemplateNotFoundError as exc:
-            setattr(exc, "line", self.line)
-            setattr(exc, "column", self.column)
+            exc.line = self.line
+            exc.column = self.column
             raise
 
         except PyBladeException as exc:
-            setattr(exc, "template", template)
+            exc.template = template
             raise
 
         except Exception as exc:
@@ -830,7 +908,15 @@ class ComponentNode(Node):
     it was written in.
     """
 
-    def __init__(self, name_expr, data_expr=None, attributes=None, slots=None, line=None, column=None):
+    def __init__(
+        self,
+        name_expr,
+        data_expr=None,
+        attributes=None,
+        slots=None,
+        line=None,
+        column=None,
+    ):
         super().__init__(line, column)
         self.name_expr = name_expr
         self.data_expr = data_expr
@@ -1117,7 +1203,7 @@ class VerbatimNode(Node):
         self.content = content
 
     def __repr__(self):
-        return f"VerbatimNode(content='{repr(self.content)}')"
+        return f"VerbatimNode(content='{self.content!r}')"
 
     def render(self, context):
         return self.content
@@ -1131,7 +1217,7 @@ class CommentNode(Node):
         self.content = content
 
     def __repr__(self):
-        return f"CommentNode(content='{repr(self.content)}')"
+        return f"CommentNode(content='{self.content!r}')"
 
     def render(self, context):
         # Comments are stripped from output
@@ -1251,7 +1337,15 @@ class FirstOfNode(Node):
 class UrlNode(Node):
     """Represents an @url('pattern', args, kwargs) directive."""
 
-    def __init__(self, pattern_expr, positional_args=None, keyword_args=None, as_name=None, line=None, column=None):
+    def __init__(
+        self,
+        pattern_expr,
+        positional_args=None,
+        keyword_args=None,
+        as_name=None,
+        line=None,
+        column=None,
+    ):
         super().__init__(line, column)
         self.pattern_expr = pattern_expr
         self.positional_args = positional_args or []
@@ -1379,7 +1473,7 @@ class PybladeScriptsNode(Node):
         # never started twice on a page
         return (
             f'<script type="module" src="/pyblade/live/assets/js/" data-csrf="{token}" defer '
-            f'data-navigate-once></script>'
+            f"data-navigate-once></script>"
         )
 
 
@@ -1411,7 +1505,13 @@ class MethodNode(Node):
 class StyleNode(Node):
     """Represents an @style directive with parsed positional and conditional values."""
 
-    def __init__(self, positional_styles=None, conditional_expressions=None, line=None, column=None):
+    def __init__(
+        self,
+        positional_styles=None,
+        conditional_expressions=None,
+        line=None,
+        column=None,
+    ):
         super().__init__(line, column)
         self.positional_styles = positional_styles or []
         self.conditional_expressions = conditional_expressions or {}
@@ -1449,7 +1549,13 @@ class StyleNode(Node):
 class ClassNode(Node):
     """Represents an @class directive with parsed positional and conditional values."""
 
-    def __init__(self, positional_classes=None, conditional_expressions=None, line=None, column=None):
+    def __init__(
+        self,
+        positional_classes=None,
+        conditional_expressions=None,
+        line=None,
+        column=None,
+    ):
         super().__init__(line, column)
         self.positional_classes = positional_classes or []
         self.conditional_expressions = conditional_expressions or {}
@@ -1463,7 +1569,6 @@ class ClassNode(Node):
 
         # Evaluate conditional expressions and include truthy ones
         for class_name, expression in self.conditional_expressions.items():
-
             try:
                 value = self.eval(expression, context)
                 if value:
@@ -1574,7 +1679,15 @@ class BlockTranslateNode(Node):
     """Represents an @blocktranslate...@plural...@endblocktranslate block."""
 
     def __init__(
-        self, body, plural_body=None, count=None, context=None, trimmed=False, kwargs=None, line=None, column=None
+        self,
+        body,
+        plural_body=None,
+        count=None,
+        context=None,
+        trimmed=False,
+        kwargs=None,
+        line=None,
+        column=None,
     ):
         super().__init__(line, column)
         self.body = body
@@ -1652,9 +1765,7 @@ class BlockTranslateNode(Node):
 
     def _interpolate(self, translated, context):
         """Fills the placeholders of a translated message with the values around it."""
-        values = {
-            name: context[name] for name in self._interpolation_pattern.findall(translated) if name in context
-        }
+        values = {name: context[name] for name in self._interpolation_pattern.findall(translated) if name in context}
 
         try:
             return translated % values
@@ -1848,8 +1959,27 @@ class LoremNode(Node):
     @lorem(2, 'p', True)   -> 2 paragraphs with HTML <p> wrappers
     """
 
-    _LOREM_WORDS = "lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore \
-         et dolore magna aliqua".split()
+    _LOREM_WORDS = [
+        "lorem",
+        "ipsum",
+        "dolor",
+        "sit",
+        "amet",
+        "consectetur",
+        "adipiscing",
+        "elit",
+        "sed",
+        "do",
+        "eiusmod",
+        "tempor",
+        "incididunt",
+        "ut",
+        "labore",
+        "et",
+        "dolore",
+        "magna",
+        "aliqua",
+    ]
 
     def __init__(self, args_expr, line=None, column=None):
         super().__init__(line, column)
@@ -1901,8 +2031,7 @@ class LoremNode(Node):
             return "".join([f"<p>{p}</p>" for p in generate_paragraphs(count, random_order)])
         else:
             raise DirectiveParsingError(
-                f"Invalid method name passed to @lorem directive: '{method}'."
-                "\nSupported methods are 'w', 'b' and 'p'.",
+                f"Invalid method name passed to @lorem directive: '{method}'.\nSupported methods are 'w', 'b' and 'p'.",
                 line=self.line,
                 column=self.column,
             )
@@ -2058,7 +2187,7 @@ class FieldNode(Node):
             if value is not False
         )
 
-        return f"{html[:match.start()]}<{match.group('tag')}{rendered}{match.group('void')}>{html[match.end():]}"
+        return f"{html[: match.start()]}<{match.group('tag')}{rendered}{match.group('void')}>{html[match.end() :]}"
 
     @staticmethod
     def _escape(value):

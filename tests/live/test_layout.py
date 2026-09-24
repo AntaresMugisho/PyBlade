@@ -40,9 +40,7 @@ class LayoutTestCase(unittest.TestCase):
         self._saved_dirs = list(loader._default_loader._template_dirs)
         loader._default_loader.add_directories([self.templates_dir])
 
-        self._saved_settings = {
-            key: settings._data.get(key) for key in ("templates_dir", "components_dir")
-        }
+        self._saved_settings = {key: settings._data.get(key) for key in ("templates_dir", "components_dir")}
         settings._data["templates_dir"] = str(self.templates_dir)
         settings._data["components_dir"] = str(self.components_dir)
 
@@ -70,7 +68,10 @@ class LayoutTestCase(unittest.TestCase):
         component = type(
             "Page",
             (LiveComponent,),
-            {"render": lambda self: self.render_inline(template_string, context={}), **body},
+            {
+                "render": lambda self: self.render_inline(template_string, context={}),
+                **body,
+            },
         )
         return component
 
@@ -85,7 +86,10 @@ class TestLayoutRendering(LayoutTestCase):
         self._layout()
         page = self._page("<div>Hello</div>")
 
-        self.assertIn('<main><div pb:id="pb-test">Hello</div></main>', without_snapshot(self._render(page)))
+        self.assertIn(
+            '<main><div pb:id="pb-test">Hello</div></main>',
+            without_snapshot(self._render(page)),
+        )
 
     def test_slot_is_not_escaped(self):
         self._layout(content="<body>{{ slot }}</body>")
@@ -226,7 +230,11 @@ class TestComponentsThatAreNotPages(LayoutTestCase):
     def test_action_answers_with_the_component_alone(self):
         """What is morphed back into the page is the component, not the page."""
         self._layout()
-        page = self._page("<div>{{ count }}</div>", count=0, increment=lambda self: setattr(self, "count", 1))
+        page = self._page(
+            "<div>{{ count }}</div>",
+            count=0,
+            increment=lambda self: setattr(self, "count", 1),
+        )
 
         response = page.update_component({"_id": "pb-test", "count": 0}, "increment")
 
@@ -264,11 +272,42 @@ class TestAsView(LayoutTestCase):
 
     def test_view_carries_the_arguments_of_the_route_to_mount(self):
         self._layout()
-        page = self._page("<div>{{ count }}</div>", mount=lambda self, start=0: setattr(self, "count", start))
+        page = self._page(
+            "<div>{{ count }}</div>",
+            mount=lambda self, start=0: setattr(self, "count", start),
+        )
 
         content = page.as_view()(self._request(), start=7).content.decode()
 
         self.assertIn(">7<", content)
+
+    def test_a_page_that_goes_wrong_is_shown_while_developing(self):
+        """The same page the engine shows for any other template that went wrong."""
+        from django.test import override_settings
+
+        self._layout()
+        page = self._page("<div>{{ nowhere }}</div>")
+
+        with override_settings(DEBUG=True):
+            response = page.as_view()(self._request())
+
+        content = response.content.decode()
+
+        self.assertEqual(response.status_code, 500)
+        self.assertIn("Undefined variable", content)
+        self.assertIn("development mode", content.lower())
+
+    def test_what_went_wrong_is_not_shown_in_production(self):
+        """An error's message never reaches the browser once it is not development."""
+        from django.test import override_settings
+
+        self._layout()
+        page = self._page("<div>{{ nowhere }}</div>")
+
+        with override_settings(DEBUG=False), self.assertRaises(Exception) as raised:
+            page.as_view()(self._request())
+
+        self.assertIn("nowhere", str(raised.exception))
 
     def test_view_names_the_component_it_renders(self):
         page = self._page("<div>Hi</div>")
@@ -344,9 +383,7 @@ class TestRenderingAnotherTemplate(LayoutTestCase):
         """The id lands on its root, and what the component holds is in it."""
         self._layout()
         self._write("skeletons.figures", "<div>{{ count }} so far</div>")
-        page = self._component(
-            count=7, render=lambda self: self.render_template("skeletons.figures")
-        )
+        page = self._component(count=7, render=lambda self: self.render_template("skeletons.figures"))
 
         rendered = without_snapshot(self._render(page))
 
@@ -371,17 +408,13 @@ class TestRenderingAnotherTemplate(LayoutTestCase):
     def test_naming_nothing_still_renders_the_component_s_own(self):
         self._layout()
         self._write("figures", "<div>The component's own</div>", directory=self.components_dir)
-        page = self._component(
-            template_name="figures", render=lambda self: self.render_template()
-        )
+        page = self._component(template_name="figures", render=lambda self: self.render_template())
 
         self.assertIn("The component's own", self._render(page))
 
     def test_a_context_may_still_be_given_as_it_always_could(self):
         self._layout()
         self._write("skeletons.figures", "<div>{{ note }}</div>")
-        page = self._component(
-            render=lambda self: self.render_template("skeletons.figures", {"note": "Hold on"})
-        )
+        page = self._component(render=lambda self: self.render_template("skeletons.figures", {"note": "Hold on"}))
 
         self.assertIn("Hold on", self._render(page))

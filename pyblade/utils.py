@@ -2,7 +2,6 @@ import re
 import subprocess
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
-from typing import List, Optional, Tuple
 
 from pyblade.cli.exceptions import CommandError
 
@@ -14,7 +13,7 @@ def get_version(package_name: str = "pyblade"):
         return
 
 
-def split_dotted_path(dotted: str) -> Tuple:
+def split_dotted_path(dotted: str) -> tuple:
     """
     :param: The path in dot format (e.g: 'path.to.some.file)
     :returns: A tuple containing the path and the file name
@@ -26,7 +25,7 @@ def split_dotted_path(dotted: str) -> Tuple:
     return (path, parts[-1])
 
 
-def run_command(command: List[str] | str, cwd: Optional[Path] = None) -> None:
+def run_command(command: list[str] | str, cwd: Path | None = None) -> None:
     if isinstance(command, str):
         command = command.split(" ")
 

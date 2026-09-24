@@ -1,5 +1,5 @@
 from collections import namedtuple
-from typing import Any, Dict, List
+from typing import Any
 
 import click
 import questionary
@@ -27,12 +27,21 @@ questionnary_style = Style(
         ("question", "bold"),  # question text
         ("answer", "fg:blue"),  # submitted answer text behind the question
         ("pointer", "fg:yellow bold"),  # pointer used in select and checkbox prompts
-        ("highlighted", "fg:blue bold"),  # pointed-at choice in select and checkbox prompts
+        (
+            "highlighted",
+            "fg:blue bold",
+        ),  # pointed-at choice in select and checkbox prompts
         ("selected", "fg:blue"),  # style for a selected item of a checkbox
         ("separator", "fg:#cc5454"),  # separator in lists
-        ("instruction", "fg:gray italic"),  # user instructions for select, rawselect, checkbox
+        (
+            "instruction",
+            "fg:gray italic",
+        ),  # user instructions for select, rawselect, checkbox
         ("text", ""),  # plain text
-        ("disabled", "fg:#858585 italic"),  # disabled choices for select and checkbox prompts
+        (
+            "disabled",
+            "fg:#858585 italic",
+        ),  # disabled choices for select and checkbox prompts
         ("placeholder", "fg:#858585 italic"),
     ]
 )
@@ -41,29 +50,23 @@ questionnary_style = Style(
 class Argument(click.Argument):
     """Custom argument class"""
 
-    ...
-
 
 class Option(click.Option):
     """Custom Option class"""
-
-    ...
 
 
 class ClickCommand(click.Command):
     """Custom Click Command class"""
 
-    ...
-
 
 class BaseCommand:
     name: str = ""
     help: str = ""  # Will come from the Command class docstring
-    aliases: List[str] = []
+    aliases: list[str] = []
 
     def __init__(self):
-        self.arguments: List[Dict] = []
-        self.options: List[Dict] = []
+        self.arguments: list[dict] = []
+        self.options: list[dict] = []
 
         if not self.name:
             raise Exception("Command must profide a 'name' attribute")
@@ -71,15 +74,27 @@ class BaseCommand:
     # Command configuration
     def config(self):
         """Used to define command arguments and options"""
-        pass
 
     def add_argument(self, name: str, required: bool = True, default: str | int | bool = None):
         self.arguments.append({"name": name, "required": required, "default": default})
 
     def add_option(
-        self, *args, help: str, required: bool = False, is_flag: bool = False, default: str | int | bool = None
+        self,
+        *args,
+        help: str,
+        required: bool = False,
+        is_flag: bool = False,
+        default: str | int | bool = None,
     ):
-        self.options.append({"name": args, "help": help, "required": required, "default": default, "is_flag": is_flag})
+        self.options.append(
+            {
+                "name": args,
+                "help": help,
+                "required": required,
+                "default": default,
+                "is_flag": is_flag,
+            }
+        )
 
     def add_flag(self, *args, help: str, required: bool = False):
         self.add_option(*args, help=help, required=required, is_flag=True)
@@ -114,15 +129,12 @@ class BaseCommand:
     # Helpers
     def argument(self, arg: str):
         """Must return the value of the argument if it exists or None if not"""
-        pass
 
     def option(self, option_name: str):
         """Must return the value of the option if it exists or None if not"""
-        pass
 
     def get(self, arg: str, default=None):
         """Must return the value of the argument/option if it exists or the default value if not"""
-        pass
 
     # Prompting for inputs
     def ask(self, message: str, default: str = "") -> str:
@@ -131,10 +143,10 @@ class BaseCommand:
     def confirm(self, message: str, default: bool = False) -> bool:
         return questionary.confirm(message, default=default).unsafe_ask()
 
-    def choice(self, message: str, choices: List, default: str | None = None) -> str:
+    def choice(self, message: str, choices: list, default: str | None = None) -> str:
         return questionary.select(message, choices, default=default).unsafe_ask()
 
-    def checkbox(self, message: str, choices: List[str], default: List[str] | None = None) -> List[str]:
+    def checkbox(self, message: str, choices: list[str], default: list[str] | None = None) -> list[str]:
         return questionary.checkbox(message, choices, default=default).unsafe_ask()
 
     def secret(self, message: str, default: str | None = None) -> str:
@@ -179,5 +191,5 @@ class BaseCommand:
     def status(self, message: str):
         return console.status(f"[blue]{message}[/blue]\n")
 
-    def track(self, items: List[Any], description: str = "Processing..."):
+    def track(self, items: list[Any], description: str = "Processing..."):
         return track(items, description=f"{description}\n")

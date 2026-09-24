@@ -16,7 +16,6 @@ class Command(BaseCommand):
 
     def config(self):
         """Setup command arguments and options here"""
-        ...
 
     def handle(self):
 
@@ -59,7 +58,8 @@ class Command(BaseCommand):
         self.line(f"{len(html_templates)} .html files found for conversion.")
 
         for template_path in self.track(
-            html_templates, description="Converting django  template tags to pyblade dirctives..."
+            html_templates,
+            description="Converting django  template tags to pyblade dirctives...",
         ):
             with open(template_path, "r", encoding="utf-8") as file:
                 file_content = file.read()
@@ -91,7 +91,9 @@ class Command(BaseCommand):
 
         # Convert Django's {% extends %} syntax to PyBlade's @extends syntax
         content_without_comments = re.sub(
-            r'{%\s*extends\s+"(.*?)\.html"\s*%}', r'@extends("\1")', content_without_comments
+            r'{%\s*extends\s+"(.*?)\.html"\s*%}',
+            r'@extends("\1")',
+            content_without_comments,
         )
 
         # Convert Django's {% block %} syntax to PyBlade's @yield and @block syntax
@@ -121,7 +123,9 @@ class Command(BaseCommand):
         content_without_comments = re.sub(r"{%\s*else\s*%}", r"@else", content_without_comments)
         content_without_comments = re.sub(r"{%\s*endif\s*%}", r"@endif", content_without_comments)
         content_without_comments = re.sub(
-            r"{%\s*for\s+(.*?)\s+in\s+(.*?)\s*%}", r"@for(\1 : \2)", content_without_comments
+            r"{%\s*for\s+(.*?)\s+in\s+(.*?)\s*%}",
+            r"@for(\1 : \2)",
+            content_without_comments,
         )
         content_without_comments = re.sub(r"{%\s*endfor\s*%}", r"@endfor", content_without_comments)
 
@@ -132,11 +136,15 @@ class Command(BaseCommand):
         content_without_comments = re.sub(r'{%\s*trans\s+"(.*?)"\s*%}', r'@trans("\1")', content_without_comments)
         content_without_comments = re.sub(r"{%\s*trans\s+(.*?)\s*%}", r"@trans(\1)", content_without_comments)
         content_without_comments = re.sub(
-            r'{%\s*translate\s+"(.*?)"\s*%}', r'@translate("\1")', content_without_comments
+            r'{%\s*translate\s+"(.*?)"\s*%}',
+            r'@translate("\1")',
+            content_without_comments,
         )
         content_without_comments = re.sub(r"{%\s*translate\s+(.*?)\s*%}", r"@translate(\1)", content_without_comments)
         content_without_comments = re.sub(
-            r"{%\s*localize\s+(on|off)\s*%}", r'@localize("\1")', content_without_comments
+            r"{%\s*localize\s+(on|off)\s*%}",
+            r'@localize("\1")',
+            content_without_comments,
         )
         content_without_comments = re.sub(r"{%\s*endlocalize\s+(.*?)\s*%}", r"@endlocalize", content_without_comments)
         content_without_comments = re.sub(r"{%\s*csrf_token\s+(.*?)\s*%}", r"@csrf_token", content_without_comments)
@@ -144,7 +152,11 @@ class Command(BaseCommand):
         content_without_comments = re.sub(r"{%\s*endifchanged\s*%}", r"@endifchanged", content_without_comments)
         content_without_comments = re.sub(r"{%\s*with\s+(.*?)\s*%}", r"@with(\1)", content_without_comments)
         content_without_comments = re.sub(r"{%\s*endwith\s*%}", r"@endwith", content_without_comments)
-        content_without_comments = re.sub(r"{%\s*autoescape\s+(.*?)\s*%}", r"@autoescape(\1)", content_without_comments)
+        content_without_comments = re.sub(
+            r"{%\s*autoescape\s+(.*?)\s*%}",
+            r"@autoescape(\1)",
+            content_without_comments,
+        )
         content_without_comments = re.sub(r"{%\s*endautoescape\s*%}", r"@endautoescape", content_without_comments)
         content_without_comments = re.sub(r"{%\s*verbatim\s*%}", r"@verbatim", content_without_comments)
         content_without_comments = re.sub(r"{%\s*endverbatim\s*%}", r"@endverbatim", content_without_comments)

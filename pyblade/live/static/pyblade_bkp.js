@@ -70,7 +70,7 @@ class Component {
                 return true;
             }
         });
-        
+
         this.id = Math.random().toString(36).substr(2, 9);
         this._setupModelBindings();
     }
@@ -82,7 +82,7 @@ class Component {
         // Set up model bindings
         rootElement.querySelectorAll('[pb:model]').forEach(el => {
             const modelName = el.getAttribute('pb:model');
-            
+
             // Initialize value if not exists
             if (!(modelName in this._data)) {
                 this._data[modelName] = el.value;
@@ -143,7 +143,7 @@ class Component {
             });
 
             if (!response.ok) throw new Error('Network response was not ok');
-            
+
             const data = await response.json();
             if (data.error) {
                 console.error('Server error:', data.error);
@@ -185,7 +185,7 @@ class Component {
                     return !fromEl.isEqualNode(toEl);
                 }
             });
-            
+
             // Re-setup model bindings after DOM update
             this._setupModelBindings();
         }
@@ -194,11 +194,11 @@ class Component {
     async callServerMethod(methodName, el, ...args) {
         const component = el.closest("[pb:id]").getAttribute('pb:id');
         const loadingTarget = document.querySelector(`[pb:loading-target="${methodName}"]`);
-        
+
         try {
             emit('request.start');
             showLoadingForMethod(methodName, loadingTarget || el);
-            
+
             const response = await fetch('/liveblade/', {
                 method: 'POST',
                 headers: {
@@ -218,7 +218,7 @@ class Component {
 
             const data = await response.json();
             console.log('Response data:', data);
-            
+
             if (data.error) {
                 console.error('Server error:', data.error);
                 return;
@@ -250,7 +250,7 @@ class Component {
                             return !fromEl.isEqualNode(toEl);
                         }
                     });
-                    
+
                     this._setupModelBindings();
                 }
             }
@@ -266,12 +266,12 @@ class Component {
     }
 
     async callServerMethodOld(methodName, el, ...args) {
-        document.dispatchEvent(new Event('request.start')); 
+        document.dispatchEvent(new Event('request.start'));
         const component = el.closest("[pb:id]").getAttribute('pb:id')
         try {
             const formData = new FormData();
-            formData.append('component', component); 
-            formData.append('method', methodName.expression || methodName); 
+            formData.append('component', component);
+            formData.append('method', methodName.expression || methodName);
 
             // Ajout des paramètres
             if (args.length > 0) {
@@ -279,7 +279,7 @@ class Component {
                     if (typeof arg === 'object') {
                         formData.append(`param${index}`, JSON.stringify(arg));
                         console.log('argument', arg);
-                        
+
                     } else {
                         formData.append(`param${index}`, arg);
                     }
@@ -290,7 +290,7 @@ class Component {
                 headers: {
                     'X-CSRFToken': getCookie('csrftoken')
                 },
-                body: formData 
+                body: formData
             });
 
             console.log('Réponse du serveur:', response);
@@ -299,33 +299,33 @@ class Component {
                 if (response.redirected) {
                     fetch('/scripts/error.html')
                     .then(res=>res.text())
-                    .then(error=>{     
+                    .then(error=>{
                          document.body.innerHTML = error
                           document.querySelector('[error-message]').textContent =  window.location.search
                           }
-                     
+
                     )
                 }
             }
 
                if (response.redirected){
                   window.location.replace(response.url)
-                
+
                }
                 // const data = await response.json();
                 console.log('Données reçues:',await response.text());
-    
-                const rootElement = document.getElementById('app'); 
+
+                const rootElement = document.getElementById('app');
             // if(data.html["navigate"]){
             //     navigateTo(data.html['url'])
-            // }   
+            // }
             // if (rootElement) {
-             
+
             //     morphdom(rootElement, data.html, {
             //         onBeforeElUpdated: (fromEl, toEl) => {
             //             if (fromEl.tagName === 'INPUT' && fromEl.type === 'text') {
             //                 toEl.value = fromEl.value;
-            //                 return false; 
+            //                 return false;
             //             }
             //             return true;
             //         }
@@ -336,7 +336,7 @@ class Component {
         } catch (error) {
             console.error('Erreur:', error.message);
         } finally {
-            document.dispatchEvent(new Event('request.end')); 
+            document.dispatchEvent(new Event('request.end'));
         }
     }
 
@@ -369,7 +369,7 @@ class Component {
         if (newData.html) {
             const tempDiv = document.createElement('div');
             tempDiv.innerHTML = newData.html;
-            
+
             // Trouver l'élément parent avec l'attribut pb:id
             const currentComponent = document.querySelector(`[pb:id="${this.id}"]`);
             if (currentComponent) {
@@ -391,14 +391,14 @@ class Directive {
     }
 
     get params() {
-        const regex = /\(([^)]+)\)/; 
+        const regex = /\(([^)]+)\)/;
         const match = this.el.getAttribute(this.rawName).match(regex);
         if (match) {
             const paramsArray = match[1].split(',').map(param => param.trim());
             return paramsArray.reduce((acc, param) => {
-                acc[param] = this.el.getAttribute(param); 
+                acc[param] = this.el.getAttribute(param);
                 return acc;
-            }, {});             
+            }, {});
         }
 
         // Vérification pour les formulaires et les inputs
@@ -411,67 +411,67 @@ class Directive {
                 params[directiveName] = directiveEl.value;
             });
 
-            return params; 
+            return params;
         }
 
-        return {}; 
+        return {};
     }
 }
 
 // Fonction pour extraire et formater les paramètres
 function formatValue(value) {
     if (typeof value === 'number') return value;
-    
+
     value = value.trim();
-    
+
     if (!isNaN(value) && value !== '') {
         return Number(value);
     }
-    
+
     if (value === 'true') return true;
     if (value === 'false') return false;
     if (value === 'null') return null;
     if (value === 'undefined') return undefined;
-    
+
     try {
-        if ((value.startsWith('{') && value.endsWith('}')) || 
+        if ((value.startsWith('{') && value.endsWith('}')) ||
             (value.startsWith('[') && value.endsWith(']'))) {
             return JSON.parse(value);
         }
     } catch (e) {}
-    
-    if ((value.startsWith('"') && value.endsWith('"')) || 
+
+    if ((value.startsWith('"') && value.endsWith('"')) ||
         (value.startsWith("'") && value.endsWith("'"))) {
         return value.slice(1, -1);
     }
-    
+
     return value;
 }
 
 // Fonction pour extraire les paramètres
 function extractParams(directive) {
     const expression = directive.expression;
-    
+
     if (!expression.includes('(')) {
         return [];
     }
-    
+
     let paramsStr = expression.substring(
         expression.indexOf('(') + 1,
         expression.lastIndexOf(')')
     ).trim();
-    
+
     if (!paramsStr) return [];
-    
+
     let params = [];
     let currentParam = '';
     let bracketCount = 0;
     let inString = false;
     let stringChar = '';
-    
+
     for (let i = 0; i < paramsStr.length; i++) {
         const char = paramsStr[i];
-        
+
         if ((char === '"' || char === "'") && paramsStr[i-1] !== '\\') {
             if (!inString) {
                 inString = true;
@@ -482,15 +482,15 @@ function extractParams(directive) {
             currentParam += char;
             continue;
         }
-        
+
         if (char === '{' || char === '[') bracketCount++;
         if (char === '}' || char === ']') bracketCount--;
-        
+
         if (inString || bracketCount > 0) {
             currentParam += char;
             continue;
         }
-        
+
         if (char === ',' && bracketCount === 0) {
             if (currentParam) {
                 params.push(currentParam.trim());
@@ -498,14 +498,14 @@ function extractParams(directive) {
             currentParam = '';
             continue;
         }
-        
+
         currentParam += char;
     }
-    
+
     if (currentParam) {
         params.push(currentParam.trim());
     }
-    
+
     return params.map(param => formatValue(param));
 }
 
@@ -538,16 +538,16 @@ directive('model', ({ el, component, directive }) => {
 directive('click', ({ el, component, directive }) => {
 
     let isProcessing = false;
-    
+
     el.addEventListener('click', async () => {
         // Si déjà en cours de traitement, ne rien faire
         console.log(el, 'click');
-        
+
         if (isProcessing) {
             console.log('Click already processing');
             return;
         }
-        
+
         try {
             isProcessing = true;
             const methodName = directive.expression.split('(')[0];
@@ -581,7 +581,7 @@ directive('submit', ({ el, component, directive }) => {
 
 directive("valided",({el,component, directive})=>{
     fetch('/',{
-        method:"POST",  
+        method:"POST",
         body:'valided',
         headers: {
             'X-CSRFToken': getCookie('csrftoken')
@@ -593,7 +593,7 @@ directive("valided",({el,component, directive})=>{
 
         })
     }
-    
+
 })
 
 // Directive pb:submit pour la soumission des formulaires
@@ -602,9 +602,9 @@ directive('submit', ({ el, component, directive }) => {
         event.preventDefault();
         try {
             const formModels = getFormModels(el, component);
-            
+
             const methodName = directive.expression.split('(')[0];
-            
+
             await component.callServerMethod(methodName, el, {form_data: formModels});
             el.reset();
             Object.keys(formModels).forEach(key => {
@@ -619,19 +619,19 @@ directive('submit', ({ el, component, directive }) => {
 directive('live', ({ el, directive, component }) => {
     const methodName = directive.expression;
     console.log('Live directive setup for method:', directive);
-    
+
     const debounceTime = 300;
     let timeout;
-    
+
     // Gérer les événements input
     const handleInput = async (event) => {
         const value = event.target.value;
         console.log('Input value:', value);
-        
+
         if (timeout) {
             clearTimeout(timeout);
         }
-        
+
         // Créer un nouveau timeout
         timeout = setTimeout(async () => {
             try {
@@ -642,10 +642,10 @@ directive('live', ({ el, directive, component }) => {
             }
         }, debounceTime);
     };
-    
+
     // Ajouter l'écouteur d'événements
     el.addEventListener('input', handleInput);
-    
+
     // Nettoyer quand l'élément est supprimé
     return () => {
         el.removeEventListener('input', handleInput);
@@ -685,7 +685,7 @@ directive('change', ({ el, component, directive }) => {
 
     const executeChangeUpdate = async () => {
         try {
-            const params = directive.params; 
+            const params = directive.params;
             await component.callServerMethod({ expression: el.getAttribute(`pb:${directive.value}`) },el, [el.getAttribute('pb:model'), el.value]);
         } catch (error) {
             console.error('Erreur lors de la mise à jour avec changement:', error);
@@ -729,24 +729,24 @@ directive('change', ({ el, component, directive }) => {
 
 directive('upload', ({ el, directive, component }) => {
     console.log('Upload directive setup:', directive);
-    
+
     const methodName = directive.expression;
     const isMultiple = directive.modifiers.includes('multiple');
-    
+
     // Configurer l'élément input
     el.setAttribute('type', 'file');
     if (isMultiple) {
         el.setAttribute('multiple', true);
     }
-    
+
     // Gérer le changement de fichier
     const handleFileChange = async (event) => {
         const files = event.target.files;
         if (!files || files.length === 0) return;
-        
+
         try {
             const filesData = {};
-            
+
             // Ajouter tous les fichiers sélectionnés
             if (isMultiple) {
                 Array.from(files).forEach((file, index) => {
@@ -768,12 +768,12 @@ directive('upload', ({ el, directive, component }) => {
                     url_tmp: tmp_url
                 };
             }
-            
+
             // Récupérer l'ID du composant
             const componentId = el.closest("[pb:id]").getAttribute('pb:id');
-            
+
             console.log('Files data to send:', filesData);
-            
+
             // Appeler la méthode du serveur
             const response = await fetch('/liveblade/', {
                 method: 'POST',
@@ -788,14 +788,14 @@ directive('upload', ({ el, directive, component }) => {
                     'X-CSRFToken': getCsrfToken()
                 }
             });
-            
+
             if (!response.ok) {
                 throw new Error(`Upload failed: ${response.statusText}`);
             }
-            
+
             const result = await response.json();
             console.log('Upload result:', result);
-            
+
             // Mettre à jour le composant avec la réponse
             if (result.data) {
                 const tempDiv = document.createElement('div');
@@ -845,18 +845,18 @@ directive('upload', ({ el, directive, component }) => {
                     comp._setupModelBindings();
                 }
             }
-            
+
         } catch (error) {
             console.error('Error uploading files:', error);
         }
-        
+
         // Réinitialiser l'input pour permettre de sélectionner le même fichier
         el.value = '';
     };
-    
+
     // Ajouter l'écouteur d'événements
     el.addEventListener('change', handleFileChange);
-    
+
     // Nettoyer quand l'élément est supprimé
     return () => {
         el.removeEventListener('change', handleFileChange);
@@ -872,7 +872,7 @@ function getCsrfToken() {
 directive('navigate', ({ el }) => {
     el.addEventListener('click', async (event) => {
         event.preventDefault();
-        const url = el.getAttribute('href'); 
+        const url = el.getAttribute('href');
         if (url) {
             await navigateTo(url);
         }
@@ -881,7 +881,7 @@ directive('navigate', ({ el }) => {
 
 // Fonction pour gérer la navigation
 async function navigateTo(url) {
-    document.dispatchEvent(new Event('navigation.start')); 
+    document.dispatchEvent(new Event('navigation.start'));
     try {
         const response = await fetch(url);
         if (!response.ok) {
@@ -889,15 +889,15 @@ async function navigateTo(url) {
         }
         const data = await response.text();
         const rootElement = document.getElementById('app');
-        
+
         rootElement.innerHTML = data;
-        
+
         // Réinitialiser les directives sur le nouveau contenu
         initializeApp(rootElement, Component);
     } catch (error) {
         console.error('Erreur:', error.message);
     } finally {
-        document.dispatchEvent(new Event('navigation.end')); 
+        document.dispatchEvent(new Event('navigation.end'));
     }
 }
 
@@ -942,10 +942,10 @@ function getCookie(name) {
 function updateLoadingState(el, isLoading) {
     // Récupérer les modifiers
     const modifiers = el.getAttribute('pb:loading-modifiers')?.split(' ') || [];
-    
+
     if (isLoading) {
         el.classList.add('blade-loading');
-        
+
         // Appliquer les modifiers
         if (modifiers.includes('spinner')) {
             el.classList.add('blade-loading-spinner');
@@ -1024,5 +1024,5 @@ function hideLoadingForMethod(method) {
 
 document.addEventListener('DOMContentLoaded', () => {
     const rootElement = document.querySelector('body');
-    initializeApp(rootElement, Component); 
+    initializeApp(rootElement, Component);
 });

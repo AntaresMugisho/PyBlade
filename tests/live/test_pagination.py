@@ -9,7 +9,7 @@ paginator; what is checked here is everything around it.
 import unittest
 
 from pyblade.live.base import LiveComponent
-from pyblade.live.pagination import DEFAULT_PAGE_NAME, Page, Paginator
+from pyblade.live.pagination import Paginator
 
 
 def component(**body):
@@ -47,9 +47,13 @@ class TestTheMixinBelongingToTheComponent(unittest.TestCase):
             def dangerous(self):
                 pass
 
-        cls = type("Listing", (LiveComponent, Ordinary), {
-            "render": lambda self: self.render_inline("<div>x</div>", context={}),
-        })
+        cls = type(
+            "Listing",
+            (LiveComponent, Ordinary),
+            {
+                "render": lambda self: self.render_inline("<div>x</div>", context={}),
+            },
+        )
         instance = cls("pb-test")
 
         self.assertNotIn("secret", instance._get_state())
@@ -195,8 +199,10 @@ class TestSeveralPaginatorsAtOnce(unittest.TestCase):
 class TestWatchingThePageChange(unittest.TestCase):
     def test_the_hook_named_after_the_paginator_runs(self):
         seen = []
-        instance = component(updating_page=lambda self, page: seen.append(("updating", page)),
-                             updated_page=lambda self, page: seen.append(("updated", page)))("pb-test")
+        instance = component(
+            updating_page=lambda self, page: seen.append(("updating", page)),
+            updated_page=lambda self, page: seen.append(("updated", page)),
+        )("pb-test")
 
         instance.set_page(4)
 
@@ -224,9 +230,9 @@ class TestWatchingThePageChange(unittest.TestCase):
 
     def test_a_hook_may_watch_any_of_them(self):
         seen = []
-        instance = component(
-            updating_paginators=lambda self, page, page_name: seen.append((page_name, page))
-        )("pb-test")
+        instance = component(updating_paginators=lambda self, page, page_name: seen.append((page_name, page)))(
+            "pb-test"
+        )
 
         instance.set_page(2)
         instance.set_page(3, "invoice_page")
@@ -374,16 +380,12 @@ class TestWhatTheAddressBarIsTold(unittest.TestCase):
         self.assertEqual(instance.pagination_query(), {"invoice_page": 1})
 
     def test_what_is_carried_along_is_said_too(self):
-        instance = self._rendered(
-            render=lambda self: str(self.paginate(things(50), 10).appends(sort="votes").links)
-        )
+        instance = self._rendered(render=lambda self: str(self.paginate(things(50), 10).appends(sort="votes").links))
 
         self.assertEqual(instance.pagination_query(), {"page": 1, "sort": "votes"})
 
     def test_a_paginator_may_ask_to_be_left_out_of_it(self):
-        instance = self._rendered(
-            render=lambda self: str(self.paginate(things(50), 10).without_query_string().links)
-        )
+        instance = self._rendered(render=lambda self: str(self.paginate(things(50), 10).without_query_string().links))
 
         self.assertEqual(instance.pagination_query(), {})
 
@@ -394,9 +396,13 @@ class TestWhatTheAddressBarIsTold(unittest.TestCase):
         self.assertEqual(instance.pagination_query(), {"page": 1})
 
     def test_a_component_that_does_not_paginate_says_nothing(self):
-        plain = type("Plain", (LiveComponent,), {
-            "render": lambda self: self.render_inline("<div>x</div>", context={}),
-        })
+        plain = type(
+            "Plain",
+            (LiveComponent,),
+            {
+                "render": lambda self: self.render_inline("<div>x</div>", context={}),
+            },
+        )
 
         result = plain.update_component({"_id": "pb-test"}, "$refresh")
 
@@ -411,16 +417,12 @@ class TestWhatTheAddressBarIsTold(unittest.TestCase):
         self.assertIs(result["scroll"], True)
 
     def test_where_to_scroll_may_be_said(self):
-        instance = self._rendered(
-            render=lambda self: str(self.paginate(things(50), 10).links(scroll_to="#posts"))
-        )
+        instance = self._rendered(render=lambda self: str(self.paginate(things(50), 10).links(scroll_to="#posts")))
 
         self.assertEqual(instance.pagination_scroll(), "#posts")
 
     def test_scrolling_may_be_turned_off(self):
-        instance = self._rendered(
-            render=lambda self: str(self.paginate(things(50), 10).links(scroll_to=False))
-        )
+        instance = self._rendered(render=lambda self: str(self.paginate(things(50), 10).links(scroll_to=False)))
 
         self.assertIs(instance.pagination_scroll(), False)
 

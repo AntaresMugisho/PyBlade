@@ -13,10 +13,10 @@ from pyblade.live.base import LiveComponent
 
 class Post(LiveComponent):
     title = ""
-    draft: bool                   # declared, with no value yet
+    draft: bool  # declared, with no value yet
 
     def mount(self):
-        self.slug = "hello"       # set while the component is alive
+        self.slug = "hello"  # set while the component is alive
 
     def can_edit(self):
         return False

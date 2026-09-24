@@ -3,9 +3,12 @@ import types
 import unittest
 from unittest.mock import MagicMock, patch
 
+# The module under test imports questionary through the package, so the
+# stand-in has to be in place before it is imported: hence the import here
+# rather than with the others above.
 sys.modules.setdefault("questionary", MagicMock())
 
-from pyblade import i18n
+from pyblade import i18n  # noqa: E402
 
 
 class TestI18nModule(unittest.TestCase):
@@ -45,4 +48,7 @@ class TestI18nModule(unittest.TestCase):
             self.assertEqual(i18n.gettext("Hello"), "django:Hello")
             self.assertEqual(i18n.pgettext("greeting", "Hello"), "django:greeting:Hello")
             self.assertEqual(i18n.ngettext("one", "many", 2), "django:one|many|2")
-            self.assertEqual(i18n.npgettext("greeting", "one", "many", 2), "django:greeting:one|many|2")
+            self.assertEqual(
+                i18n.npgettext("greeting", "one", "many", 2),
+                "django:greeting:one|many|2",
+            )

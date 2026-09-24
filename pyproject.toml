@@ -28,11 +28,18 @@ dev = [
 [project.scripts]
 pyblade = "pyblade.cli.main:cli"
 
-[tool.black]
+[tool.ruff]
 line-length = 120
 
-[tool.isort]
-profile = "black"
+[tool.ruff.lint]
+# What the project checked before ruff replaced them: pyflakes and pycodestyle,
+# which flake8 ran, and import order, which isort did. Formatting is ruff's own.
+select = ["E", "W", "F", "I"]
+ignore = ["E203"]  # Whitespace before ':', which the formatter puts there itself
+
+[tool.ruff.lint.per-file-ignores]
+# A package's __init__ exists to re-export, so what it imports is used elsewhere
+"**/__init__.py" = ["F401"]
 
 [build-system]
 requires = ["hatchling"]

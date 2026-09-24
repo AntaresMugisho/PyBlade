@@ -8,6 +8,7 @@ the same arguments it would have had.
 """
 
 import json
+import sys
 import unittest
 
 from pyblade.live.base import LiveComponent
@@ -16,9 +17,10 @@ from pyblade.live.decorators import lazy
 
 def component(name="Lazy", **body):
     """A component of the given body, whose render says what it holds."""
-    body.setdefault("render", lambda self: self.render_inline(
-        "<div>Loaded: {{ greeting }}</div>", context={}
-    ))
+    body.setdefault(
+        "render",
+        lambda self: self.render_inline("<div>Loaded: {{ greeting }}</div>", context={}),
+    )
     body.setdefault("greeting", "")
 
     return type(name, (LiveComponent,), body)
@@ -30,10 +32,12 @@ class TestTheFirstPass(unittest.TestCase):
     def setUp(self):
         self.mounted = []
 
-        self.cls = lazy(component(
-            mount=lambda self: self.mounted.append(True) or setattr(self, "greeting", "done"),
-            mounted=self.mounted,
-        ))
+        self.cls = lazy(
+            component(
+                mount=lambda self: self.mounted.append(True) or setattr(self, "greeting", "done"),
+                mounted=self.mounted,
+            )
+        )
 
     def test_it_does_not_mount(self):
         self.cls.render_initial()
@@ -75,9 +79,11 @@ class TestTheSkeletonItDraws(unittest.TestCase):
         self.assertEqual(markup.count("pb-skeleton-row"), 4)
 
     def test_a_component_may_write_its_own(self):
-        cls = lazy(component(
-            placeholder=lambda self: self.render_inline("<div>Just a moment</div>", context={}),
-        ))
+        cls = lazy(
+            component(
+                placeholder=lambda self: self.render_inline("<div>Just a moment</div>", context={}),
+            )
+        )
 
         markup = cls.render_initial()
 
@@ -85,9 +91,11 @@ class TestTheSkeletonItDraws(unittest.TestCase):
         self.assertNotIn("pb-skeleton", markup)
 
     def test_one_it_writes_is_still_the_component(self):
-        cls = lazy(component(
-            placeholder=lambda self: self.render_inline("<div>Just a moment</div>", context={}),
-        ))
+        cls = lazy(
+            component(
+                placeholder=lambda self: self.render_inline("<div>Just a moment</div>", context={}),
+            )
+        )
 
         markup = cls.render_initial()
 
@@ -119,8 +127,13 @@ class TestBeingAskedForAtTheCallSite(unittest.TestCase):
 
     def test_lazy_is_not_a_property_of_the_component(self):
         snapshot = json.loads(
-            component().render_initial({"lazy": True}).split("pb:snapshot='")[1].split("'")[0]
-            .replace("&#39;", "'").replace("&lt;", "<").replace("&amp;", "&")
+            component()
+            .render_initial({"lazy": True})
+            .split("pb:snapshot='")[1]
+            .split("'")[0]
+            .replace("&#39;", "'")
+            .replace("&lt;", "<")
+            .replace("&amp;", "&")
         )
 
         self.assertNotIn("lazy", snapshot["state"])
@@ -139,7 +152,10 @@ class TestBeingLoaded(unittest.TestCase):
         snapshot = self._snapshot(cls.render_initial())
 
         answer = cls.update_component(
-            snapshot["state"] | {"_id": snapshot["id"]}, "$lazy", [], mount=snapshot.get("mount"),
+            snapshot["state"] | {"_id": snapshot["id"]},
+            "$lazy",
+            [],
+            mount=snapshot.get("mount"),
         )
 
         self.assertIn("Loaded: done", answer["html"])
@@ -149,7 +165,10 @@ class TestBeingLoaded(unittest.TestCase):
         snapshot = self._snapshot(cls.render_initial({"name": "Antares"}))
 
         answer = cls.update_component(
-            snapshot["state"] | {"_id": snapshot["id"]}, "$lazy", [], mount=snapshot.get("mount"),
+            snapshot["state"] | {"_id": snapshot["id"]},
+            "$lazy",
+            [],
+            mount=snapshot.get("mount"),
         )
 
         self.assertIn("Loaded: Antares", answer["html"])
@@ -166,7 +185,10 @@ class TestBeingLoaded(unittest.TestCase):
         snapshot = self._snapshot(cls.render_initial())
 
         answer = cls.update_component(
-            snapshot["state"] | {"_id": snapshot["id"]}, "$lazy", [], mount=snapshot.get("mount"),
+            snapshot["state"] | {"_id": snapshot["id"]},
+            "$lazy",
+            [],
+            mount=snapshot.get("mount"),
         )
 
         self.assertNotIn("mount", answer["snapshot"])
@@ -174,14 +196,19 @@ class TestBeingLoaded(unittest.TestCase):
 
     def test_anything_else_asked_of_it_first_mounts_it_too(self):
         """A page that gets an event in before the load is not half a component."""
-        cls = lazy(component(
-            mount=lambda self: setattr(self, "greeting", "done"),
-            shout=lambda self: setattr(self, "greeting", self.greeting.upper()),
-        ))
+        cls = lazy(
+            component(
+                mount=lambda self: setattr(self, "greeting", "done"),
+                shout=lambda self: setattr(self, "greeting", self.greeting.upper()),
+            )
+        )
         snapshot = self._snapshot(cls.render_initial())
 
         answer = cls.update_component(
-            snapshot["state"] | {"_id": snapshot["id"]}, "shout", [], mount=snapshot.get("mount"),
+            snapshot["state"] | {"_id": snapshot["id"]},
+            "shout",
+            [],
+            mount=snapshot.get("mount"),
         )
 
         self.assertIn("Loaded: DONE", answer["html"])
@@ -195,7 +222,9 @@ class TestBeingLoaded(unittest.TestCase):
         answer = cls.update_component(state, "$lazy", [], mount=snapshot.get("mount"))
         cls.update_component(
             answer["snapshot"]["state"] | {"_id": snapshot["id"]},
-            "$lazy", [], mount=answer["snapshot"].get("mount"),
+            "$lazy",
+            [],
+            mount=answer["snapshot"].get("mount"),
         )
 
         self.assertEqual(len(mounted), 1)
@@ -268,8 +297,6 @@ class Waiting(LiveComponent):
         return self.render_inline("<div>Loaded: {{ greeting }}</div>", context={})
 
 
-import sys  # noqa: E402  -- the endpoint resolves the component by this module's name
-
 sys.modules[__name__].Waiting = Waiting
 
 
@@ -300,8 +327,11 @@ class TestASkeletonOfItsOwn(unittest.TestCase):
 
         self._cleanup = lambda: (
             setattr(loader._default_loader, "_template_dirs", self._saved_dirs),
-            settings._data.__setitem__("templates_dir", self._saved)
-            if self._saved is not None else settings._data.pop("templates_dir", None),
+            (
+                settings._data.__setitem__("templates_dir", self._saved)
+                if self._saved is not None
+                else settings._data.pop("templates_dir", None)
+            ),
             shutil.rmtree(self.root, ignore_errors=True),
         )
 
@@ -309,9 +339,11 @@ class TestASkeletonOfItsOwn(unittest.TestCase):
         self._cleanup()
 
     def test_a_template_may_stand_in_for_it(self):
-        cls = lazy(component(
-            placeholder=lambda self: self.render_template("skeletons.figures"),
-        ))
+        cls = lazy(
+            component(
+                placeholder=lambda self: self.render_template("skeletons.figures"),
+            )
+        )
 
         markup = cls.render_initial()
 
@@ -319,9 +351,11 @@ class TestASkeletonOfItsOwn(unittest.TestCase):
         self.assertNotIn("pb-skeleton-line", markup)
 
     def test_and_is_still_the_component_waiting(self):
-        cls = lazy(component(
-            placeholder=lambda self: self.render_template("skeletons.figures"),
-        ))
+        cls = lazy(
+            component(
+                placeholder=lambda self: self.render_template("skeletons.figures"),
+            )
+        )
 
         markup = cls.render_initial()
 

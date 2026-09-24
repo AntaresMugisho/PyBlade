@@ -54,7 +54,14 @@ class Links(SafeContent):
     differently. It is markup, so it is never escaped.
     """
 
-    def __init__(self, page, template=None, data=None, on_each_side=DEFAULT_ON_EACH_SIDE, scroll_to=True):
+    def __init__(
+        self,
+        page,
+        template=None,
+        data=None,
+        on_each_side=DEFAULT_ON_EACH_SIDE,
+        scroll_to=True,
+    ):
         self.page = page
         self.template = template
         self.data = data or {}
@@ -121,15 +128,40 @@ class Page:
 
     #: What a template may call on a page. Everything here only reads: nothing
     #: a template can reach changes the page, the list, or where the links go.
-    pb_safe_methods = frozenset({
-        "items", "count", "total", "per_page", "first_item", "last_item",
-        "current_page", "last_page", "has_pages", "has_more_pages",
-        "on_first_page", "on_last_page", "previous_page_number", "next_page_number",
-        "window", "url", "get_url_range", "get_page_name", "get_options", "links",
-    })
+    pb_safe_methods = frozenset(
+        {
+            "items",
+            "count",
+            "total",
+            "per_page",
+            "first_item",
+            "last_item",
+            "current_page",
+            "last_page",
+            "has_pages",
+            "has_more_pages",
+            "on_first_page",
+            "on_last_page",
+            "previous_page_number",
+            "next_page_number",
+            "window",
+            "url",
+            "get_url_range",
+            "get_page_name",
+            "get_options",
+            "links",
+        }
+    )
 
-    def __init__(self, django_page, page_name=DEFAULT_PAGE_NAME, path=None, appended=None,
-                 query_string=True, template=None):
+    def __init__(
+        self,
+        django_page,
+        page_name=DEFAULT_PAGE_NAME,
+        path=None,
+        appended=None,
+        query_string=True,
+        template=None,
+    ):
         self._page = django_page
         self.page_name = page_name
         self.path = path
@@ -303,7 +335,8 @@ class Paginator(ComponentMixin):
         than read, so a page of twenty-five out of a million is a query for
         twenty-five rows.
         """
-        from django.core.paginator import EmptyPage, Paginator as DjangoPaginator
+        from django.core.paginator import EmptyPage
+        from django.core.paginator import Paginator as DjangoPaginator
 
         paginator = DjangoPaginator(object_list, per_page)
         number = self.page_of(page_name)

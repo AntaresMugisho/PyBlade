@@ -53,6 +53,4 @@ class Command(BaseCommand):
             target.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
             self.success(f"Exported {target} — {stub['describe']}.")
 
-        self.info(
-            f"PyBlade will draw with your copy from now on, instead of its own."
-        )
+        self.info("PyBlade will draw with your copy from now on, instead of its own.")

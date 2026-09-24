@@ -1,9 +1,9 @@
 """@lang and @languages: which language the page is in, and which it could be.
 
-    @lang                          fr
-    @lang(as CURRENT_LANGUAGE)     stored, nothing written
-    @languages                     stored as `languages`, nothing written
-    @languages(as LANGUAGES)       stored under the name given
+@lang                          fr
+@lang(as CURRENT_LANGUAGE)     stored, nothing written
+@languages                     stored as `languages`, nothing written
+@languages(as LANGUAGES)       stored under the name given
 """
 
 import unittest
@@ -38,7 +38,7 @@ class TestWithDjango(LanguagesTestCase):
 
     def test_lang_writes_the_language_the_page_is_in(self):
         with override_settings(USE_I18N=True), translation.override("fr"):
-            self.assertEqual(self._render("<html lang=\"@lang\">"), '<html lang="fr">')
+            self.assertEqual(self._render('<html lang="@lang">'), '<html lang="fr">')
 
     def test_lang_as_stores_it_and_writes_nothing(self):
         with override_settings(USE_I18N=True), translation.override("fr"):
@@ -48,7 +48,9 @@ class TestWithDjango(LanguagesTestCase):
 
     def test_languages_are_the_ones_the_project_offers(self):
         with override_settings(LANGUAGES=[("en", "English"), ("fr", "French")]):
-            html = self._render("@languages(as LANGUAGES)@for(language in LANGUAGES){{ language[0] }}={{ language[1] }};@endfor")
+            html = self._render(
+                "@languages(as LANGUAGES)@for(language in LANGUAGES){{ language[0] }}={{ language[1] }};@endfor"
+            )
 
         self.assertEqual(html, "en=English;fr=French;")
 

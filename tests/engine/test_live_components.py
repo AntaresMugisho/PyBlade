@@ -36,12 +36,15 @@ class ComponentResolutionTestCase(unittest.TestCase):
     def test_html_file_alone_is_a_static_component(self):
         html = self._write("button.html", "<button>Go</button>")
 
-        self.assertEqual(self.node._resolve_component("button"), {
-            "type": "static",
-            "name": "button",
-            "html": html,
-            "python": None,
-        })
+        self.assertEqual(
+            self.node._resolve_component("button"),
+            {
+                "type": "static",
+                "name": "button",
+                "html": html,
+                "python": None,
+            },
+        )
 
     def test_python_file_alone_is_a_live_component(self):
         python = self._write("live.counter.py")

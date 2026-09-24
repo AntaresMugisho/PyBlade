@@ -1,5 +1,5 @@
+from collections.abc import Iterable
 from html import escape as html_escape
-from typing import Iterable
 
 from .exceptions import PyBladeException
 
@@ -213,7 +213,6 @@ class AttributesContext(SafeContent):
         :param needle: the string to search
         :return:
         """
-        pass
 
     def where_does_not_start_with(self, needle: str) -> str:
         """
@@ -223,7 +222,6 @@ class AttributesContext(SafeContent):
         :param needle:
         :return:
         """
-        pass
 
 
 class RenderableContent(SafeContent):

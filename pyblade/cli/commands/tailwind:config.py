@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from pyblade.cli import BaseCommand
 from pyblade.cli.exceptions import CommandError
 from pyblade.config import Config
@@ -51,7 +49,7 @@ class Command(BaseCommand):
                 file.write(base_template)
 
         except Exception as e:
-            self.warning(f"Failed to configure Tailwind: {str(e)}")
+            self.warning(f"Failed to configure Tailwind: {e!s}")
             return
 
         self.success("Tailwind CSS 4 has been configured successfully.")

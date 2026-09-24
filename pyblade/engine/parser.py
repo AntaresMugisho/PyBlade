@@ -5,6 +5,7 @@ from pyblade.engine.exceptions import DirectiveParsingError, TemplateRenderError
 
 from .lexer import Lexer
 from .nodes import (
+    ActiveNode,
     AttributeNode,
     AuthNode,
     AutocompleteNode,
@@ -30,27 +31,27 @@ from .nodes import (
     IfChangedNode,
     IfNode,
     IncludeNode,
+    LangNode,
+    LanguagesNode,
     LiveBladeNode,
     LoremNode,
     MethodNode,
     NowNode,
     ParentNode,
+    PersistNode,
     PropsNode,
+    PushNode,
     PybladeScriptsNode,
     PybladeStylesNode,
     QuerystringNode,
     RatioNode,
     RegroupNode,
     ResetCycleNode,
+    ScriptNode,
     SectionNode,
     SlotNode,
     SpacelessNode,
     StackNode,
-    PersistNode,
-    ScriptNode,
-    LangNode,
-    LanguagesNode,
-    PushNode,
     StaticNode,
     StyleNode,
     SwitchNode,
@@ -113,18 +114,7 @@ class Parser:
         while self.current_token():
             token = self.current_token()
             if token.type == "COMMENT_START":
-                # Handle inline comments {# ... #}
-                # Collect comment content
-                comment_parts = []
-                comment_line = token.line
-                comment_column = token.column
-                while self.current_token() and self.current_token().type != "COMMENT_END":
-                    comment_parts.append(self.current_token().value)
-                    self.advance()
-                self.expect("COMMENT_END")
-                ast.append(
-                    CommentNode("".join(comment_parts[1:]), line=comment_line, column=comment_column)
-                )  # The first part is the comment start marker {#
+                ast.append(self._parse_inline_comment())
             elif token.type == "TEXT":
                 ast.append(TextNode(token.value, line=token.line, column=token.column))
                 self.advance()
@@ -154,7 +144,15 @@ class Parser:
         return ast
 
     # Directives rendering an HTML attribute of the same name
-    _attribute_directives = ("checked", "selected", "disabled", "readonly", "required", "multiple", "autofocus")
+    _attribute_directives = (
+        "checked",
+        "selected",
+        "disabled",
+        "readonly",
+        "required",
+        "multiple",
+        "autofocus",
+    )
 
     # Directives closing a block, handled by the parser of the block they belong to.
     # Meeting one anywhere else means it is misplaced.
@@ -221,6 +219,8 @@ class Parser:
             return self._parse_for(args, token)
         elif name in ("match", "switch"):
             return self._parse_switch(args, token, name)
+        elif name == "active":
+            return self._parse_active(args, token)
         elif name == "auth":
             return self._parse_auth(args, token)
         elif name in ("guest", "anonymous"):
@@ -246,7 +246,11 @@ class Parser:
         elif name == "lang":
             return LangNode(self._parse_as_name(args, "@lang"), line=token.line, column=token.column)
         elif name == "languages":
-            return LanguagesNode(self._parse_as_name(args, "@languages"), line=token.line, column=token.column)
+            return LanguagesNode(
+                self._parse_as_name(args, "@languages"),
+                line=token.line,
+                column=token.column,
+            )
         elif name == "block":
             return self._parse_block(args, token)
         elif name == "parent":
@@ -414,7 +418,10 @@ class Parser:
     def _parse_for(self, loop_expression_str, token):
         """Parses an @for...[@empty...]@endfor block."""
         # loop_expression_str should be like "(item in collection)"
-        match = re.match(r"^\s*\(\s*([a-zA-Z_][a-zA-Z0-9_]*)\s+in\s+(.+?)\s*\)\s*$", loop_expression_str)
+        match = re.match(
+            r"^\s*\(\s*([a-zA-Z_][a-zA-Z0-9_]*)\s+in\s+(.+?)\s*\)\s*$",
+            loop_expression_str,
+        )
         if not match:
             raise DirectiveParsingError(
                 f"Invalid @for loop syntax: '@for{loop_expression_str}'. Expected '@for(item in itterable)'.",
@@ -456,6 +463,25 @@ class Parser:
             column=token.column,
         )
 
+    def _parse_inline_comment(self):
+        """Read a {# ... #} comment, wherever it is written.
+
+        A comment belongs anywhere anything else does -- the body of an @if or
+        an @for as much as the top level of a template -- so it is read here
+        rather than by each of the places that has to allow for one.
+        """
+        start = self.current_token()
+        parts = []
+
+        while self.current_token() and self.current_token().type != "COMMENT_END":
+            parts.append(self.current_token().value)
+            self.advance()
+
+        self.expect("COMMENT_END")
+
+        # The first part is the '{#' that opened it
+        return CommentNode("".join(parts[1:]), line=start.line, column=start.column)
+
     def _parse_until_directives(self, directives_to_stop_at):
         """
         Parses nodes within a block until one of the specified directives is encountered.
@@ -485,12 +511,13 @@ class Parser:
                 body.append(self._parse_pb_component(token, paired=True))
             elif token.type == "PB_TAG_SELF_CLOSE":
                 body.append(self._parse_pb_component(token, paired=False))
-            # TODO: Properly handle this case for inline comments
-            # elif token.type == "COMMENT_START" or token.type == "COMMENT_END":
-            #     self.advance()
+            elif token.type == "COMMENT_START":
+                body.append(self._parse_inline_comment())
             else:
                 raise TemplateRenderError(
-                    "Unexpected token type in _parse_until_directives: ", line=token.line, column=token.column
+                    "Unexpected token type in _parse_until_directives: ",
+                    line=token.line,
+                    column=token.column,
                 )
 
         # If we reach here, we hit end of file without finding a closing directive.
@@ -558,6 +585,33 @@ class Parser:
 
         self.expect("DIRECTIVE", value_prefix="@endauth")
         return AuthNode(body, else_body, guard, line=token.line, column=token.column)
+
+    def _parse_active(self, args_str, token):
+        """Parses an @active('...')...@endactive block."""
+        patterns = args_str.strip()
+
+        match = re.match(r"^\s*\((.*)\)\s*$", patterns, re.DOTALL)
+        if match:
+            patterns = match.group(1).strip()
+
+        if not patterns:
+            raise TemplateRenderError(
+                "@active expects the page to ask about.",
+                line=token.line,
+                column=token.column,
+                help="Name a route, as @active('dashboard'), or a path, as @active('/posts/*').",
+            )
+
+        body = self._parse_until_directives(["@else", "@endactive"])
+        else_body = None
+
+        if self.current_token() and self.current_token().value.startswith("@else"):
+            self.advance()
+            else_body = self._parse_until_directives(["@endactive"])
+
+        self.expect("DIRECTIVE", value_prefix="@endactive")
+
+        return ActiveNode(patterns, body, else_body, line=token.line, column=token.column)
 
     def _parse_guest(self, args_str, token):
         """Parses an @guest...@endguest block."""
@@ -695,10 +749,10 @@ class Parser:
         """
         start = self.pos
         body = self._parse_until_directives(["@endscript"])
-        source = "".join(str(t.value) for t in self.tokens[start:self.pos])
+        source = "".join(str(t.value) for t in self.tokens[start : self.pos])
         self.expect("DIRECTIVE", value_prefix="@endscript")
 
-        key = hashlib.sha1(f"{token.line}:{token.column}:{source}".encode("utf-8")).hexdigest()[:12]
+        key = hashlib.sha1(f"{token.line}:{token.column}:{source}".encode()).hexdigest()[:12]
 
         return ScriptNode(key, body, line=token.line, column=token.column)
 
@@ -950,7 +1004,9 @@ class Parser:
                 body.append(self._parse_variable(escaped=False))
             else:
                 raise TemplateRenderError(
-                    f"Unexpected token type in @blocktranslate body: {token.type}", line=token.line, column=token.column
+                    f"Unexpected token type in @blocktranslate body: {token.type}",
+                    line=token.line,
+                    column=token.column,
                 )
 
         # If we reach here, we hit end of file without finding a closing directive.
@@ -1007,7 +1063,11 @@ class Parser:
         m = re.match(r"(.*?)\s+by\s+(.*?)\s+as\s+(.*)", inner)
         if m:
             return RegroupNode(
-                m.group(1).strip(), m.group(2).strip(), m.group(3).strip(), line=token.line, column=token.column
+                m.group(1).strip(),
+                m.group(2).strip(),
+                m.group(3).strip(),
+                line=token.line,
+                column=token.column,
             )
         return RegroupNode(inner, None, None, line=token.line, column=token.column)
 
@@ -1033,7 +1093,11 @@ class Parser:
             match = re.match(r"^\s*\((.*)\)\s*$", args_str)
             if match:
                 inner = match.group(1).strip()
-        return LoremNode(inner, line=token.line if token else None, column=token.column if token else None)
+        return LoremNode(
+            inner,
+            line=token.line if token else None,
+            column=token.column if token else None,
+        )
 
     def _parse_spaceless(self, args_str, token=None):
         """Parses a @spaceless...@endspaceless block."""
@@ -1158,7 +1222,10 @@ class Parser:
 
             if current.type == "PB_TAG_START" and self._pb_tag_name(current.value).split(":")[0] == base_name:
                 depth += 1
-            elif current.type == "PB_TAG_END" and self._pb_tag_name(current.value) in (tag_name, base_name):
+            elif current.type == "PB_TAG_END" and self._pb_tag_name(current.value) in (
+                tag_name,
+                base_name,
+            ):
                 depth -= 1
                 if depth == 0:
                     self.advance()  # Consume the closing tag
@@ -1241,7 +1308,7 @@ class Parser:
                         line=getattr(token, "line", None),
                         column=getattr(token, "column", None),
                         help='Give it the expression to evaluate, as in :count="1 + 1", '
-                        f"or drop the colon to pass the name on its own.",
+                        "or drop the colon to pass the name on its own.",
                     )
 
                 # Quoted or not, a bound value is the expression it holds
@@ -1321,7 +1388,13 @@ class Parser:
             values_str, var_name = inner_args.split(" as ", 1)
             values_str = values_str.strip()
             var_name = var_name.strip()
-            return CycleNode(values_str, var_name, silent=silent, line=token.line, column=token.column)
+            return CycleNode(
+                values_str,
+                var_name,
+                silent=silent,
+                line=token.line,
+                column=token.column,
+            )
         else:
             return CycleNode(inner_args, None, silent=silent, line=token.line, column=token.column)
 
@@ -1341,10 +1414,17 @@ class Parser:
             values_str = values_str.strip()
             var_name = var_name.strip()
             return FirstOfNode(
-                values_str, as_name=var_name, line=token.line if token else None, column=token.column if token else None
+                values_str,
+                as_name=var_name,
+                line=token.line if token else None,
+                column=token.column if token else None,
             )
         else:
-            return FirstOfNode(inner_args, line=token.line if token else None, column=token.column if token else None)
+            return FirstOfNode(
+                inner_args,
+                line=token.line if token else None,
+                column=token.column if token else None,
+            )
 
     def _parse_url(self, args_str, token):
         """Parse @url('pattern', args, kwargs) or @url('pattern', args, kwargs as variable_name)"""
@@ -1453,7 +1533,14 @@ class Parser:
                 help="Provide at least the URL name as the first argument of the @url directive.",
             )
 
-        return UrlNode(pattern_expr, positional_args, keyword_args, as_name, line=token.line, column=token.column)
+        return UrlNode(
+            pattern_expr,
+            positional_args,
+            keyword_args,
+            as_name,
+            line=token.line,
+            column=token.column,
+        )
 
     def _parse_static(self, args_str, token):
         """Parse @static(path) or @static(path as variable_name)"""
@@ -1510,7 +1597,11 @@ class Parser:
 
     def _parse_method(self, args_str, token=None):
         method = self._extract_expression_from_args(args_str, "@method")
-        return MethodNode(method, line=token.line if token else None, column=token.column if token else None)
+        return MethodNode(
+            method,
+            line=token.line if token else None,
+            column=token.column if token else None,
+        )
 
     def _parse_ifchanged(self, args_str, token):
         # args_str can be empty or "(var)"

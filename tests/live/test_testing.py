@@ -238,17 +238,18 @@ class TestAFileOnItsWay(unittest.TestCase):
         self.assertTrue(gallery.state["photo"].startswith("pyblade-upload:"))
 
     def test_and_the_action_is_handed_the_file(self):
-        gallery = live(Gallery).upload(
-            "photo", SimpleUploadedFile("holiday.png", b"a picture")
-        ).call("keep")
+        gallery = live(Gallery).upload("photo", SimpleUploadedFile("holiday.png", b"a picture")).call("keep")
 
         self.assertEqual(gallery.state["kept"], "holiday.png")
 
     def test_several_files_may_be_uploaded_at_once(self):
-        gallery = live(Gallery).upload("photo", [
-            SimpleUploadedFile("one.png", b"a"),
-            SimpleUploadedFile("two.png", b"b"),
-        ])
+        gallery = live(Gallery).upload(
+            "photo",
+            [
+                SimpleUploadedFile("one.png", b"a"),
+                SimpleUploadedFile("two.png", b"b"),
+            ],
+        )
 
         self.assertEqual(len(gallery.state["photo"]), 2)
 

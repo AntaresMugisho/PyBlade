@@ -12,9 +12,9 @@ without reaching into the internals of the engine.
     from pyblade.live.decorators import layout, renderless
 """
 
-from .skeleton import check_skeleton
-
 from functools import wraps
+
+from .skeleton import check_skeleton
 
 
 def renderless(fn):

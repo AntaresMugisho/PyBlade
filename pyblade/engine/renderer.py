@@ -1,6 +1,5 @@
 import traceback
 from pathlib import Path
-from typing import Dict, List, Optional
 
 from pyblade.config import settings
 from pyblade.engine.exceptions import PyBladeException
@@ -12,7 +11,12 @@ from .processor import TemplateProcessor
 class PyBlade:
     """Main template rendering engine class."""
 
-    def __init__(self, dirs: Optional[List[str]] = None, cache_size: int = 1000, cache_ttl: int = 3600):
+    def __init__(
+        self,
+        dirs: list[str] | None = None,
+        cache_size: int = 1000,
+        cache_ttl: int = 3600,
+    ):
         """
         Initialize the PyBlade template engine.
 
@@ -36,10 +40,10 @@ class PyBlade:
     def render(
         self,
         template: str,
-        context: Optional[Dict] = None,
-        template_path: Optional[Path] = None,
+        context: dict | None = None,
+        template_path: Path | None = None,
         inherit: bool = True,
-        layout: Optional[str] = None,
+        layout: str | None = None,
     ) -> str:
         """
         Render a template with the given context.
@@ -62,7 +66,6 @@ class PyBlade:
             template = self._processor.render(template, context, inherit=inherit, layout=layout)
         except PyBladeException as exc:
             if settings.DEBUG:
-
                 if exc.template:
                     template = exc.template.content
                     template_path = exc.template.path
@@ -75,7 +78,7 @@ class PyBlade:
 
         return template
 
-    def render_file(self, template_name: str, context: Optional[Dict] = None) -> str:
+    def render_file(self, template_name: str, context: dict | None = None) -> str:
         """
         Load and render a template file.
 
@@ -116,7 +119,7 @@ class PyBlade:
         """Clear the template cache."""
         self._processor.clear_cache()
 
-    def invalidate_template(self, template: str, context: Optional[Dict] = None) -> None:
+    def invalidate_template(self, template: str, context: dict | None = None) -> None:
         """
         Invalidate a specific template in the cache.
 
@@ -170,8 +173,7 @@ def error_page(error: Exception, template_source: str = None, template_path: Pat
         # frames are the only thing that says where it happened.
         "traceback": "" if code_lines else _traceback_of(error),
         "help": getattr(error, "help", None)
-        or "An unexpected error occurred during template rendering. "
-        "Check the full stack trace to identify the origin.",
+        or "An unexpected error occurred during template rendering. Check the full stack trace to identify the origin.",
     }
 
     template = loader.load_template("error", [Path(__file__).parent / "templates"])
@@ -184,6 +186,4 @@ def _traceback_of(error: Exception) -> str:
     if error.__traceback__ is None:
         return ""
 
-    return "".join(
-        traceback.format_exception(type(error), error, error.__traceback__)
-    ).rstrip()
+    return "".join(traceback.format_exception(type(error), error, error.__traceback__)).rstrip()

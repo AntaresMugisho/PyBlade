@@ -2,7 +2,7 @@
 Core template processing functionality.
 """
 
-from typing import Any, Dict
+from typing import Any
 
 from . import loader, stacks
 from .cache import TemplateCache
@@ -19,19 +19,31 @@ class TemplateProcessor:
     """
 
     # Attributes under which nodes store a list of child nodes.
-    _node_list_attrs = ("body", "else_body", "empty_body", "default_body", "plural_body")
+    _node_list_attrs = (
+        "body",
+        "else_body",
+        "empty_body",
+        "default_body",
+        "plural_body",
+    )
 
     # Attributes under which nodes store (expression, child nodes) pairs.
     _node_pair_list_attrs = ("elif_blocks", "cases")
 
-    def __init__(self, cache_size: int = 1000, cache_ttl: int = 3600, debug: bool = None, framework: str = None):
+    def __init__(
+        self,
+        cache_size: int = 1000,
+        cache_ttl: int = 3600,
+        debug: bool = None,
+        framework: str = None,
+    ):
         self.cache = TemplateCache(max_size=cache_size, ttl=cache_ttl)
         self.context = {}
 
     def render(
         self,
         template: str,
-        context: Dict[str, Any],
+        context: dict[str, Any],
         template_name: str = None,
         template_path: str = None,
         inherit: bool = True,
@@ -204,7 +216,7 @@ class TemplateProcessor:
             layout_nodes, inherited = self._resolve_inheritance(layout_nodes, context, [*_seen, layout_name])
         except TemplateRenderError as exc:
             if getattr(exc, "template", None) is None:
-                setattr(exc, "template", layout_template)
+                exc.template = layout_template
             raise
 
         context_updates = dict(inherited)
@@ -313,7 +325,11 @@ class TemplateProcessor:
         for attr in self._node_pair_list_attrs:
             pairs = getattr(node, attr, None)
             if isinstance(pairs, list):
-                setattr(node, attr, [(expression, transform(children)) for expression, children in pairs])
+                setattr(
+                    node,
+                    attr,
+                    [(expression, transform(children)) for expression, children in pairs],
+                )
 
     # CACHING
     # ------------------------------------------------------------------------------------------------------------
@@ -322,7 +338,7 @@ class TemplateProcessor:
         """Clear the template cache."""
         self.cache.clear()
 
-    def invalidate_template(self, template: str, context: Dict[str, Any]) -> None:
+    def invalidate_template(self, template: str, context: dict[str, Any]) -> None:
         """
         Invalidate a specific template in the cache.
 

@@ -114,7 +114,10 @@ class TestListeningForEvents(unittest.TestCase):
         cls = component(update=on("post-created")(update))
 
         self.assertEqual(self._emit(cls, "post-created")["snapshot"]["state"]["count"], 0)
-        self.assertEqual(self._emit(cls, "post-created", {"refresh": True})["snapshot"]["state"]["count"], 1)
+        self.assertEqual(
+            self._emit(cls, "post-created", {"refresh": True})["snapshot"]["state"]["count"],
+            1,
+        )
 
     def test_a_method_taking_anything_is_handed_everything(self):
         def update(self, **data):
@@ -161,7 +164,10 @@ class TestDynamicEventNames(unittest.TestCase):
         self.assertEqual(cls("pb-test")._resolved_listeners(), {"post-updated.7": "update"})
 
     def test_the_resolved_name_is_the_one_that_calls_the_method(self):
-        cls = component(post_id=3, update=on("post-updated.{post_id}")(lambda self: setattr(self, "count", 9)))
+        cls = component(
+            post_id=3,
+            update=on("post-updated.{post_id}")(lambda self: setattr(self, "count", 9)),
+        )
 
         result = cls.update_component({"_id": "pb-test", "post_id": 3}, "$event", ["post-updated.3", {}])
 
@@ -171,7 +177,11 @@ class TestDynamicEventNames(unittest.TestCase):
         cls = component(post_id=3, update=on("post-updated.{post_id}")(lambda self: None))
 
         with self.assertRaises(NameError):
-            cls.update_component({"_id": "pb-test", "post_id": 3}, "$event", ["post-updated.{post_id}", {}])
+            cls.update_component(
+                {"_id": "pb-test", "post_id": 3},
+                "$event",
+                ["post-updated.{post_id}", {}],
+            )
 
     def test_a_placeholder_that_cannot_be_resolved_leaves_the_listener_out(self):
         cls = component(update=on("post-updated.{nowhere}")(lambda self: None))
@@ -265,7 +275,15 @@ class TestEventsOnTheFirstRendering(unittest.TestCase):
 
         self.assertEqual(
             set(_attribute(rendered, "snapshot")),
-            {"id", "class", "state", "listeners", "confirmations", "errors", "checksum"},
+            {
+                "id",
+                "class",
+                "state",
+                "listeners",
+                "confirmations",
+                "errors",
+                "checksum",
+            },
         )
 
     def test_a_component_emitting_nothing_writes_no_events(self):

@@ -26,7 +26,7 @@ if not settings.configured:
     django.setup()
 
 
-import pytest  # noqa: E402
+import pytest
 
 
 @pytest.fixture(autouse=True)

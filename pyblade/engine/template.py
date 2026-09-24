@@ -3,7 +3,7 @@ Template class for representing loaded templates.
 """
 
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any
 
 from .processor import TemplateProcessor
 
@@ -21,10 +21,10 @@ class Template:
     def __init__(
         self,
         template_name: str,
-        template_path: Union[str, Path],
-        template_string: Optional[str] = None,
-        backend: Optional[Any] = None,
-        engine: Optional[Any] = None,
+        template_path: str | Path,
+        template_string: str | None = None,
+        backend: Any | None = None,
+        engine: Any | None = None,
     ):
         """
         Initialize a template.
@@ -48,10 +48,10 @@ class Template:
 
     def render(
         self,
-        context: Optional[Dict[str, Any]] = None,
-        request: Optional[Any] = None,
+        context: dict[str, Any] | None = None,
+        request: Any | None = None,
         inherit: bool = True,
-        layout: Optional[str] = None,
+        layout: str | None = None,
     ) -> str:
         """
         Render the template with the given context.
@@ -85,12 +85,22 @@ class Template:
         if not self.engine:
             self._processor = TemplateProcessor()
             return self._processor.render(
-                self.content, context, template_path=self.path, inherit=inherit, layout=layout
+                self.content,
+                context,
+                template_path=self.path,
+                inherit=inherit,
+                layout=layout,
             )
 
-        return self.engine.render(self.content, context, template_path=self.path, inherit=inherit, layout=layout)
+        return self.engine.render(
+            self.content,
+            context,
+            template_path=self.path,
+            inherit=inherit,
+            layout=layout,
+        )
 
-    def get_relative_path(self, base_dir: Optional[Union[str, Path]] = None) -> str:
+    def get_relative_path(self, base_dir: str | Path | None = None) -> str:
         """
         Get the template path relative to a base directory.
 

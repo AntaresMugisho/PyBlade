@@ -47,7 +47,7 @@ _PERIODS = {"second": 1, "minute": 60, "hour": 3600, "day": 86400}
 _RATE = re.compile(r"^\s*(\d+)\s*/\s*(second|minute|hour|day)s?\s*$", re.IGNORECASE)
 
 _SIZE = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*(b|kb|mb|gb)?\s*$", re.IGNORECASE)
-_UNITS = {"b": 1, "kb": 1024, "mb": 1024 ** 2, "gb": 1024 ** 3}
+_UNITS = {"b": 1, "kb": 1024, "mb": 1024**2, "gb": 1024**3}
 
 
 def _now():
@@ -182,7 +182,8 @@ def throttled(scope, check_size=True):
             wait = hit(scope, request)
             if wait is not None:
                 response = JsonResponse(
-                    {"error": "Too many requests. Wait a moment before trying again."}, status=429
+                    {"error": "Too many requests. Wait a moment before trying again."},
+                    status=429,
                 )
                 response["Retry-After"] = str(wait)
                 return response

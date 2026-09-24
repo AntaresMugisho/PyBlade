@@ -59,7 +59,10 @@ class TestSayingWhatIsExpected(unittest.TestCase):
 
 class TestChecking(unittest.TestCase):
     def _component(self, **body):
-        body.setdefault("rules", {"email": forms.EmailField(), "age": forms.IntegerField(min_value=18)})
+        body.setdefault(
+            "rules",
+            {"email": forms.EmailField(), "age": forms.IntegerField(min_value=18)},
+        )
         body.setdefault("age", 20)
         return component(**body)("pb-test")
 
@@ -115,7 +118,10 @@ class TestCheckingOneFieldAtATime(unittest.TestCase):
     """What a field being left behind asks for, rather than the whole form."""
 
     def _component(self, **body):
-        body.setdefault("rules", {"email": forms.EmailField(), "age": forms.IntegerField(min_value=18)})
+        body.setdefault(
+            "rules",
+            {"email": forms.EmailField(), "age": forms.IntegerField(min_value=18)},
+        )
         return component(**body)("pb-test")
 
     def test_only_the_field_asked_about_is_answered_for(self):
@@ -229,7 +235,9 @@ class TestWhatTheClientIsToldAndMayNotSay(unittest.TestCase):
         cls = component(rules={"email": forms.EmailField()}, bump=lambda self: None)
 
         result = cls.update_component(
-            {"_id": "pb-test", "email": "nope"}, "bump", errors={"email": ["Enter a valid email address."]}
+            {"_id": "pb-test", "email": "nope"},
+            "bump",
+            errors={"email": ["Enter a valid email address."]},
         )
 
         self.assertIn("email", result["errors"])

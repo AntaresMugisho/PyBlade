@@ -4,7 +4,6 @@ Template caching implementation for improved performance.
 
 import hashlib
 from datetime import datetime, timedelta
-from typing import Dict, Optional
 
 
 class TemplateCache:
@@ -14,11 +13,11 @@ class TemplateCache:
     """
 
     def __init__(self, max_size: int = 1000, ttl: int = 3600):
-        self._cache: Dict[str, dict] = {}
+        self._cache: dict[str, dict] = {}
         self._max_size = max_size
         self._ttl = ttl  # Time to live in seconds
 
-    def get(self, template: str, context: dict) -> Optional[str]:
+    def get(self, template: str, context: dict) -> str | None:
         """
         Retrieve a cached template if it exists and is valid.
 

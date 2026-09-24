@@ -37,7 +37,10 @@ class Command(BaseCommand):
         self.add_flag("--no-reload", "--noreload", help="Disable auto-reload")
         self.add_flag("--ipv6", "-6", help="Tells Django to use an IPv6 address")
         self.add_flag("--insecure", help="Allows serving static files even if DEBUG is False")
-        self.add_flag("--nostatic", help="Tells Django to not automatically serve static files at STATIC_URL")
+        self.add_flag(
+            "--nostatic",
+            help="Tells Django to not automatically serve static files at STATIC_URL",
+        )
         self.add_flag("--nothreading", help="Tells Django to not use threading")
         self.add_flag("--no-color", "--nocolor", help="Don't colorize the command output")
         self.add_flag("--force-color", help="Force colorization of the command output")

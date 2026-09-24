@@ -1,13 +1,12 @@
 import json
 from copy import deepcopy
 from pathlib import Path
-from typing import Dict, Self
+from typing import Self
 
 from pyblade.utils import get_project_root
 
 
 class Config:
-
     DEFAULTS = {
         "templates_dir": "templates",
         "components_dir": "components",
@@ -25,10 +24,10 @@ class Config:
     def __init__(
         self,
         config_file: str = str(get_project_root() / "pyblade.json"),
-        data: Dict | None = None,
+        data: dict | None = None,
         parent: Self | None = None,
         key: str | None = None,
-        defaults: Dict | None = None,
+        defaults: dict | None = None,
     ):
         self._config_file = Path(config_file)
         self._data = data if data is not None else {}
@@ -51,7 +50,11 @@ class Config:
             return self._parent.save()
 
         with open(self._config_file, "w") as file:
-            json.dump({k: v for k, v in self._data.items() if k not in self._defaults}, file, indent=4)
+            json.dump(
+                {k: v for k, v in self._data.items() if k not in self._defaults},
+                file,
+                indent=4,
+            )
 
     def __str__(self):
         if self._parent and self.name:
@@ -90,31 +93,55 @@ class Config:
 
     @property
     def DEBUG(self) -> bool:
-        """Auto-detect debug mode from framework if not explicitly set."""
+        """Whether the project is being run by whoever is writing it.
 
-        if self.framework == "django":
+        Asked of the framework that is serving, which is the one that knows.
+        The project may say which that is; a project that never said is asked
+        of each in turn, so that a template which goes wrong is explained
+        rather than silently swallowed for want of a line in pyblade.json.
+        """
+        named = self.framework
+
+        for framework in ("django", "flask", "fastapi"):
+            if named and named != framework:
+                continue
+
+            debug = self._framework_debug(framework)
+            if debug is not None:
+                return debug
+
+        return False
+
+    @staticmethod
+    def _framework_debug(framework: str):
+        """What a framework says about being in development, or None if it is not the one serving."""
+        if framework == "django":
             try:
                 from django.conf import settings
 
-                return settings.DEBUG
+                # A project that has not configured Django is not being served
+                # by it, whatever it may have imported
+                return bool(settings.DEBUG) if settings.configured else None
             except Exception:
-                return False
+                return None
 
-        elif self.framework == "flask":
+        if framework == "flask":
             try:
                 from flask import current_app
 
-                return current_app.debug
+                return bool(current_app.debug)
             except Exception:
-                return False
+                return None
 
-        elif self.framework == "fastapi":
-            # FastAPI doesn't have built-in DEBUG, so we check environment
+        if framework == "fastapi":
+            # FastAPI has no debug setting of its own, so the environment says
             import os
 
-            return os.getenv("DEBUG", "False").lower() == "true"
+            flag = os.getenv("DEBUG")
 
-        return False
+            return flag.lower() == "true" if flag is not None else None
+
+        return None
 
 
 settings = Config()

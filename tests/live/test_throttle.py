@@ -13,7 +13,14 @@ from django.test import RequestFactory
 
 from pyblade.config import settings
 from pyblade.live import throttle
-from pyblade.live.throttle import client_of, hit, parse_rate, parse_size, stream_slots, throttled
+from pyblade.live.throttle import (
+    client_of,
+    hit,
+    parse_rate,
+    parse_size,
+    stream_slots,
+    throttled,
+)
 
 
 def endpoint(request):
@@ -40,8 +47,13 @@ class ThrottleTestCase(unittest.TestCase):
         settings._data["live"] = live
 
     def post(self, address="10.0.0.1", body="{}", **extra):
-        return self.requests.post("/pyblade/live/", data=body, content_type="application/json",
-                                  REMOTE_ADDR=address, **extra)
+        return self.requests.post(
+            "/pyblade/live/",
+            data=body,
+            content_type="application/json",
+            REMOTE_ADDR=address,
+            **extra,
+        )
 
 
 class TestReadingWhatTheProjectSays(unittest.TestCase):
@@ -55,7 +67,7 @@ class TestReadingWhatTheProjectSays(unittest.TestCase):
             parse_rate("lots")
 
     def test_a_size_is_written_the_way_people_write_one(self):
-        self.assertEqual(parse_size("1mb"), 1024 ** 2)
+        self.assertEqual(parse_size("1mb"), 1024**2)
         self.assertEqual(parse_size("500kb"), 500 * 1024)
         self.assertEqual(parse_size(2048), 2048)
 

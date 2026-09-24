@@ -46,4 +46,34 @@ class TestDefaultLoader(unittest.TestCase):
         (other / "layouts" / "app.html").write_text("<html>from the configured one</html>")
         loader._default_loader.add_directories([other])
 
-        self.assertEqual(loader.load_template("layouts.app").content, "<html>from the configured one</html>")
+        self.assertEqual(
+            loader.load_template("layouts.app").content,
+            "<html>from the configured one</html>",
+        )
+
+
+class TestTheDjangoBackend(unittest.TestCase):
+    """What Django is told when a template it asked for is not there.
+
+    Django asks each engine in turn for a template, and an engine that has not
+    got it says so by raising TemplateDoesNotExist. An engine that raises
+    anything else stops the search: a template held by another engine would
+    never be reached, and Django's own page saying where it looked is never
+    shown.
+    """
+
+    def _backend(self):
+        from pyblade.backends.django import PyBladeEngine
+
+        return PyBladeEngine({"NAME": "pyblade", "DIRS": [], "APP_DIRS": False, "OPTIONS": {}})
+
+    def test_a_template_that_is_not_there_is_said_the_way_django_says_it(self):
+        from django.template import TemplateDoesNotExist
+
+        with self.assertRaises(TemplateDoesNotExist):
+            self._backend().get_template("no_such_template_anywhere")
+
+    def test_and_is_still_what_pyblade_calls_it(self):
+        """So that code catching PyBlade's own exception goes on working."""
+        with self.assertRaises(TemplateNotFoundError):
+            self._backend().get_template("no_such_template_anywhere")

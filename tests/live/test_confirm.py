@@ -50,9 +50,7 @@ class TestTheDecorator(unittest.TestCase):
     def test_the_message_reaches_the_client(self):
         cls = component(delete=confirm("Delete this post?")(lambda self: None))
 
-        self.assertEqual(
-            cls("pb-test").serialize()["confirmations"], {"delete": "Delete this post?"}
-        )
+        self.assertEqual(cls("pb-test").serialize()["confirmations"], {"delete": "Delete this post?"})
 
     def test_what_it_says_is_signed_with_the_rest_of_the_snapshot(self):
         from pyblade.live.security import verify_snapshot

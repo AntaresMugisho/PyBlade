@@ -9,7 +9,7 @@ from pyblade.config import Config
 from pyblade.utils import get_project_root, get_version, run_command
 
 _SETTINGS_PATERN = re.compile(
-    r"\"\"\"(?P<banner>.*?)\"\"\"\s*.*?\s*INSTALLED_APPS\s=\s\[\s*(?P<installed_apps>.*?)\s*\]\s*.*?\s*MIDDLEWARE\s=\s\[\s*(?P<middleware>.*?)\s*\]\s*.*?\s*TEMPLATES\s=\s*\[\s*(?P<templates>\{.*?\},)\n\]",  # noqa E501
+    r"\"\"\"(?P<banner>.*?)\"\"\"\s*.*?\s*INSTALLED_APPS\s=\s\[\s*(?P<installed_apps>.*?)\s*\]\s*.*?\s*MIDDLEWARE\s=\s\[\s*(?P<middleware>.*?)\s*\]\s*.*?\s*TEMPLATES\s=\s*\[\s*(?P<templates>\{.*?\},)\n\]",
     re.DOTALL,
 )
 
@@ -52,7 +52,7 @@ class Command(BaseCommand):
     Project details :
         - Project name : [bold]{self.project.name}[/bold]
         - Framework : [bold]{self.project.framework.capitalize()}[/bold]
-        - CSS framework : [bold]{self.project.css_framework or 'None'}[/bold]
+        - CSS framework : [bold]{self.project.css_framework or "None"}[/bold]
     """)
 
             if not self.confirm("Is this correct?", True):
@@ -106,7 +106,8 @@ class Command(BaseCommand):
 
                 status.update("Making things ready ...")
                 self.success(
-                    f"Your [bold]{self.project.framework.capitalize()}[/bold] project powered by PyBlade was created and configured successfully."
+                    f"Your [bold]{self.project.framework.capitalize()}[/bold] project powered by "
+                    "PyBlade was created and configured successfully."
                 )
                 self.line("Run [blue]pyblade serve[/blue] to start a development server.\n")
 
@@ -182,14 +183,13 @@ class Command(BaseCommand):
 
                 self.success("PyBlade Engine has been configured successfully.")
             except Exception as e:
-                self.error(f"Failed to properly configure PyBlade: {str(e)}")
+                self.error(f"Failed to properly configure PyBlade: {e!s}")
 
     def _configure_bootstrap(self):
         """Configures Bootstrap 5 for the project."""
 
         stubs_path = Path(self.settings.stubs_dir)
         settings_path = Path(self.settings.settings_path)
-        root_dir = Path(self.settings.root_dir)
 
         if self.settings.framework.lower() == "django":
             # Update settings.py
@@ -209,7 +209,7 @@ class Command(BaseCommand):
                     file.write(base_template)
 
             except Exception as e:
-                self.error(f"Failed to configure Bootstrap 5: {str(e)}")
+                self.error(f"Failed to configure Bootstrap 5: {e!s}")
                 return
 
             self.success("Bootstrap 5 has been configured successfully.")
@@ -236,7 +236,7 @@ class Command(BaseCommand):
                 file.write(base_template)
 
         except Exception as e:
-            self.warning(f"Failed to configure Tailwind: {str(e)}")
+            self.warning(f"Failed to configure Tailwind: {e!s}")
             return
 
         self.success("Tailwind CSS 4 has been configured successfully.")

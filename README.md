@@ -4,7 +4,7 @@
 
 <h1 align="center">PyBlade</h1>
 
-<div align="center"> 
+<div align="center">
 
 **_The reactive template engine for Python web frameworks._**
 

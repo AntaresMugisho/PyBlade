@@ -142,9 +142,9 @@ class TestTheMixinItself(unittest.TestCase):
         import pyblade.live.mixins as module
 
         tree = ast.parse(inspect.getsource(module))
-        imported = [
-            alias.name for node in ast.walk(tree) if isinstance(node, ast.Import) for alias in node.names
-        ] + [node.module or "" for node in ast.walk(tree) if isinstance(node, ast.ImportFrom)]
+        imported = [alias.name for node in ast.walk(tree) if isinstance(node, ast.Import) for alias in node.names] + [
+            node.module or "" for node in ast.walk(tree) if isinstance(node, ast.ImportFrom)
+        ]
 
         self.assertEqual(imported, [])
 

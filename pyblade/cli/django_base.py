@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import List, Optional
 
 import click
 
@@ -41,7 +40,7 @@ DJANGO_COMMAND_ALIASES = {
 }
 
 
-def run_django_command(command: List[str] | str, cwd: Optional[Path] = None) -> None:
+def run_django_command(command: list[str] | str, cwd: Path | None = None) -> None:
     if isinstance(command, str):
         command = command.split(" ")
 
@@ -164,7 +163,11 @@ class DjangoCommand(BaseCommand):
                 if not action.option_strings:
                     if action.dest == "args":
                         # This is a cath-all for remaining arguments
-                        self.add_argument(action.metavar, required=action.required, default=action.default)
+                        self.add_argument(
+                            action.metavar,
+                            required=action.required,
+                            default=action.default,
+                        )
 
                     else:
                         # Regular positional argument
@@ -191,7 +194,7 @@ class DjangoCommand(BaseCommand):
                         #     param_kwargs["type"] = click.INT
                         # elif action.type == float:
                         #     param_kwargs["type"] = click.FLOAT
-                        if action.type == bool:
+                        if action.type is bool:
                             param_kwargs["is_flag"] = True
                             param_kwargs["default"] = None
 
@@ -213,7 +216,9 @@ class DjangoCommand(BaseCommand):
 
         for argument in self.arguments:
             click_command = click.argument(
-                argument.get("name"), required=argument.get("required"), default=argument.get("default")
+                argument.get("name"),
+                required=argument.get("required"),
+                default=argument.get("default"),
             )(click_command)
 
         for option in self.options:

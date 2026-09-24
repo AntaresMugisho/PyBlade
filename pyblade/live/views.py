@@ -3,24 +3,33 @@ import logging
 import queue
 import threading
 from pathlib import Path
-from pprint import pprint # noqa
-
-from django.http import (HttpRequest, HttpResponse, JsonResponse, FileResponse, Http404,
-                         StreamingHttpResponse)
-from django.views.decorators.http import require_POST
-from django.conf import settings as dj_settings
-from django.urls import path
+from pprint import pprint  # noqa
 
 from django import forms
+from django.conf import settings as dj_settings
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.http import (
+    FileResponse,
+    Http404,
+    HttpRequest,
+    HttpResponse,
+    JsonResponse,
+    StreamingHttpResponse,
+)
+from django.views.decorators.http import require_POST
 
 from pyblade.engine.renderer import error_page
 
+from .registry import ComponentNotFound, registry
 from .security import verify_snapshot
 from .throttle import stream_slots, throttled
-from .uploads import (MultipleFileField, REFERENCE_PREFIX, TemporaryUpload, store_temporarily,
-                      sweep_if_due)
-from .registry import ComponentNotFound, registry
+from .uploads import (
+    REFERENCE_PREFIX,
+    MultipleFileField,
+    TemporaryUpload,
+    store_temporarily,
+    sweep_if_due,
+)
 
 logger = logging.getLogger("pyblade.live")
 
@@ -30,10 +39,18 @@ GENERIC_ERROR = "Something went wrong on the server."
 
 #: The types a preview is shown as rather than downloaded: pictures a browser
 #: draws and does nothing else with. SVG is not one of them: it can hold scripts.
-SHOWN_INLINE = frozenset({
-    "image/png", "image/jpeg", "image/gif", "image/webp", "image/avif", "image/bmp",
-    "image/x-icon", "image/vnd.microsoft.icon",
-})
+SHOWN_INLINE = frozenset(
+    {
+        "image/png",
+        "image/jpeg",
+        "image/gif",
+        "image/webp",
+        "image/avif",
+        "image/bmp",
+        "image/x-icon",
+        "image/vnd.microsoft.icon",
+    }
+)
 
 
 def serve_assets(request: HttpRequest, asset_type: str):
@@ -43,7 +60,7 @@ def serve_assets(request: HttpRequest, asset_type: str):
         js_file_path = assets_dir / "pyblade.min.js"
         with open(js_file_path, "rb") as f:
             content = f.read()
-        
+
         return HttpResponse(content, content_type="text/javascript")
 
     elif asset_type == "css":
@@ -103,10 +120,7 @@ def upload_file(request: HttpRequest) -> JsonResponse:
 
     if field is None:
         return JsonResponse(
-            {"errors": [
-                f"The {ComponentClass.__name__} component does not take a file "
-                f"for '{property_name}'."
-            ]},
+            {"errors": [f"The {ComponentClass.__name__} component does not take a file for '{property_name}'."]},
             status=422,
         )
 
@@ -115,10 +129,11 @@ def upload_file(request: HttpRequest) -> JsonResponse:
     if not isinstance(field, MultipleFileField):
         if len(uploaded) > 1:
             return JsonResponse(
-                {"errors": [
-                    f"The {ComponentClass.__name__} component takes one file for "
-                    f"'{property_name}', not several."
-                ]},
+                {
+                    "errors": [
+                        f"The {ComponentClass.__name__} component takes one file for '{property_name}', not several."
+                    ]
+                },
                 status=422,
             )
 
@@ -135,15 +150,19 @@ def upload_file(request: HttpRequest) -> JsonResponse:
     files = uploaded if isinstance(uploaded, list) else [uploaded]
     kept = [store_temporarily(one) for one in files]
 
-    return JsonResponse({"files": [
+    return JsonResponse(
         {
-            "reference": upload.reference,
-            "name": upload.name,
-            "size": upload.size,
-            "content_type": upload.content_type,
+            "files": [
+                {
+                    "reference": upload.reference,
+                    "name": upload.name,
+                    "size": upload.size,
+                    "content_type": upload.content_type,
+                }
+                for upload in kept
+            ]
         }
-        for upload in kept
-    ]})
+    )
 
 
 def in_development():
@@ -199,7 +218,10 @@ def preview_upload(request: HttpRequest, reference: str):
         response = FileResponse(handle, content_type=upload.content_type)
     else:
         response = FileResponse(
-            handle, content_type="application/octet-stream", as_attachment=True, filename=upload.name,
+            handle,
+            content_type="application/octet-stream",
+            as_attachment=True,
+            filename=upload.name,
         )
 
     # And the browser is told to take the type at its word rather than guess
@@ -353,7 +375,6 @@ def update_component(request: HttpRequest) -> JsonResponse:
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON payload."}, status=400)
 
-
     snapshot = payload.get("snapshot", {})
     action = payload.get("action")
     params = payload.get("params", [])
@@ -400,24 +421,41 @@ def update_component(request: HttpRequest) -> JsonResponse:
         # enough requests for them would otherwise run the server out of threads
         if not stream_slots.take():
             response = JsonResponse(
-                {"error": "The server is busy answering others. Try again in a moment."}, status=429
+                {"error": "The server is busy answering others. Try again in a moment."},
+                status=429,
             )
             response["Retry-After"] = "5"
             return response
 
         return StreamingHttpResponse(
-            _HoldingASlot(streamed_response(
-                ComponentClass, state, action, params,
-                request=request, known=known, updates=updates, confirmed=confirmed,
-                errors=errors, mount=mount,
-            )),
+            _HoldingASlot(
+                streamed_response(
+                    ComponentClass,
+                    state,
+                    action,
+                    params,
+                    request=request,
+                    known=known,
+                    updates=updates,
+                    confirmed=confirmed,
+                    errors=errors,
+                    mount=mount,
+                )
+            ),
             content_type="application/x-ndjson",
         )
 
     try:
         response_data = ComponentClass.update_component(
-            state, action, params, request=request, known=known, updates=updates,
-            confirmed=confirmed, errors=errors, mount=mount,
+            state,
+            action,
+            params,
+            request=request,
+            known=known,
+            updates=updates,
+            confirmed=confirmed,
+            errors=errors,
+            mount=mount,
         )
     except PermissionError as err:
         return JsonResponse({"error": str(err)}, status=403)

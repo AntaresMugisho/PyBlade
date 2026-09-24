@@ -1,24 +1,25 @@
+import inspect
+import json
 import re
 from copy import deepcopy
 from pathlib import Path
-from typing import Any, Dict, Pattern
+from pprint import pprint  # noqa
+from re import Pattern
+from typing import Any
 from uuid import uuid4
-import json
-import inspect
-from pprint import pprint # noqa
 
-from pyblade.engine import loader, stacks
-from pyblade.engine.exceptions import TemplateNotFoundError
-from pyblade.engine.template import Template
+from django.utils.datastructures import MultiValueDict
+
 from pyblade.config import settings
+from pyblade.engine import loader, stacks
+from pyblade.engine.exceptions import PyBladeException, TemplateNotFoundError
+from pyblade.engine.renderer import error_page
+from pyblade.engine.template import Template
 
 from .mixins import ComponentMixin
 from .security import generate_checksum
-from django.utils.datastructures import MultiValueDict
-
 from .skeleton import skeleton_markup
 from .uploads import TemporaryUpload, is_upload_reference
-
 
 #: The opening tag of the root element of a component. A slot the component
 #: declares is not one: it is markup for the layout to render, not the element
@@ -48,7 +49,7 @@ class EmittedEvent:
         self.emit("post-created").self()
     """
 
-    def __init__(self, event: Dict[str, Any]):
+    def __init__(self, event: dict[str, Any]):
         self._event = event
 
     def to(self, component: str):
@@ -176,8 +177,7 @@ class LiveComponent:
             if not isinstance(value, _IMMUTABLE):
                 setattr(self, name, deepcopy(value))
 
-
-    def render_template(self, template_name: str = None, context: Dict[str, Any] = None):
+    def render_template(self, template_name: str = None, context: dict[str, Any] = None):
         """Render a template as this component, with its context.
 
             def render(self):
@@ -202,10 +202,8 @@ class LiveComponent:
         try:
             template = loader.load_template(name, [settings.components_dir])
         except TemplateNotFoundError:
-            raise TemplateNotFoundError(
-                f"No template named {name}" if template_name else f"No component named {name}"
-            )
-       
+            raise TemplateNotFoundError(f"No template named {name}" if template_name else f"No component named {name}")
+
         # Add pb-id to the root node of the template
         if self._id is not None:
             template.content = self._inject_component_id(template.content)
@@ -217,7 +215,7 @@ class LiveComponent:
 
         return self._rendered
 
-    def render_inline(self, template_string: str, context: Dict[str, Any] = None):
+    def render_inline(self, template_string: str, context: dict[str, Any] = None):
         """Render an inline live component (not attached to an HTML template file)"""
 
         if not context:
@@ -247,15 +245,12 @@ class LiveComponent:
     # LIFECYCLE HOOKS
     def mount(self, **kwargs):
         """Called at the initial component rendering. This is the equivalent of __init__() in python"""
-        pass
 
     def boot(self):
         """Called on every request, after the component is mounted."""
-        pass
-        
+
     def hydrate(self):
         """Called on every AJAX request, just after the state is deserialized."""
-        pass
 
     def placeholder(self):
         """What a lazy component shows while it is being got ready.
@@ -271,7 +266,7 @@ class LiveComponent:
         in a template of its own. Without one, PyBlade draws the skeleton @lazy
         asked for.
         """
-        return None
+        return
 
     def render(self):
         """
@@ -295,13 +290,11 @@ class LiveComponent:
         """
         Called before the component is rendered.
         """
-        pass
 
     def rendered(self, rendered_content: str):
         """
         Called after the component is rendered.
         """
-        pass
 
     def updating(self, property: str, value):
         """
@@ -309,7 +302,6 @@ class LiveComponent:
         property: The name of the current property being updated
         value: The value about to be set to the property
         """
-        pass
 
     def updated(self, property: str, value):
         """
@@ -317,7 +309,6 @@ class LiveComponent:
         property: The name of the current property that was updated
         value: The new value of the property
         """
-        pass
 
     def _call_property_hook(self, phase: str, property_name: str, value):
         """
@@ -397,9 +388,7 @@ class LiveComponent:
             return None
 
         try:
-            relative = (
-                Path(module_file).resolve().with_suffix("").relative_to(Path(settings.components_dir).resolve())
-            )
+            relative = Path(module_file).resolve().with_suffix("").relative_to(Path(settings.components_dir).resolve())
         except ValueError:
             return None
 
@@ -544,8 +533,7 @@ class LiveComponent:
             return
 
         raise PermissionError(
-            f"The '{method_name}' action of the {type(self).__name__} component "
-            "must be confirmed before it is called."
+            f"The '{method_name}' action of the {type(self).__name__} component must be confirmed before it is called."
         )
 
     def _resolved_listeners(self):
@@ -650,9 +638,7 @@ class LiveComponent:
         if name in self._annotated_names() and not callable(declared) and not isinstance(declared, property):
             return
 
-        raise PermissionError(
-            f"'{name}' is not a property of the {type(self).__name__} component the page may set."
-        )
+        raise PermissionError(f"'{name}' is not a property of the {type(self).__name__} component the page may set.")
 
     def _set_property(self, name: str, value):
         """Set a property of the component, running the hooks that watch it.
@@ -756,7 +742,6 @@ class LiveComponent:
 
         return methods
 
-
     def _get_events(self):
         """Get server-to-client events"""
         return list(self._events)
@@ -790,7 +775,7 @@ class LiveComponent:
             opening += f" {attributes}"
         opening += f' pb:id="{self._id}"{void}>'
 
-        return f"{template_string[:match.start()]}{opening}{scripts}{template_string[match.end():]}"
+        return f"{template_string[: match.start()]}{opening}{scripts}{template_string[match.end() :]}"
 
     @staticmethod
     def _take_trailing_scripts(template_string: str):
@@ -814,8 +799,6 @@ class LiveComponent:
             return template_string, ""
 
         return rest, "".join(scripts)
-
-
 
     def serialize(self):
         """Serialize the component state to JSON"""
@@ -892,10 +875,13 @@ class LiveComponent:
 
             # A copy, as the component is free to change what it holds and the
             # state it was handed belongs to whoever handed it over
-            setattr(instance, key, value if isinstance(value, _IMMUTABLE) else deepcopy(value))
+            setattr(
+                instance,
+                key,
+                value if isinstance(value, _IMMUTABLE) else deepcopy(value),
+            )
 
         return instance
-
 
     # LIFECYCLE CALLERS (SSR and AJAX HANDLING)
     @staticmethod
@@ -925,9 +911,7 @@ class LiveComponent:
         method_name = self._resolved_listeners().get(event_name)
 
         if method_name is None:
-            raise NameError(
-                f"The {type(self).__name__} component does not listen for the '{event_name}' event."
-            )
+            raise NameError(f"The {type(self).__name__} component does not listen for the '{event_name}' event.")
 
         self._confirm_action(method_name, confirmed)
 
@@ -1066,7 +1050,8 @@ class LiveComponent:
         # scripts that come back for the component; a skeleton on a page without
         # them would wait for ever.
         markup = written or self.render_inline(
-            skeleton_markup(lines=settings["lines"], shape=settings["shape"]), context={}
+            skeleton_markup(lines=settings["lines"], shape=settings["shape"]),
+            context={},
         )
 
         marker = 'pb:lazy="visible"' if settings["visible"] else 'pb:lazy=""'
@@ -1104,17 +1089,21 @@ class LiveComponent:
         the double quotes of the JSON as they are: escaping those instead would
         be six characters for every name and every string it holds.
         """
-        return (
-            json.dumps(payload)
-            .replace("&", "&amp;")
-            .replace("<", "&lt;")
-            .replace("'", "&#39;")
-        )
+        return json.dumps(payload).replace("&", "&amp;").replace("<", "&lt;").replace("'", "&#39;")
 
     @classmethod
     def update_component(
-        cls, state, action_name, action_args=[], request=None, known=(), updates=None,
-        confirmed=False, sink=None, errors=None, mount=None,
+        cls,
+        state,
+        action_name,
+        action_args=[],
+        request=None,
+        known=(),
+        updates=None,
+        confirmed=False,
+        sink=None,
+        errors=None,
+        mount=None,
     ):
         """
         Manage the livfecycle on every AJAX request.
@@ -1188,9 +1177,7 @@ class LiveComponent:
         elif action_name == "$event":
             event_name = action_args[0] if action_args else None
             data = action_args[1] if len(action_args) > 1 else {}
-            outcome = instance._handle_event(
-                event_name, data if isinstance(data, dict) else {}, confirmed=confirmed
-            )
+            outcome = instance._handle_event(event_name, data if isinstance(data, dict) else {}, confirmed=confirmed)
 
         # 7. If it's a method calling
         else:
@@ -1280,8 +1267,7 @@ class LiveComponent:
         for name in names:
             if name not in declared:
                 raise AttributeError(
-                    f"'{name}' is not a property the {type(self).__name__} component declares "
-                    "and cannot be reset."
+                    f"'{name}' is not a property the {type(self).__name__} component declares and cannot be reset."
                 )
 
             # A copy, so that a list or a dictionary declared on the class is
@@ -1332,7 +1318,6 @@ class LiveComponent:
         self._events.append(emitted)
 
         return EmittedEvent(emitted)
-
 
     def validate(self, only=None):
         """Check the properties against what the component expects of them.
@@ -1413,9 +1398,7 @@ class LiveComponent:
             if isinstance(value, TemporaryUpload):
                 return value
 
-            if isinstance(value, list) and value and all(
-                isinstance(item, TemporaryUpload) for item in value
-            ):
+            if isinstance(value, list) and value and all(isinstance(item, TemporaryUpload) for item in value):
                 return value
 
             return None
@@ -1499,13 +1482,11 @@ class LiveComponent:
         """
         self._skip_render = True
 
-
     # MAGIC PROPERTIES
     @property
     def request(self):
         """The request the component is answering, on the first rendering and on every action."""
         return self._request
-
 
     @staticmethod
     def exception(exc, stopPropagation):
@@ -1531,18 +1512,41 @@ class LiveComponent:
         from django.http import HttpResponse
 
         def view(request, *args, **kwargs):
-            page = cls.render_initial(
-                {**properties, **kwargs},
-                request=request,
-                layout=cls.get_layout_name(),
-            )
+            try:
+                page = cls.render_initial(
+                    {**properties, **kwargs},
+                    request=request,
+                    layout=cls.get_layout_name(),
+                )
+            except PyBladeException as error:
+                # A page that went wrong is shown the way any other template
+                # that went wrong is: the file, the line, and the lines around
+                # it. Only while developing -- in production the error is left
+                # to be raised, so that nothing of what it says reaches the
+                # browser and the project's own handling takes it.
+                from django.conf import settings as dj_settings
+
+                if not dj_settings.DEBUG:
+                    raise
+
+                # The template it happened in, so the lines around it are shown
+                template = getattr(error, "template", None)
+
+                return HttpResponse(
+                    error_page(
+                        error,
+                        template_source=getattr(template, "content", None),
+                        template_path=getattr(template, "path", None),
+                    ),
+                    status=500,
+                )
+
             return HttpResponse(page)
 
         # So that a project can tell which component a route renders
         view.component = cls
 
         return view
-
 
     # Navigation
     def redirect(self, href):
@@ -1558,4 +1562,3 @@ class LiveComponent:
 #: and is the only thing the client ever sees or reaches. Read once the class is
 #: built, so that a method added to LiveComponent is covered without being listed.
 _RESERVED_NAMES = frozenset(vars(LiveComponent))
-

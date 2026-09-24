@@ -44,23 +44,21 @@ SWEEP_EVERY = 60 * 60
 _last_swept = None
 
 _SIZE_PATTERN = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*(b|kb|mb|gb)?\s*$", re.IGNORECASE)
-_SIZE_UNITS = {"b": 1, "kb": 1024, "mb": 1024 ** 2, "gb": 1024 ** 3}
+_SIZE_UNITS = {"b": 1, "kb": 1024, "mb": 1024**2, "gb": 1024**3}
 
 
 def parse_size(size):
     """A size written the way people write sizes, in bytes.
 
-        parse_size("2mb")   -> 2097152
-        parse_size(4096)    -> 4096
+    parse_size("2mb")   -> 2097152
+    parse_size(4096)    -> 4096
     """
     if isinstance(size, int):
         return size
 
     match = _SIZE_PATTERN.match(str(size))
     if not match:
-        raise ValueError(
-            f"'{size}' is not a size. Write it as a number of bytes, or as '500kb', '2mb' or '1gb'."
-        )
+        raise ValueError(f"'{size}' is not a size. Write it as a number of bytes, or as '500kb', '2mb' or '1gb'.")
 
     amount, unit = match.groups()
 
@@ -175,9 +173,7 @@ class TemporaryUpload:
             return None
 
         try:
-            payload = signing.loads(
-                reference[len(REFERENCE_PREFIX):], salt=SIGNING_SALT, max_age=max_age
-            )
+            payload = signing.loads(reference[len(REFERENCE_PREFIX) :], salt=SIGNING_SALT, max_age=max_age)
         except (signing.BadSignature, signing.SignatureExpired, ValueError):
             return None
 
@@ -241,7 +237,7 @@ class TemporaryUpload:
         """
         from django.urls import reverse
 
-        return reverse("pyblade-preview", args=[self.reference[len(REFERENCE_PREFIX):]])
+        return reverse("pyblade-preview", args=[self.reference[len(REFERENCE_PREFIX) :]])
 
 
 def store_temporarily(uploaded_file):

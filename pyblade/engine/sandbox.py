@@ -172,7 +172,6 @@ class SafeEvaluator:
         # CALL SUPPORT (method OR filter with args)
         # ----------------------------
         if isinstance(node, ast.Call):
-
             # If this is something like value.truncate(20)
             if isinstance(node.func, ast.Attribute):
                 attr_node = node.func

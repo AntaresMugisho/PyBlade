@@ -3,7 +3,6 @@ Template file loading functionality.
 """
 
 from pathlib import Path
-from typing import List, Optional, Union
 
 from pyblade.config import settings
 
@@ -14,7 +13,7 @@ from .template import Template
 class TemplateLoader:
     """Handles loading template files from the filesystem."""
 
-    def __init__(self, template_dirs: Optional[List[Union[str, Path]]] = None):
+    def __init__(self, template_dirs: list[str | Path] | None = None):
         """
         Initialize the template loader.
 
@@ -26,7 +25,7 @@ class TemplateLoader:
         if template_dirs:
             self.add_directories(template_dirs)
 
-    def add_directories(self, directories: List[Union[str, Path]]) -> None:
+    def add_directories(self, directories: list[str | Path]) -> None:
         """
         Add template directories to the search path.
 
@@ -38,7 +37,7 @@ class TemplateLoader:
             if path.is_dir():
                 self._template_dirs.append(path)
 
-    def _search_dirs(self) -> List[Path]:
+    def _search_dirs(self) -> list[Path]:
         """The directories a template is looked for in, in order.
 
         The ones that were configured come first, then the templates directory
@@ -82,7 +81,7 @@ class TemplateLoader:
                 content = self._read_template(full_path)
 
                 return Template(template_name, full_path, content)
-            except (IOError, OSError):
+            except OSError:
                 continue
 
         raise TemplateNotFoundError(f"{template_name}{self._extension}")
@@ -101,20 +100,20 @@ class TemplateLoader:
             IOError: If there's an error reading the file
         """
         if not path.is_file():
-            raise IOError(f"Not a file: {path}")
+            raise OSError(f"Not a file: {path}")
 
         try:
             with open(path, "r", encoding="utf-8") as f:
                 return f.read()
         except Exception as e:
-            raise IOError(f"Error reading template file {path}: {str(e)}")
+            raise OSError(f"Error reading template file {path}: {e!s}")
 
 
 # Global loader instances
 _default_loader = TemplateLoader()
 
 
-def load_template(template_name: str, directories: Optional[List[Union[str, Path]]] = None, engine=None) -> Template:
+def load_template(template_name: str, directories: list[str | Path] | None = None, engine=None) -> Template:
     """
     Load a template using the default loader.
 

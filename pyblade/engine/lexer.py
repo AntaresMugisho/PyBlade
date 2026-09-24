@@ -71,9 +71,18 @@ class Lexer:
         while self.pos < len(self.template_string):
             # Prioritized matching for special blocks (order matters)
 
+            # An escaped directive: @@if is written out as the text @if, the way
+            # @{{ }} writes out a variable. The two @ signs become one, and what
+            # follows is text like any other -- a directive is only a directive
+            # for having an @ in front of it, and this one no longer has.
+            if self._peek(2) == "@@":
+                self.tokens.append(Token("TEXT", "@", self.line, self.column))
+                self._update_pos(2)
+                continue
+
             # Escaped variable display: @{{ ... }} should render as literal {{ ... }}
             # We treat the entire sequence from '@{{' up to the next '}}' as plain text.
-            if self._peek(3) == "@{{":
+            elif self._peek(3) == "@{{":
                 start_line = self.line
                 start_column = self.column
 
@@ -174,15 +183,18 @@ class Lexer:
                     # Check for single special characters that don't form complete tokens
                     next_char = self._peek(1)
                     # Only treat as text if it's not part of a multi-char delimiter
-                    if next_char and next_char not in ["@", "{", "}", "!"]:
-                        self._add_token("TEXT", next_char)
-                    elif next_char == "{" and self._peek(2) not in ["{{", "{#", "{!"]:
-                        self._add_token("TEXT", next_char)
-                    elif next_char == "}" and self._peek(2) not in ["}}", "!}"]:
-                        self._add_token("TEXT", next_char)
-                    elif next_char == "!" and self._peek(2) not in ["!!", "!}"]:
-                        self._add_token("TEXT", next_char)
-                    elif next_char == "<" and self._peek(4) != "<pb-":
+                    if (
+                        next_char
+                        and next_char not in ["@", "{", "}", "!"]
+                        or next_char == "{"
+                        and self._peek(2) not in ["{{", "{#", "{!"]
+                        or next_char == "}"
+                        and self._peek(2) not in ["}}", "!}"]
+                        or next_char == "!"
+                        and self._peek(2) not in ["!!", "!}"]
+                        or next_char == "<"
+                        and self._peek(4) != "<pb-"
+                    ):
                         self._add_token("TEXT", next_char)
                     else:
                         # This shouldn't happen, but ensures progress

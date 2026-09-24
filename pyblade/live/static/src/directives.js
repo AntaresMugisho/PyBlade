@@ -75,21 +75,21 @@ export const Directives = {
     // Parse a single value (string, number, boolean, etc.)
     parseValue(value) {
         // Remove quotes from strings
-        if ((value.startsWith('"') && value.endsWith('"')) || 
+        if ((value.startsWith('"') && value.endsWith('"')) ||
             (value.startsWith("'") && value.endsWith("'"))) {
             return value.slice(1, -1);
         }
-        
+
         // Parse numbers
         if (!isNaN(value)) {
             return Number(value);
         }
-        
+
         // Parse booleans
         if (value === 'true') return true;
         if (value === 'false') return false;
         if (value === 'null') return null;
-        
+
         // Return as string for other cases
         return value;
     },
@@ -447,14 +447,14 @@ export const Directives = {
         submit({ el, expression, component, signal }) {
             el.addEventListener('submit', (e) => {
                 e.preventDefault();
-                
+
                 // Disable form while submitting
                 const submitButton = el.querySelector('button[type="submit"], input[type="submit"]');
                 const inputs = el.querySelectorAll('input, textarea, select');
-                
+
                 if (submitButton) submitButton.disabled = true;
                 inputs.forEach(input => input.readOnly = true);
-                
+
                 Promise.resolve(Directives.invoke(expression, component, el)).finally(() => {
                     if (submitButton) submitButton.disabled = false;
                     inputs.forEach(input => input.readOnly = false);
@@ -589,7 +589,7 @@ export const Directives = {
         current({ el, expression, component }) {
             const currentPath = window.location.pathname;
             const href = el.getAttribute('href');
-            
+
             if (href === currentPath) {
                 const classes = expression ? expression.split(' ') : [];
                 el.classList.add(...classes);
@@ -865,7 +865,7 @@ export const Directives = {
                 const state = component.getState();
                 el.textContent = state[expression] || '';
             };
-            
+
             updateText();
             component.onStateChange(updateText, signal);
         }

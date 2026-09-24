@@ -1,5 +1,5 @@
 import importlib
-from typing import Type, Dict, Any
+from typing import Any
 
 
 class ComponentNotFound(ValueError):
@@ -13,15 +13,15 @@ class ComponentNotFound(ValueError):
 class LiveComponentRegistry:
     """
     Central registry for PyBlade Live components.
-    
+
     Caches Python class references in memory to enable O(1) lookups
     during AJAX requests without requiring re-imports or state persistence.
     """
 
     def __init__(self) -> None:
-        self._components: Dict[str, Type[Any]] = {}
+        self._components: dict[str, type[Any]] = {}
 
-    def register(self, name_or_path: str, component_class: Type[Any]) -> None:
+    def register(self, name_or_path: str, component_class: type[Any]) -> None:
         """
         Registers a component class under a given key or class path.
 
@@ -30,7 +30,7 @@ class LiveComponentRegistry:
         """
         self._components[name_or_path] = component_class
 
-    def get(self, class_path: str) -> Type[Any]:
+    def get(self, class_path: str) -> type[Any]:
         """
         Retrieves a component class by its path.
         Uses in-memory cache if available; otherwise, lazily imports the module.
@@ -45,7 +45,7 @@ class LiveComponentRegistry:
 
         # 2. Lazy resolution via importlib on first access
         try:
-            module_path, class_name = class_path.rsplit('.', 1)
+            module_path, class_name = class_path.rsplit(".", 1)
             module = importlib.import_module(module_path)
             cls = getattr(module, class_name)
 

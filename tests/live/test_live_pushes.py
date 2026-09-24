@@ -19,8 +19,7 @@ class Chart(LiveComponent):
 
     def render(self):
         return self.render_inline(
-            "<div>@if(shown)<canvas></canvas>"
-            "@push('scripts')<script src=\"/chart.js\"></script>@endpush@endif</div>",
+            "<div>@if(shown)<canvas></canvas>@push('scripts')<script src=\"/chart.js\"></script>@endpush@endif</div>",
             context={},
         )
 
@@ -33,11 +32,16 @@ class TestPushesOnUpdate(unittest.TestCase):
     def test_what_is_pushed_is_sent_with_the_answer(self):
         answer = self.update("show")
 
-        self.assertEqual(answer["pushes"], [{
-            "stack": "scripts",
-            "key": stacks.key_of('<script src="/chart.js"></script>'),
-            "html": '<script src="/chart.js"></script>',
-        }])
+        self.assertEqual(
+            answer["pushes"],
+            [
+                {
+                    "stack": "scripts",
+                    "key": stacks.key_of('<script src="/chart.js"></script>'),
+                    "html": '<script src="/chart.js"></script>',
+                }
+            ],
+        )
 
     def test_it_is_not_in_the_markup(self):
         self.assertNotIn("chart.js", self.update("show")["html"])

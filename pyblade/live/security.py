@@ -1,7 +1,9 @@
-import hmac
 import hashlib
+import hmac
 import json
+
 from django.conf import settings as dj_settings
+
 
 def generate_checksum(payload_data: dict) -> str:
     """
@@ -12,7 +14,7 @@ def generate_checksum(payload_data: dict) -> str:
     return hmac.new(
         dj_settings.SECRET_KEY.encode("utf-8"),
         serialized_data.encode("utf-8"),
-        hashlib.sha256
+        hashlib.sha256,
     ).hexdigest()
 
 

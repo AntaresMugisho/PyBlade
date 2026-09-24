@@ -31,9 +31,7 @@ def check_skeleton(lines=3, shape="text"):
     a error at import rather than a blank rectangle discovered on a page.
     """
     if shape not in SHAPES:
-        raise ValueError(
-            f"'{shape}' is not a skeleton PyBlade can draw. It draws {', '.join(SHAPES)}."
-        )
+        raise ValueError(f"'{shape}' is not a skeleton PyBlade can draw. It draws {', '.join(SHAPES)}.")
 
     if not isinstance(lines, int) or isinstance(lines, bool) or lines < 1:
         raise ValueError(f"A skeleton is drawn with at least one line, not {lines!r}.")
@@ -57,11 +55,7 @@ def skeleton_markup(lines=3, shape="text"):
         block = '<div class="pb-skeleton-block"></div>' if shape == "card" else ""
         body = block + "".join(_line(index, lines) for index in range(lines))
 
-    return (
-        f'<div class="pb-skeleton pb-skeleton-{shape}" aria-busy="true">'
-        f"{body}"
-        "</div>"
-    )
+    return f'<div class="pb-skeleton pb-skeleton-{shape}" aria-busy="true">{body}</div>'
 
 
 def _line(index, count):

@@ -84,21 +84,21 @@ export class Component {
 
     async setProperties(updatedProperties, delay = 300) {
         const [propName, value] = updatedProperties;
-        
+
         // Update local form state immediately (react-hook-form pattern)
         this.formState.values[propName] = value;
         this.formState.touchedFields.add(propName);
         this.refreshDirty();
-        
+
         // Batch updates - don't send immediately
         this.pendingUpdates = this.pendingUpdates || {};
         this.pendingUpdates[propName] = value;
-        
+
         // Clear existing timer and set new one for batched update
         if (this.pendingUpdateTimer) {
             clearTimeout(this.pendingUpdateTimer);
         }
-        
+
         this.pendingUpdateTimer = setTimeout(async () => {
             if (this.pendingUpdates) {
                 const updates = Object.entries(this.pendingUpdates).flat();

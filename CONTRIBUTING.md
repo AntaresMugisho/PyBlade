@@ -127,10 +127,15 @@ $ pip install -e /path/to/your/pyblade         # otherwise
 
 ## Formatting and linting
 
-PyBlade is formatted with [Black](https://black.readthedocs.io) and
-[isort](https://pycqa.github.io/isort/), and linted with [Flake8](https://flake8.pycqa.org), with
-lines up to 120 characters. The pre-commit hooks run all three on every commit; `make pre-commit`
-runs them on the whole repository.
+PyBlade is formatted and linted with [Ruff](https://docs.astral.sh/ruff/), with lines up to 120
+characters. It does the work Black, isort and Flake8 used to do between them, and it is configured
+under `[tool.ruff]` in `pyproject.toml`: the rules selected there are pyflakes, pycodestyle and
+import order, so what is checked is what was checked before.
+
+The pre-commit hooks run it on every commit; `make pre-commit` runs it on the whole repository, and
+it must pass before you open a pull request. `ruff check` fixes what it can on its own, and
+`ruff format` rewrites the files it needs to, so a run that reports changes has already made them:
+look at what it did and run it again.
 
 ## Project structure
 

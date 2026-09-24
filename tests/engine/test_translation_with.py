@@ -11,7 +11,10 @@ class TestTranslationWith(unittest.TestCase):
     def _render(self, template, context=None):
         return self.processor.render(template, context or {})
 
-    @patch("pyblade.engine.nodes.pgettext", side_effect=lambda c, x: f"CtxTranslated<{c}:{x}>")
+    @patch(
+        "pyblade.engine.nodes.pgettext",
+        side_effect=lambda c, x: f"CtxTranslated<{c}:{x}>",
+    )
     @patch("pyblade.engine.nodes.gettext", side_effect=lambda x: f"Translated<{x}>")
     def test_trans(self, gettext, pgettext):
 
@@ -27,7 +30,10 @@ class TestTranslationWith(unittest.TestCase):
         template = "@trans('Hello', noop=True)"
         self.assertEqual(self._render(template), "Hello")
 
-    @patch("pyblade.engine.nodes.ngettext", side_effect=lambda s, p, n: f"Plural<{s}|{p}|{n}>")
+    @patch(
+        "pyblade.engine.nodes.ngettext",
+        side_effect=lambda s, p, n: f"Plural<{s}|{p}|{n}>",
+    )
     @patch("pyblade.engine.nodes.gettext", side_effect=lambda x: f"Block<{x}>")
     def test_blocktranslate(self, gettext, ngettext):
 

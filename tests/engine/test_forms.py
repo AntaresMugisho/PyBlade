@@ -15,9 +15,9 @@ if not settings.configured:
     )
     django.setup()
 
-from django import forms  # noqa: E402
+from django import forms
 
-from pyblade.engine.processor import TemplateProcessor  # noqa: E402
+from pyblade.engine.processor import TemplateProcessor
 
 
 class ContactForm(forms.Form):

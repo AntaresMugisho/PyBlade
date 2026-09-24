@@ -15,7 +15,11 @@ class Command(BaseCommand):
     def config(self):
         """Setup command arguments and options here"""
         self.add_argument("name")
-        self.add_flag("-i", "--inline", help="Embed the HTML template in the Python component class file")
+        self.add_flag(
+            "-i",
+            "--inline",
+            help="Embed the HTML template in the Python component class file",
+        )
         self.add_flag("-f", "--force", help="Create the Live component even if it already exists")
 
     def handle(self, **kwargs):

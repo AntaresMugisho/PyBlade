@@ -140,7 +140,10 @@ class TestStreamingAsItHappens(unittest.TestCase):
         def write(self):
             raise ValueError("password=hunter2")
 
-        with override_settings(DEBUG=False), self.assertLogs("pyblade.live", level="ERROR") as logged:
+        with (
+            override_settings(DEBUG=False),
+            self.assertLogs("pyblade.live", level="ERROR") as logged,
+        ):
             lines = self._lines(component(write=streamed(write)))
 
         self.assertNotIn("hunter2", json.dumps(lines[-1]))

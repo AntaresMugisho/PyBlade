@@ -68,7 +68,10 @@ class TestTemplateInheritance(unittest.TestCase):
     # @parent
 
     def test_parent_directive_keeps_original_block_content(self):
-        self._write("layouts.base", "<aside>@block('sidebar')<nav>Default navigation</nav>@endblock</aside>")
+        self._write(
+            "layouts.base",
+            "<aside>@block('sidebar')<nav>Default navigation</nav>@endblock</aside>",
+        )
 
         result = self._render("@extends('layouts.base')@block('sidebar')@parent<p>Appended</p>@endblock")
 
@@ -119,7 +122,10 @@ class TestTemplateInheritance(unittest.TestCase):
             "layouts.base",
             "<html>@block('head')base-head@endblock<body>@block('content')base-content@endblock</body></html>",
         )
-        self._write("layouts.app", "@extends('layouts.base')@block('head')@parent app-head@endblock")
+        self._write(
+            "layouts.app",
+            "@extends('layouts.base')@block('head')@parent app-head@endblock",
+        )
 
         result = self._render("@extends('layouts.app')@block('content')page-content@endblock")
 
@@ -135,7 +141,10 @@ class TestTemplateInheritance(unittest.TestCase):
 
     def test_parent_directive_resolves_to_the_closest_ancestor_block(self):
         self._write("layouts.base", "<body>@block('content')base@endblock</body>")
-        self._write("layouts.app", "@extends('layouts.base')@block('content')@parent+app@endblock")
+        self._write(
+            "layouts.app",
+            "@extends('layouts.base')@block('content')@parent+app@endblock",
+        )
 
         result = self._render("@extends('layouts.app')@block('content')@parent+page@endblock")
 
@@ -152,7 +161,10 @@ class TestTemplateInheritance(unittest.TestCase):
             "@slot('subtitle')My Second Title@endslot"
         )
 
-        self.assertEqual(self._render(child), "<title>My Awesome Title</title><h2>My Second Title</h2>")
+        self.assertEqual(
+            self._render(child),
+            "<title>My Awesome Title</title><h2>My Second Title</h2>",
+        )
 
     def test_named_slots_are_not_part_of_the_default_slot(self):
         self._write("layouts.base", "<main>{{ slot }}</main>")
@@ -187,13 +199,18 @@ class TestTemplateInheritance(unittest.TestCase):
         self.assertEqual(result, "<body>Hello Antares<footer>2026</footer></body>")
 
     def test_components_work_inside_blocks_and_slot(self):
-        self._write("alert", '<div class="alert">{{ slot }}</div>', directory=self.components_dir)
-        self._write("layouts.base", "<body>@block('content')nothing@endblock<main>{{ slot }}</main></body>")
+        self._write(
+            "alert",
+            '<div class="alert">{{ slot }}</div>',
+            directory=self.components_dir,
+        )
+        self._write(
+            "layouts.base",
+            "<body>@block('content')nothing@endblock<main>{{ slot }}</main></body>",
+        )
 
         child = (
-            "@extends('layouts.base')"
-            "@block('content')<pb-alert>Boom</pb-alert>@endblock"
-            "<pb-alert>Outside</pb-alert>"
+            "@extends('layouts.base')@block('content')<pb-alert>Boom</pb-alert>@endblock<pb-alert>Outside</pb-alert>"
         )
 
         result = self._render(child)
@@ -209,7 +226,10 @@ class TestTemplateInheritance(unittest.TestCase):
             "<ul>@for(item in items)<li>{{ item }}</li>@endfor</ul>@block('content')nothing@endblock",
         )
 
-        result = self._render("@extends('layouts.base')@block('content')done@endblock", {"items": ["a", "b"]})
+        result = self._render(
+            "@extends('layouts.base')@block('content')done@endblock",
+            {"items": ["a", "b"]},
+        )
 
         self.assertEqual(result, "<ul><li>a</li><li>b</li></ul>done")
 
@@ -225,7 +245,10 @@ class TestTemplateInheritance(unittest.TestCase):
 
     def test_included_template_can_extend_a_layout(self):
         self._write("layouts.base", "<section>@block('content')nothing@endblock</section>")
-        self._write("partials.card", "@extends('layouts.base')@block('content'){{ label }}@endblock")
+        self._write(
+            "partials.card",
+            "@extends('layouts.base')@block('content'){{ label }}@endblock",
+        )
 
         result = self._render("<div>@include('partials.card')</div>", {"label": "Card"})
 
@@ -234,7 +257,10 @@ class TestTemplateInheritance(unittest.TestCase):
     def test_blocks_named_by_a_variable_are_matched_on_their_expression(self):
         self._write("layouts.base", "<body>@block(block_name)base@endblock</body>")
 
-        result = self._render("@extends('layouts.base')@block(block_name)page@endblock", {"block_name": "content"})
+        result = self._render(
+            "@extends('layouts.base')@block(block_name)page@endblock",
+            {"block_name": "content"},
+        )
 
         self.assertEqual(result, "<body>page</body>")
 
