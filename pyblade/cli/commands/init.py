@@ -31,7 +31,8 @@ _TEMPLATES = """{
         },
     },
     {
-        "BACKEND": "pyblade.backends.PyBladeEngine",
+        "BACKEND": "pyblade.django.PyBladeEngine",
+        "NAME": "pyblade",
         "DIRS": [BASE_DIR / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
@@ -60,7 +61,7 @@ class Command(BaseCommand):
 
     #: What says a directory already holds a project, so starting one in it
     #: would write over somebody's work.
-    ALREADY_A_PROJECT = ("manage.py", "pyblade.toml")
+    ALREADY_A_PROJECT = ("manage.py", "pyblade.toml", "pyproject.toml")
 
     def config(self):
         self.add_option(
@@ -74,7 +75,7 @@ class Command(BaseCommand):
                 name=self.ask("What is your project name ? (. for the current directory)", default="my_project"),
                 framework=self.choice(
                     "Which Python web framework would you like to use?",
-                    choices=[Choice("Django", "django")],
+                    choices=[Choice("Django", "django"), Choice("Flask", "flask"), Choice("FastAPI", "fastapi")],
                 ),
                 tailwind=self.confirm("Would you like to configure Tailwind CSS?", True),
             )

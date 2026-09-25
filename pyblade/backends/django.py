@@ -4,8 +4,9 @@ from django.template.backends.utils import csrf_input_lazy, csrf_token_lazy
 from django.utils.functional import cached_property
 from django.utils.module_loading import import_string
 
-from pyblade import PyBlade
+from pyblade.config import config
 from pyblade.engine.exceptions import TemplateNotFoundError
+from pyblade.engine.renderer import PyBlade
 from pyblade.engine.template import Template as PyBladeTemplate
 
 
@@ -18,7 +19,7 @@ class TemplateNotFoundHere(TemplateNotFoundError, TemplateDoesNotExist):
 
 
 class PyBladeEngine(BaseEngine):
-    app_dirname = "templates"
+    app_dirname = str(config.paths.templates)
 
     def __init__(self, params):
         params = params.copy()

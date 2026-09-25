@@ -1,8 +1,9 @@
-from pyblade import PyBlade
+"""PyBlade in a FastAPI application.
 
+FastAPI's responses are Starlette's, so this is that binding under the name
+somebody writing FastAPI will look for.
+"""
 
-class PyBladeEngine:
-    def __init__(self, params):
-        self.engine = PyBlade(dirs="templates")
+from .starlette import configure, render
 
-    def render(self, request, template, context): ...
+__all__ = ["configure", "render"]

@@ -150,7 +150,7 @@ look at what it did and run it again.
 
 Configuration is read through `pyblade.config.config`, from a project's `pyblade.toml` or the
 `[tool.pyblade]` table of its `pyproject.toml`. Its tables are `[project]`, `[stack]`, `[paths]`,
-`[live]` and `[i18n]`, reached by name: `config.paths.templates`, `config.i18n.locale`. Every key
+`[live_components]` and `[i18n]`, reached by name: `config.paths.templates`, `config.i18n.locale`. Every key
 has a default in `pyblade/config.py`, so add one there before reading it anywhere else, and a key
 that names a place on disk comes back as a `Path`.
 

@@ -1,9 +1,19 @@
 """PyBlade: a template engine, and live components built on it.
 
-Everything that needs a web framework installed is imported when it is asked
-for rather than when PyBlade is. `pyblade init` exists to start a project with
-a framework that is not installed yet -- so importing PyBlade, which the CLI
-does before it can do anything at all, must not need one.
+Nothing here needs a web framework. `pyblade init` exists to start a project
+with a framework that is not installed yet, and the CLI imports PyBlade before
+it can do anything at all, so importing PyBlade must not need one.
+
+A framework is bound by importing its own module, which is the point at which
+it does have to be installed:
+
+    from pyblade import PyBlade
+    from pyblade.flask import render
+    from pyblade.starlette import render
+
+Django is the exception: it is bound by its template backend rather than by a
+render function, and a project names `pyblade.backends.PyBladeEngine` in its
+TEMPLATES setting.
 """
 
 from importlib import import_module
@@ -13,11 +23,23 @@ from .config import config
 from .engine import contexts, exceptions, loader, template
 from .engine.renderer import PyBlade
 
-#: What lives behind a web framework, and the module each one comes from.
-_FRAMEWORK_BOUND = {
-    "LiveComponent": "pyblade.live.base",
-    "ComponentMixin": "pyblade.live.mixins",
+#: Names that are a module of their own, imported the first time one is asked
+#: for. Every one of them needs something PyBlade itself does not.
+_LAZY_MODULES = {
     "decorators": "pyblade.live.decorators",
+    "django": "pyblade.django",
+    "fastapi": "pyblade.fastapi",
+    "flask": "pyblade.flask",
+    "litestar": "pyblade.litestar",
+    "quart": "pyblade.quart",
+    "sanic": "pyblade.sanic",
+    "starlette": "pyblade.starlette",
+}
+
+#: Names that live inside a module, imported the same way and for the same reason.
+_LAZY_NAMES = {
+    "ComponentMixin": "pyblade.live.mixins",
+    "LiveComponent": "pyblade.live.base",
 }
 
 __all__ = [
@@ -28,20 +50,27 @@ __all__ = [
     "config",
     "contexts",
     "decorators",
+    "django",
     "exceptions",
+    "fastapi",
+    "flask",
+    "litestar",
     "loader",
-    "settings",
+    "quart",
+    "sanic",
+    "starlette",
     "template",
 ]
 
 
 def __getattr__(name):
-    """Bring in a framework-bound name the first time somebody asks for it."""
-    if name not in _FRAMEWORK_BOUND:
+    """Bring in a name that needs a web framework, the first time it is asked for."""
+    if name in _LAZY_MODULES:
+        value = import_module(_LAZY_MODULES[name])
+    elif name in _LAZY_NAMES:
+        value = getattr(import_module(_LAZY_NAMES[name]), name)
+    else:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-
-    module = import_module(_FRAMEWORK_BOUND[name])
-    value = module if name == "decorators" else getattr(module, name)
 
     # Kept, so the import happens once rather than on every attribute read
     globals()[name] = value
