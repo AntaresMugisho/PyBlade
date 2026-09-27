@@ -237,3 +237,37 @@ class TestTheChildOnItsOwn(NestingTestCase):
 
         self.assertEqual(answer["snapshot"]["state"], {"count": 5})
         self.assertNotIn('id="parent"', answer["html"])
+
+
+class TestRequest(NestingTestCase):
+    """The request a page is rendered for reaches the live components on it."""
+
+    def setUp(self):
+        super().setUp()
+        self.write_child(
+            body="""
+            def render(self):
+                return self.render_template(context={"seen": getattr(self.request, "marker", "no request")})
+            """,
+            template='<div id="child">{{ seen }}</div>',
+        )
+
+    def request(self):
+        from django.test import RequestFactory
+
+        request = RequestFactory().get("/")
+        request.marker = "the request"
+        return request
+
+    def test_a_child_is_rendered_with_the_request_of_its_parent(self):
+        page = self.parent_class().render_initial({"key": "parent-1"}, request=self.request())
+
+        self.assertIn('<div id="child"', page)
+        self.assertIn("the request", page)
+
+    def test_a_component_written_in_a_plain_template_is_rendered_with_its_request(self):
+        from pyblade.engine.renderer import PyBlade
+
+        page = PyBlade().render("<main><pb-child /></main>", {"request": self.request()})
+
+        self.assertIn("the request", page)

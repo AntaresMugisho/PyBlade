@@ -1,6 +1,5 @@
-from pathlib import Path
-
 from pyblade.cli import BaseCommand
+from pyblade.cli.locations import LocationError, shown, target_directory
 from pyblade.config import config
 from pyblade.utils import split_dotted_path
 
@@ -16,6 +15,7 @@ class Command(BaseCommand):
     def config(self):
         """Setup command arguments and options here"""
         self.add_argument("name")
+        self.add_option("-a", "--app", help="Create it in the templates of this Django app, instead of the project's")
         self.add_flag("-f", "--force", help="Create the template even if it already exists")
 
     def handle(self, **kwargs):
@@ -24,14 +24,20 @@ class Command(BaseCommand):
         name = kwargs.get("name")
         path, template_name = split_dotted_path(name)
 
-        p = Path(config.paths.templates, path)
+        try:
+            base = target_directory("templates", kwargs.get("app"))
+        except LocationError as error:
+            self.error(str(error))
+            return
+
+        p = base / path
         p.mkdir(parents=True, exist_ok=True)
 
         html_path = p / f"{template_name}.html"
 
         if html_path.exists():
             if not kwargs.get("force"):
-                self.error(f"Template '{html_path}' already exists.")
+                self.error(f"Template '{shown(html_path)}' already exists.")
                 self.tip(
                     "Use [bright_black]--force[/bright_black] to override the existing "
                     "template or choose a different name."
@@ -51,4 +57,4 @@ class Command(BaseCommand):
         with open(html_path, "w") as file:
             file.write(template)
 
-        self.success(f"""Created template '{html_path}' successfully.""")
+        self.success(f"""Created template '{shown(html_path)}' successfully.""")

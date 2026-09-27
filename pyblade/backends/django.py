@@ -19,7 +19,7 @@ class TemplateNotFoundHere(TemplateNotFoundError, TemplateDoesNotExist):
 
 
 class PyBladeEngine(BaseEngine):
-    app_dirname = str(config.paths.templates)
+    app_dirname = str(config.written("paths.templates"))
 
     def __init__(self, params):
         params = params.copy()

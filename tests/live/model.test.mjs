@@ -257,6 +257,44 @@ test('a field that was typed into keeps what was typed', () => {
     assert.equal(component.formState.values.title, 'Typed');
 });
 
+test('what the server empties after taking it is emptied on the page', () => {
+    // A comment box: what was typed goes with the action, which saves it and
+    // resets the property. The field is the server's again once it has answered.
+    const component = live({ body: '' });
+    component.setLocal('body', 'Hello');
+
+    component.update({ html: null, snapshot: { state: { body: '' } } }, { body: 'Hello' });
+
+    assert.equal(component.formState.values.body, '');
+    assert.deepEqual(component.pendingUpdatesToSend(), {});
+});
+
+test('what was typed after the request went keeps what was typed', () => {
+    const component = live({ body: '' });
+    component.setLocal('body', 'Hello');
+    component.setLocal('body', 'Hello there');
+
+    component.update({ html: null, snapshot: { state: { body: '' } } }, { body: 'Hello' });
+
+    assert.equal(component.formState.values.body, 'Hello there');
+});
+
+test('a field the request did not carry keeps what was typed', () => {
+    const component = live({ body: '', title: '' });
+    component.setLocal('title', 'Typed');
+
+    component.update({ html: null, snapshot: { state: { body: '', title: '' } } }, { body: '' });
+
+    assert.equal(component.formState.values.title, 'Typed');
+});
+
+test('what a request sets is what it sent', () => {
+    const component = live({ query: '' });
+
+    assert.deepEqual(component.sentWith({ action: '$set', params: ['query', 'abc'] }, { title: 'A' }), { title: 'A', query: 'abc' });
+    assert.deepEqual(component.sentWith({ action: 'save', params: [] }, { title: 'A' }), { title: 'A' });
+});
+
 test('a property the request is already setting does not also wait', () => {
     const component = live({ query: '' });
     component.setLocal('query', 'abc');

@@ -1,0 +1,12 @@
+"""{name}, a FastAPI application with its templates rendered by PyBlade."""
+
+from fastapi import FastAPI, Request
+
+from pyblade.fastapi import render
+
+app = FastAPI()
+
+
+@app.get("/")
+def welcome(request: Request):
+    return render(request, "welcome", framework="FastAPI")

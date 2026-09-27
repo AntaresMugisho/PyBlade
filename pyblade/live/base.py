@@ -14,6 +14,7 @@ from pyblade.config import config
 from pyblade.engine import loader, stacks
 from pyblade.engine.exceptions import PyBladeException, TemplateNotFoundError
 from pyblade.engine.renderer import error_page
+from pyblade.engine.roots import component_roots, root_of
 from pyblade.engine.template import Template
 
 from .mixins import ComponentMixin
@@ -200,7 +201,7 @@ class LiveComponent:
         name = template_name or self.get_template_name()
 
         try:
-            template = loader.load_template(name, [config.paths.components])
+            template = self._load_template(name, own=template_name is None)
         except TemplateNotFoundError:
             raise TemplateNotFoundError(f"No template named {name}" if template_name else f"No component named {name}")
 
@@ -337,7 +338,8 @@ class LiveComponent:
         if name is None:
             raise TemplateNotFoundError(
                 f"Could not tell which template the {type(self).__name__} component renders. "
-                f"Components are looked for in {Path(config.paths.components).resolve()}."
+                "Components are looked for in "
+                f"{', '.join(str(root.directory.resolve()) for root in component_roots())}."
             )
 
         return name
@@ -378,19 +380,42 @@ class LiveComponent:
 
         return self._layout
 
-    def _locate(self):
-        """Where the class of the component lives, read from the components directory."""
+    def _load_template(self, name, own=True):
+        """The template of the component, from the components directory its class is in.
+
+        A project and its apps may each have a component of the same name, so
+        the template beside the class is read from the file itself rather than
+        looked up again by name, which would find the first of them.
+        """
+        root = self._components_root()
+
+        if own and root is not None:
+            path = root.directory.joinpath(*name.split(".")).with_suffix(".html")
+            if path.is_file():
+                return loader.load_file(path, name)
+
+        directories = [root.directory] if root is not None else []
+        directories += [other.directory for other in component_roots() if other != root]
+
+        return loader.load_template(name, directories or [config.paths.components])
+
+    def _components_root(self):
+        """The components directory the class of the component lives in, if it lives in one."""
         try:
             # Asked of the class rather than of sys.modules, which a component
             # outliving the import of its own module would no longer be found in
-            module_file = inspect.getfile(type(self))
+            return root_of(inspect.getfile(type(self)))
         except TypeError:
             return None
 
-        try:
-            relative = Path(module_file).resolve().with_suffix("").relative_to(Path(config.paths.components).resolve())
-        except ValueError:
+    def _locate(self):
+        """Where the class of the component lives, read from its components directory."""
+        root = self._components_root()
+
+        if root is None:
             return None
+
+        relative = Path(inspect.getfile(type(self))).resolve().with_suffix("").relative_to(root.directory.resolve())
 
         return ".".join(relative.parts)
 

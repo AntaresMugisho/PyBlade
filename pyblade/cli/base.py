@@ -59,6 +59,25 @@ class ClickCommand(click.Command):
     """Custom Click Command class"""
 
 
+def _normalise(name: str) -> str:
+    """A name as handle() receives it: '--dry-run' and 'dry-run' are both 'dry_run'."""
+    return name.lstrip("-").replace("-", "_").lower()
+
+
+def _parameter_name(declared) -> str:
+    """The name a value is handed to handle() by, the way Click works it out.
+
+    Click takes the first long option (`--dry-run` -> `dry_run`), or the first
+    short one when there is no long one. An argument is declared by its name alone.
+    """
+    if isinstance(declared, str):
+        return _normalise(declared)
+
+    longs = [name for name in declared if name.startswith("--")]
+
+    return _normalise((longs or list(declared))[0])
+
+
 class BaseCommand:
     name: str = ""
     help: str = ""  # Will come from the Command class docstring
@@ -67,6 +86,11 @@ class BaseCommand:
     def __init__(self):
         self.arguments: list[dict] = []
         self.options: list[dict] = []
+
+        # What the command was run with, by the name each value goes by in handle()
+        self._values: dict[str, Any] = {}
+        self._argument_names: set[str] = set()
+        self._option_names: set[str] = set()
 
         if not self.name:
             raise Exception("Command must profide a 'name' attribute")
@@ -105,9 +129,16 @@ class BaseCommand:
         cmd.config()
         cmd.help = cls.help or (cls.__doc__.strip() if cls.__doc__ else "")
 
+        # Which names are arguments and which are options, kept before the
+        # declarations are consumed below, so that argument() and option() can
+        # tell them apart
+        cmd._argument_names = {_parameter_name(params["name"]) for params in cmd.arguments}
+        cmd._option_names = {_parameter_name(params["name"]) for params in cmd.options}
+
         # Create a click command function
         @click.command(name=cmd.name, help=cmd.help)
         def click_command(**kwargs):
+            cmd._values = kwargs
             return cmd.handle(**kwargs)
 
         for params in cmd.arguments:
@@ -128,13 +159,22 @@ class BaseCommand:
 
     # Helpers
     def argument(self, arg: str):
-        """Must return the value of the argument if it exists or None if not"""
+        """The value of an argument the command was run with, or None if it has no such argument."""
+        name = _normalise(arg)
+
+        return self._values.get(name) if name in self._argument_names else None
 
     def option(self, option_name: str):
-        """Must return the value of the option if it exists or None if not"""
+        """The value of an option or flag the command was run with, or None if it has no such option."""
+        name = _normalise(option_name)
+
+        return self._values.get(name) if name in self._option_names else None
 
     def get(self, arg: str, default=None):
-        """Must return the value of the argument/option if it exists or the default value if not"""
+        """The value of an argument or option, or `default` when there is none or it was left out."""
+        value = self._values.get(_normalise(arg))
+
+        return default if value is None else value
 
     # Prompting for inputs
     def ask(self, message: str, default: str = "") -> str:

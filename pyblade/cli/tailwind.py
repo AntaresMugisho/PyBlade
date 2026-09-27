@@ -11,6 +11,7 @@ This is the one place that knows any of it. `pyblade init` and
 `pyblade tailwind:config` both come here, so there is no second copy to drift.
 """
 
+import os
 from pathlib import Path
 
 from pyblade.cli import packages
@@ -40,6 +41,13 @@ def stylesheet(*directories: Path | str) -> str:
     sources = "\n".join(f'@source "{up}/{Path(directory).as_posix()}";' for directory in directories)
 
     return STYLESHEET.format(sources=sources)
+
+
+def _from_root(root: Path | str, directory: Path | str) -> Path:
+    """A directory as the project root sees it: the stylesheet is written from there."""
+    directory = Path(directory)
+
+    return Path(os.path.relpath(directory, root)) if directory.is_absolute() else directory
 
 
 def is_configured(root: Path | str) -> bool:
@@ -74,7 +82,7 @@ def configure(root: Path | str, stubs: Path, sources: list[Path | str]) -> list[
 
     written = root / INPUT
     written.parent.mkdir(parents=True, exist_ok=True)
-    written.write_text(stylesheet(*sources))
+    written.write_text(stylesheet(*(_from_root(root, source) for source in sources)))
     done.append(f"wrote {INPUT}")
 
     layout = root / "templates" / "layout.html"

@@ -1,0 +1,12 @@
+"""{name}, a Flask application with its templates rendered by PyBlade."""
+
+from flask import Flask
+
+from pyblade.flask import render
+
+app = Flask(__name__)
+
+
+@app.route("/")
+def welcome():
+    return render("welcome", framework="Flask")

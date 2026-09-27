@@ -45,6 +45,7 @@ DEFAULTS = {
     "live_components": {
         "own_folder": True,
         "paginator": "",
+        "default_layout": "layouts.app",
         "throttle": {
             "enabled": True,
             "actions": "120/minute",
@@ -75,6 +76,12 @@ PATH_KEYS = frozenset(
         "i18n.directory",
     }
 )
+
+#: Keys that name a place on disk and are handed over as the project wrote them.
+#: Every other one is relative to the root of the project and is handed over
+#: from there, so that it means the same wherever the program is run from. The
+#: settings file is not a place to open but a module to import: it stays as written.
+AS_WRITTEN = frozenset({"paths.settings"})
 
 #: Keys PyBlade works out for itself, which no file holds.
 COMPUTED = ("paths.root", "paths.stubs")
@@ -353,9 +360,28 @@ class Config:
             return Section(self, dotted)
 
         if dotted in PATH_KEYS:
-            return Path(value) if value else None
+            if not value:
+                return None
+
+            path = Path(value)
+
+            return path if dotted in AS_WRITTEN or path.is_absolute() else self.root / path
 
         return value
+
+    def written(self, dotted: str):
+        """What the configuration says at a dotted key, exactly as it was written.
+
+        For the places that name a folder and not where it is: a Django app's
+        `templates` directory is looked for by that name inside the app, whatever
+        the root of the project is.
+        """
+        for source in (self._runtime, self._overlay(), self._file):
+            value = _dig(source, dotted)
+            if value is not _MISSING:
+                return value
+
+        return _dig(DEFAULTS, dotted, None)
 
     def write(self, dotted: str, value) -> None:
         """Say something, to be written out by the next save()."""
@@ -568,7 +594,7 @@ def _differences(data: dict, defaults: dict = DEFAULTS) -> dict:
 
 def dumps(data: dict) -> str:
     """A configuration written out as TOML, in the order the schema declares it."""
-    lines = ["# How this project is put together. See https://docs.pyblade.com/docs/configuration.", ""]
+    lines = ["# How this project is put together. See https://docs.pyblade.com/configuration.", ""]
     _dump_table(data, [], lines)
 
     return "\n".join(lines).rstrip() + "\n"

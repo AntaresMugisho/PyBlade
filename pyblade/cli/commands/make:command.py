@@ -1,6 +1,5 @@
 from pyblade.cli import BaseCommand
 from pyblade.config import config
-from pyblade.utils import get_project_root
 
 
 class Command(BaseCommand):
@@ -18,7 +17,7 @@ class Command(BaseCommand):
     def handle(self, **kwargs):
         name = kwargs.get("name")
         description = kwargs.get("description") or "Help message for this command should go here"
-        commands_dir = get_project_root() / "management/commands"
+        commands_dir = config.root / config.paths.commands
         commands_dir.mkdir(parents=True, exist_ok=True)
 
         cmd_path = commands_dir / f"{name}.py"

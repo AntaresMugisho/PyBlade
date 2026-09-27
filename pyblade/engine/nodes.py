@@ -34,6 +34,7 @@ from .contexts import (
     SlotContent,
     SlotContext,
 )
+from .roots import component_roots
 from .sandbox import SafeEvaluator
 
 # The name under which the content of a component or of a child template is available.
@@ -974,25 +975,44 @@ class ComponentNode(Node):
 
         """
         name = pascal_to_snake(name)
-
         parts = name.replace(".", "/").split("/")
+
+        # The project's components first, then the ones its apps bring
+        for root in component_roots():
+            found = self._resolve_in(root, parts)
+            if found is not None:
+                return found
+
+        return None
+
+    @staticmethod
+    def _resolve_in(root, parts):
+        """The component a name stands for in one components directory, if it holds one."""
         component_name = parts[-1]
-        components_dir = config.paths.components
-        parent = components_dir.joinpath(*parts[:-1])
+        parent = root.directory.joinpath(*parts[:-1])
 
         # The name the component is known by once normalized, e.g. 'user-profile' -> 'user_profile'
         normalized = ".".join(parts)
 
+        def live(python_file, html_file, name):
+            # How Python reaches the class: by the path to it from the root of
+            # the project, or by the name of the app that holds it
+            module = None
+            if root.module is not None:
+                module = ".".join([root.module, *python_file.relative_to(root.directory).with_suffix("").parts])
+
+            return {
+                "type": "live",
+                "name": name,
+                "html": html_file if html_file.is_file() else None,
+                "python": python_file,
+                "module": module,
+            }
+
         # Live component, with the template it may have next to its class
         python_file = parent / f"{component_name}.py"
         if python_file.is_file():
-            html_file = parent / f"{component_name}.html"
-            return {
-                "type": "live",
-                "name": normalized,
-                "html": html_file if html_file.is_file() else None,
-                "python": python_file,
-            }
+            return live(python_file, parent / f"{component_name}.html", normalized)
 
         # Static component
         html_file = parent / f"{component_name}.html"
@@ -1007,26 +1027,25 @@ class ComponentNode(Node):
         # Directory-based live component
         directory = parent / component_name
         python_file = directory / f"{component_name}.py"
-        html_file = directory / f"{component_name}.html"
 
         if python_file.is_file():
-            return {
-                "type": "live",
-                "name": f"{normalized}.{component_name}",
-                "html": html_file if html_file.is_file() else None,
-                "python": python_file,
-            }
+            return live(python_file, directory / f"{component_name}.html", f"{normalized}.{component_name}")
 
         return None
 
-    def _render_static_component(self, name, props, context):
+    def _render_static_component(self, name, props, context, html_file=None):
         """Render an HTML component with the properties and the slots it was given.
 
         The component is rendered in a context of its own, made of the properties
         it received: it does not see the variables of the template that calls it.
         The slots do, as they were written there, hence the binding.
         """
-        template = loader.load_template(name, [config.paths.components])
+        # Read from the file that was found: another components directory may
+        # hold a component of the same name
+        if html_file is not None:
+            template = loader.load_file(html_file, name)
+        else:
+            template = loader.load_template(name, [config.paths.components])
 
         if not validate_single_root_node(template.content):
             raise TemplateRenderError(
@@ -1056,7 +1075,7 @@ class ComponentNode(Node):
                 exc.template = template
             raise
 
-    def _render_live_component(self, python_file: Path, name: str, attributes, context):
+    def _render_live_component(self, python_file: Path, name: str, attributes, context, module: str | None = None):
         """Render a live component written in the template of another.
 
         A live component is not part of the markup of the one that writes it: it
@@ -1068,7 +1087,7 @@ class ComponentNode(Node):
         """
         from pyblade.live.registry import registry as live_component_registry
 
-        module_path = str(python_file.with_suffix("")).replace("/", ".")
+        module_path = module or str(python_file.with_suffix("")).replace("/", ".")
         class_name = snakebab_to_pascal(python_file.stem)
 
         cls = live_component_registry.get(f"{module_path}.{class_name}")
@@ -1076,8 +1095,9 @@ class ComponentNode(Node):
         live = context.get("__live")
         if live is None:
             # Written in a plain template rather than in a component: there is
-            # no rendering around it to belong to.
-            return cls.render_initial(attributes)
+            # no rendering around it to belong to. It still answers the request
+            # the page is rendered for, so it knows who is reading it.
+            return cls.render_initial(attributes, request=context.get("request"))
 
         pb_id = live.child_id(name, attributes.get("key"))
 
@@ -1086,7 +1106,7 @@ class ComponentNode(Node):
             # is, and the client keeps the one it has.
             return f'<div pb:id="{pb_id}" pb:placeholder></div>'
 
-        return cls.render_initial({**attributes, "key": pb_id})
+        return cls.render_initial({**attributes, "key": pb_id}, request=context.get("request"))
 
     def render(self, context):
         """Resolve the component and render it with its properties and slots."""
@@ -1102,10 +1122,12 @@ class ComponentNode(Node):
             attributes = self._resolve_attributes(context)
 
             if component["type"] == "static":
-                return self._render_static_component(component["name"], attributes, context)
+                return self._render_static_component(component["name"], attributes, context, component["html"])
 
             elif component["type"] == "live":
-                return self._render_live_component(component["python"], component["name"], attributes, context)
+                return self._render_live_component(
+                    component["python"], component["name"], attributes, context, component.get("module")
+                )
 
         except TemplateRenderError:
             # To avoid the error being cathed by the following except clauses

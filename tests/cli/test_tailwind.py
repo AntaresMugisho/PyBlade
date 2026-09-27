@@ -49,6 +49,15 @@ class TestTheStylesheetAProjectWrites(TailwindTestCase):
         self.assertIn("-i", tailwind.build_command("npm"))
         self.assertIn(tailwind.INPUT.as_posix(), tailwind.build_command("npm"))
 
+    def test_a_source_given_from_the_root_is_written_relative_to_the_stylesheet(self):
+        """The places a project names come from its root as absolute paths."""
+        self.configure([self.root / "templates", self.root / "apps" / "shop" / "components"])
+
+        written = (self.root / tailwind.INPUT).read_text()
+
+        self.assertIn('@source "../../templates";', written)
+        self.assertIn('@source "../../apps/shop/components";', written)
+
 
 class TestWhatConfiguringDoes(TailwindTestCase):
     def test_it_says_what_it_did(self):

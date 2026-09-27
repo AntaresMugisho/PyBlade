@@ -43,13 +43,46 @@ class TestWhatAProjectGetsWithoutSayingAnything(ConfigTestCase):
     def test_every_key_has_a_default(self):
         config = self.config()
 
-        self.assertEqual(config.paths.templates, Path("templates"))
-        self.assertEqual(config.paths.components, Path("components"))
+        self.assertEqual(config.paths.templates, self.root / "templates")
+        self.assertEqual(config.paths.components, self.root / "components")
         self.assertEqual(config.i18n.locale, "en")
         self.assertEqual(config.live_components.throttle.actions, "120/minute")
 
     def test_a_key_naming_a_place_comes_back_as_a_path(self):
         self.assertIsInstance(self.config().paths.templates, Path)
+
+    def test_a_place_is_told_from_the_root_of_the_project_wherever_the_program_runs(self):
+        self.write("pyblade.toml", '[paths]\ntemplates = "views"\n')
+        elsewhere = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, elsewhere, ignore_errors=True)
+
+        cwd = os.getcwd()
+        os.chdir(elsewhere)
+        self.addCleanup(os.chdir, cwd)
+
+        config = self.config()
+
+        self.assertEqual(config.paths.templates, self.root / "views")
+        self.assertEqual(config.paths.components, self.root / "components")
+        self.assertEqual(config.i18n.directory, self.root / "locale")
+
+    def test_a_place_that_is_absolute_is_left_where_it_is(self):
+        self.write("pyblade.toml", '[paths]\ntemplates = "/srv/templates"\n')
+
+        self.assertEqual(self.config().paths.templates, Path("/srv/templates"))
+
+    def test_the_settings_file_stays_as_written_being_a_module_to_import(self):
+        self.write("pyblade.toml", '[paths]\nsettings = "shop/settings.py"\n')
+
+        self.assertEqual(self.config().paths.settings, Path("shop/settings.py"))
+
+    def test_written_gives_a_place_as_the_project_wrote_it(self):
+        self.write("pyblade.toml", '[paths]\ntemplates = "views"\n')
+        config = self.config()
+
+        self.assertEqual(config.written("paths.templates"), "views")
+        self.assertEqual(config.written("paths.components"), "components")
+        self.assertIsNone(config.written("paths.nothing"))
 
     def test_a_place_the_project_never_named_is_nothing_rather_than_here(self):
         """Path('') is the current directory, which is not what 'unset' means."""
@@ -236,7 +269,7 @@ class TestSayingSomethingElseForAWhile(ConfigTestCase):
         with config.override({"paths.templates": "/tmp/somewhere"}):
             self.assertEqual(config.paths.templates, Path("/tmp/somewhere"))
 
-        self.assertEqual(config.paths.templates, Path("templates"))
+        self.assertEqual(config.paths.templates, self.root / "templates")
 
     def test_it_wins_over_the_file_and_over_the_framework(self):
         self.write("pyblade.toml", '[i18n]\nlocale = "fr"\n')

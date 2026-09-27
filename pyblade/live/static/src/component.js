@@ -158,6 +158,11 @@ export class Component {
 
         const ticket = ++this._asked;
 
+        // What this request tells the server the fields hold. Once it has
+        // answered, a field still holding exactly that is the server's again.
+        const updates = this.pendingUpdatesToSend(payload);
+        const sent = this.sentWith(payload, updates);
+
         try {
             let response;
 
@@ -176,7 +181,7 @@ export class Component {
                         known: [...window.PyBlade.components.keys()],
                         // What was typed into the form and not sent yet, so that
                         // the action runs against the form as the reader left it
-                        updates: this.pendingUpdatesToSend(payload),
+                        updates,
                         ...payload
                     })
                 });
@@ -217,13 +222,13 @@ export class Component {
                     // that line is a failure rather than a new state to apply
                     if (line.error) return this.failed({ status: 500, payload, answer: line });
 
-                    this.apply(ticket, line);
+                    this.apply(ticket, line, sent);
                 });
                 return;
             }
 
             const data = await response.json();
-            if (data) this.apply(ticket, data);
+            if (data) this.apply(ticket, data, sent);
         } finally {
             this.loadingEndCallbacks.forEach(cb => cb(payload));
         }
@@ -237,11 +242,26 @@ export class Component {
      * date: the state it carries would become what the next request is built
      * on, so applying it loses everything the newer one said.
      */
-    apply(ticket, data) {
+    apply(ticket, data, sent = {}) {
         if (ticket < this._applied) return;
 
         this._applied = ticket;
-        this.update(data);
+        this.update(data, sent);
+    }
+
+    /**
+     * The values a request carries for the component's properties: what was
+     * waiting to be sent, and what a `$set` sets outright.
+     */
+    sentWith(payload = {}, updates = {}) {
+        const sent = { ...updates };
+
+        if (payload.action === '$set') {
+            const params = payload.params || [];
+            for (let i = 0; i < params.length; i += 2) sent[params[i]] = params[i + 1];
+        }
+
+        return sent;
     }
 
     /**
@@ -325,7 +345,7 @@ export class Component {
         return this._register(this.errorCallbacks, callback, signal);
     }
 
-    update({ html, snapshot, events = [], streams = [], pushes = [], query = null, scroll = null, redirect = null }) {
+    update({ html, snapshot, events = [], streams = [], pushes = [], query = null, scroll = null, redirect = null }, sent = {}) {
         this.store.set(this.id, snapshot);
 
         // What the new markup pushed and the page does not hold yet -- a script
@@ -333,8 +353,18 @@ export class Component {
         runScripts(addPushes(pushes));
 
         // What has not been typed into is the server's to say, so that the
-        // page keeps up with a property an action changed
+        // page keeps up with a property an action changed. So is a field that
+        // still holds what this request sent: the server has had it, and what
+        // it answers now -- emptied by reset() once a comment is saved, say --
+        // is what the field shows. A field typed into since keeps the typing.
         Object.entries(snapshot?.state || {}).forEach(([name, value]) => {
+            if (
+                Object.prototype.hasOwnProperty.call(sent, name)
+                && JSON.stringify(this.formState.values[name]) === JSON.stringify(sent[name])
+            ) {
+                this.formState.touchedFields.delete(name);
+            }
+
             if (!this.formState.touchedFields.has(name)) this.formState.values[name] = value;
         });
 

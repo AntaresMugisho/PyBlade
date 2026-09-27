@@ -135,3 +135,128 @@ class TestSettingUpADirectoryThatIsNotEmpty(InitTestCase):
     def test_what_to_type_next_has_nowhere_to_go_when_you_are_already_there(self):
         self.assertEqual(packages.activation_line("uv", "."), "source .venv/bin/activate")
         self.assertEqual(packages.activation_line("uv", "shop"), "cd shop && source .venv/bin/activate")
+
+
+class TestTheFrameworksItCanStart(InitTestCase):
+    def test_each_one_is_given_what_it_needs_to_run(self):
+        requires = init.Command.REQUIRES
+
+        self.assertEqual(requires["django"], ["django", "pyblade"])
+        self.assertEqual(requires["flask"], ["flask", "pyblade"])
+
+    def test_fastapi_is_given_a_server_too(self):
+        """It ships none of its own, so a scaffolded project could not be run."""
+        self.assertIn("uvicorn", init.Command.REQUIRES["fastapi"])
+
+    def test_every_one_of_them_is_given_pyblade(self):
+        """A project renders its own templates; PyBlade is not a global tool to it."""
+        for framework, requires in init.Command.REQUIRES.items():
+            self.assertIn("pyblade", requires, framework)
+
+
+class TestScaffoldingAFrameworkThatScaffoldsNothing(InitTestCase):
+    """Django brings django-admin. Flask and FastAPI bring no such thing."""
+
+    def scaffold(self, framework, tailwind=False):
+        command = self.command
+        command.project = Project(framework, framework, tailwind)
+        command.directory = self.root
+        command.package = framework
+        command.manager = "uv"
+
+        self.assertTrue(command._write_application(self.root))
+
+        return command
+
+    def test_flask_gets_an_application_module(self):
+        self.scaffold("flask")
+        written = (self.root / "app.py").read_text()
+
+        self.assertIn("from flask import Flask", written)
+        self.assertIn("from pyblade.flask import render", written)
+        self.assertIn('@app.route("/")', written)
+
+    def test_fastapi_gets_one_under_the_name_it_uses(self):
+        self.scaffold("fastapi")
+        written = (self.root / "main.py").read_text()
+
+        self.assertIn("from fastapi import FastAPI, Request", written)
+        self.assertIn("from pyblade.fastapi import render", written)
+
+    def test_the_module_is_named_after_the_project(self):
+        self.scaffold("flask")
+
+        self.assertIn("flask, a Flask application", (self.root / "app.py").read_text())
+
+    def test_django_is_not_written_one(self):
+        """django-admin lays it out, so there is nothing here to write."""
+        self.assertNotIn("django", init.APPLICATION_FILE)
+
+
+class TestTheTemplatesAProjectStartsWith(InitTestCase):
+    def prepare(self, framework, tailwind):
+        from pyblade.config import Config
+
+        command = self.command
+        command.project = Project("shop", framework, tailwind)
+        command.directory = self.root
+        command.package = "shop"
+        command.settings = Config(config_file=self.root / "pyblade.toml")
+        (self.root / "templates").mkdir(parents=True, exist_ok=True)
+
+        command._write_templates()
+
+        return self.root / "templates"
+
+    def test_a_project_without_tailwind_still_gets_a_layout(self):
+        templates = self.prepare("flask", tailwind=False)
+
+        self.assertTrue((templates / "layout.html").exists())
+
+    def test_one_with_tailwind_is_left_for_tailwind_to_lay_out(self):
+        templates = self.prepare("flask", tailwind=True)
+
+        self.assertFalse((templates / "layout.html").exists())
+
+    def test_a_framework_pyblade_routes_itself_gets_a_page_to_see(self):
+        templates = self.prepare("flask", tailwind=False)
+
+        self.assertTrue((templates / "welcome.html").exists())
+
+    def test_django_serves_its_own_until_the_project_has_urls(self):
+        templates = self.prepare("django", tailwind=False)
+
+        self.assertFalse((templates / "welcome.html").exists())
+
+    def test_the_layout_and_the_page_fit_together(self):
+        """The one shape the engine actually fills: @block, and {{ slot }}."""
+        from pyblade.engine.renderer import PyBlade
+
+        templates = self.prepare("flask", tailwind=False)
+        html = PyBlade(dirs=[str(templates)]).render_file("welcome", {"framework": "Flask"})
+
+        self.assertIn("<h1>It works.</h1>", html)
+        self.assertIn("rendered by your Flask application", html)
+        self.assertIn("<title>PyBlade</title>", html)
+
+
+class TestRunningWhatWasScaffolded(unittest.TestCase):
+    def test_each_framework_has_a_development_server_to_run(self):
+        dev = importlib.import_module("pyblade.cli.commands.dev")
+
+        self.assertEqual(
+            dev.SERVERS["flask"]("127.0.0.1", "8000"),
+            ["flask", "--app", "app", "run", "--debug", "--host", "127.0.0.1", "--port", "8000"],
+        )
+        self.assertEqual(
+            dev.SERVERS["fastapi"]("127.0.0.1", "8000"),
+            ["uvicorn", "main:app", "--reload", "--host", "127.0.0.1", "--port", "8000"],
+        )
+
+    def test_the_module_it_runs_is_the_one_init_wrote(self):
+        dev = importlib.import_module("pyblade.cli.commands.dev")
+
+        self.assertIn("app", dev.SERVERS["flask"]("h", "p"))
+        self.assertIn("main:app", dev.SERVERS["fastapi"]("h", "p"))
+        self.assertEqual(init.APPLICATION_FILE["flask"], "app.py")
+        self.assertEqual(init.APPLICATION_FILE["fastapi"], "main.py")

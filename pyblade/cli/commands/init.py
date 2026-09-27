@@ -6,8 +6,11 @@ from pathlib import Path
 from questionary import Choice
 
 from pyblade.cli import BaseCommand, packages, tailwind
-from pyblade.config import Config
+from pyblade.config import Config, config
 from pyblade.utils import get_version
+
+#: The one file a framework that scaffolds nothing is given.
+APPLICATION_FILE = {"flask": "app.py", "fastapi": "main.py"}
 
 _SETTINGS_PATERN = re.compile(
     r"\"\"\"(?P<banner>.*?)\"\"\"\s*.*?\s*INSTALLED_APPS\s=\s\[\s*(?P<installed_apps>.*?)\s*\]\s*.*?\s*MIDDLEWARE\s=\s\[\s*(?P<middleware>.*?)\s*\]\s*.*?\s*TEMPLATES\s=\s*\[\s*(?P<templates>\{.*?\},)\n\]",
@@ -53,15 +56,21 @@ class Command(BaseCommand):
 
     name = "init"
 
-    #: What the new project is given to run on.
-    REQUIRES = ["django", "pyblade"]
+    #: What each framework's project is given to run on. PyBlade is in every
+    #: one of them: a project renders its own templates.
+    REQUIRES = {
+        "django": ["django", "pyblade"],
+        "flask": ["flask", "pyblade"],
+        # uvicorn because FastAPI ships no server of its own
+        "fastapi": ["fastapi", "uvicorn", "pyblade"],
+    }
 
     #: The name that means "here" rather than a directory to make.
     HERE = "."
 
     #: What says a directory already holds a project, so starting one in it
     #: would write over somebody's work.
-    ALREADY_A_PROJECT = ("manage.py", "pyblade.toml", "pyproject.toml")
+    ALREADY_A_PROJECT = ("manage.py", "pyblade.toml")
 
     def config(self):
         self.add_option(
@@ -184,9 +193,11 @@ class Command(BaseCommand):
         its virtualenv, its Django -- so that what was just created can be run,
         and so that nothing anybody else owns is written to.
         """
-        if self.project.framework != "django":
+        if self.project.framework not in self.REQUIRES:
             self.error(f"PyBlade cannot start a {self.project.framework} project yet.")
             return False
+
+        requires = self.REQUIRES[self.project.framework]
 
         if not self.manager:
             self.error("PyBlade found no way to manage this project's dependencies. Install uv and run this again.")
@@ -201,8 +212,8 @@ class Command(BaseCommand):
         steps = [
             ("Setting the project up", packages.create_environment_command(setup) if setup else None),
             (
-                f"Installing {' and '.join(self.REQUIRES)}",
-                packages.project_install_command(self.manager, self.REQUIRES, root),
+                f"Installing {' and '.join(requires)}",
+                packages.project_install_command(self.manager, requires, root),
             ),
         ]
 
@@ -213,6 +224,9 @@ class Command(BaseCommand):
             if not self._run(command, root, message):
                 return False
 
+        if self.project.framework != "django":
+            return self._write_application(root)
+
         # `.` so that manage.py lands beside the dependency file rather than in
         # a directory of its own inside the project
         admin = packages.django_admin_command(self.manager, root)
@@ -222,6 +236,26 @@ class Command(BaseCommand):
             return False
 
         return self._run([*admin, "startproject", self.package, "."], root, "Starting a new Django project")
+
+    def _write_application(self, root: Path) -> bool:
+        """Write the application module for a framework that scaffolds nothing.
+
+        Django brings django-admin, which lays a project out. Flask and FastAPI
+        have no such thing, and no layout they insist on, so PyBlade writes the
+        smallest application that serves a template: one file, one route.
+        """
+        written = APPLICATION_FILE[self.project.framework]
+        stub = config.paths.stubs / self.project.framework / f"{written}.stub"
+
+        try:
+            (root / written).write_text(stub.read_text().format(name=self.package))
+        except OSError as error:
+            self.error(f"Failed to write {written}: {error}")
+            return False
+
+        self.success(f"Wrote {written}.", bold=False)
+
+        return True
 
     def _run(self, command: list[str], cwd: Path, message: str) -> bool:
         """Run one step of the setup, saying what failed if it does."""
@@ -247,24 +281,44 @@ class Command(BaseCommand):
         self.settings.project.name = self.package
         self.settings.project.pyblade_version = get_version()
         self.settings.stack.framework = self.project.framework
-        self.settings.paths.settings = f"{self.package}/settings.py"
+
+        # Where Django keeps the settings PyBlade has to reach into. The other
+        # frameworks have no such file, and nothing looks for one.
+        if self.project.framework == "django":
+            self.settings.paths.settings = f"{self.package}/settings.py"
 
         # Written down because it is now a fact rather than a guess: this is
         # what the project's dependencies were just installed with.
         self.settings.stack.package_manager = self.manager
         self.settings.save()
 
-        # Said for this run only, so that no absolute path reaches a file that
-        # might be published on a different machine
-        self.settings.paths.root = Path(self.project.name)
-
         for directory in ("templates", "static/css", "static/js"):
             Path(self.settings.root, directory).mkdir(parents=True, exist_ok=True)
+
+        self._write_templates()
 
         if self.project.framework == "django":
             self._configure_django_settings()
 
         self.success("PyBlade Engine has been configured successfully.")
+
+    def _write_templates(self):
+        """Give the project a layout, and a page that shows it works.
+
+        Tailwind brings a layout of its own, so one is written here only when
+        it was not asked for. The welcome page is for the frameworks PyBlade
+        routes itself: Django serves its own until the project has urls.
+        """
+        stubs = config.paths.stubs / "templates"
+        templates = self.settings.root / "templates"
+
+        layout = templates / "layout.html"
+        if not self.project.tailwind and not layout.exists():
+            layout.write_text((stubs / "layout.html.stub").read_text())
+
+        welcome = templates / "welcome.html"
+        if self.project.framework != "django" and not welcome.exists():
+            welcome.write_text((stubs / "welcome.html.stub").read_text())
 
     def _configure_django_settings(self):
         """Put PyBlade's engine into the project's settings, beside Django's own."""

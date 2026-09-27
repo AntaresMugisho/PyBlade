@@ -1,6 +1,5 @@
-from pathlib import Path
-
 from pyblade.cli import BaseCommand
+from pyblade.cli.locations import LocationError, shown, target_directory
 from pyblade.config import config
 from pyblade.utils import pascal_to_snake, snakebab_to_pascal, split_dotted_path
 
@@ -16,6 +15,7 @@ class Command(BaseCommand):
     def config(self):
         """Setup command arguments and options here"""
         self.add_argument("name")
+        self.add_option("-a", "--app", help="Create it in the components of this Django app, instead of the project's")
         self.add_flag(
             "-i",
             "--inline",
@@ -35,7 +35,13 @@ class Command(BaseCommand):
         # by side in the components directory says so.
         folder = component_name if config.live_components.own_folder else ""
 
-        component_dir = Path(config.paths.components, path, folder)
+        try:
+            base = target_directory("components", kwargs.get("app"))
+        except LocationError as error:
+            self.error(str(error))
+            return
+
+        component_dir = base / path / folder
         component_dir.mkdir(parents=True, exist_ok=True)
 
         html_file = component_dir / f"{component_name}.html"
@@ -44,7 +50,7 @@ class Command(BaseCommand):
         # Check for existing files
         if html_file.exists() or python_file.exists():
             if not kwargs.get("force"):
-                self.error(f"Component '{component_name}' already exists at {python_file}")
+                self.error(f"Component '{component_name}' already exists at {shown(python_file)}")
                 self.tip(
                     "Use [bright_black]--force[/bright_black] to override the existing "
                     "component or choose a different name."
@@ -79,7 +85,7 @@ class Command(BaseCommand):
         with open(python_stub, "r") as file:
             python_template = file.read()
             python_template = python_template.format(
-                class_name=snakebab_to_pascal(component_name), template_name=html_file
+                class_name=snakebab_to_pascal(component_name), template_name=shown(html_file)
             )
 
         with open(python_file, "w") as file:
@@ -87,5 +93,5 @@ class Command(BaseCommand):
 
         self.success("Live component created successfully:")
         if not kwargs.get("inline"):
-            self.line(f"  - HTML: {html_file}")
-        self.line(f"  - Python: {python_file}")
+            self.line(f"  - HTML: {shown(html_file)}")
+        self.line(f"  - Python: {shown(python_file)}")

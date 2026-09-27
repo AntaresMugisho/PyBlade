@@ -113,6 +113,18 @@ class TemplateLoader:
 _default_loader = TemplateLoader()
 
 
+def load_file(path: str | Path, name: str | None = None) -> Template:
+    """A template read from the very file it is in, wherever that is.
+
+    For when the file is already known: looking a name up again would find the
+    first template of that name in any of the directories, which is not the
+    one that was asked for when two directories hold a template called the same.
+    """
+    path = Path(path)
+
+    return Template(name or path.stem, path, _default_loader._read_template(path))
+
+
 def load_template(template_name: str, directories: list[str | Path] | None = None, engine=None) -> Template:
     """
     Load a template using the default loader.

@@ -108,17 +108,37 @@ def load_django_commands():
 def load_custom_commands():
     """Load custom commands from the project."""
     try:
-        # Look for custom commands in multiple the management/commands folder
-        custom_commands_dir = Path(config.paths.commands)
-        if custom_commands_dir.exists():
-            for cmd_name in find_commands(custom_commands_dir):
-                try:
-                    module_dir = str(custom_commands_dir).replace("/", ".")
-                    cmd = load_command(module_dir, cmd_name)
-                    click_cmd = register(cmd)
-                    _CACHED_COMMANDS.setdefault("Custom Commands", []).append(click_cmd)
-                except Exception as e:
-                    console.print(f"[red]Failed to load custom command {cmd_name}: {e!s}[/red]")
+        root = config.root
+        commands_dir = Path(config.paths.commands)
+
+        # Where the folder is said to be is relative to the project, not to
+        # wherever the command happens to be run from
+        if not commands_dir.is_absolute():
+            commands_dir = root / commands_dir
+
+        if not commands_dir.exists():
+            return
+
+        # A command is imported by name, so what it is imported from has to be
+        # somewhere Python looks. A Django project gets its root there when its
+        # own commands are loaded; nothing else does.
+        try:
+            package = ".".join(commands_dir.relative_to(root).parts)
+            base = root
+        except ValueError:
+            package = commands_dir.name
+            base = commands_dir.parent
+
+        if str(base) not in sys.path:
+            sys.path.insert(0, str(base))
+
+        for cmd_name in find_commands(commands_dir):
+            try:
+                cmd = load_command(package, cmd_name)
+                click_cmd = register(cmd)
+                _CACHED_COMMANDS.setdefault("Custom Commands", []).append(click_cmd)
+            except Exception as e:
+                console.print(f"[red]Failed to load custom command {cmd_name}: {e!s}[/red]")
     except Exception as e:
         console.print(f"[red]Error while loading custom commands: {e!s}[/red]")
 

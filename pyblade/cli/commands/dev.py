@@ -5,6 +5,13 @@ from pyblade.cli import BaseCommand, packages, tailwind
 from pyblade.cli.django_base import run_django_command
 from pyblade.config import config
 
+#: How each framework's development server is asked to start, reloading as the
+#: code changes, which is the whole point of this command.
+SERVERS = {
+    "flask": lambda host, port: ["flask", "--app", "app", "run", "--debug", "--host", host, "--port", port],
+    "fastapi": lambda host, port: ["uvicorn", "main:app", "--reload", "--host", host, "--port", port],
+}
+
 
 class Command(BaseCommand):
     """
@@ -94,13 +101,46 @@ class Command(BaseCommand):
             watcher = None if kwargs.get("no_css") else self._watch_stylesheet()
 
             try:
-                run_django_command(command)
+                if config.stack.framework == "django" or not config.stack.framework:
+                    run_django_command(command)
+                else:
+                    self._serve(host, port)
             finally:
                 if watcher:
                     watcher.terminate()
 
         except Exception as e:
             self.error(str(e))
+
+    def _serve(self, host, port):
+        """Run the development server of a framework that is not Django.
+
+        Django's is run in this very process, which works because a Django
+        project and PyBlade share an environment. Flask and FastAPI are run
+        through whatever the project installs with, so that the server is the
+        one in the project's own environment whether or not it is activated --
+        PyBlade may well be a tool installed once for every project.
+        """
+        framework = config.stack.framework
+        root = config.root
+
+        arguments = SERVERS.get(framework)
+        if arguments is None:
+            self.error(f"PyBlade does not know how to run a {framework} project.")
+            return
+
+        command = packages.project_run_command(packages.python_manager(root), arguments(host, str(port)), root)
+
+        if command is None:
+            self.error(
+                f"PyBlade found no environment to run this {framework} project in."
+                " Activate the one it was made with, or say so in pyblade.toml."
+            )
+            return
+
+        self.success(f"Starting the {framework} development server on http://{host}:{port}", bold=False)
+
+        subprocess.run(command, cwd=root)
 
     def _watch_stylesheet(self):
         """Build the Tailwind stylesheet, and go on building it as templates change.
