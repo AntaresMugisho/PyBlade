@@ -1,6 +1,6 @@
 [project]
 name = "PyBlade"
-version = "0.3.0"
+version = "0.3.0b1"
 description = "PyBlade is a lightweight, reactive template engine for Python. It brings reusable UI components and server-driven interactivity to your web apps using Python and HTML, without requiring a frontend framework."
 authors = [{ name = "Antares Mugisho", email = "hi@antaresmugisho.com" }]
 license = "BSD-3-Clause"
@@ -64,6 +64,5 @@ build-backend = "uv_build"
 
 [tool.uv.build-backend]
 module-root = ""
-source-exclude = [
-    "pyblade/live/static/src/",
-]
+source-exclude = ["pyblade/live/static/src"]
+wheel-exclude = ["pyblade/live/static/src"]
