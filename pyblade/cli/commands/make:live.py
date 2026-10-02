@@ -33,7 +33,7 @@ class Command(BaseCommand):
         # its class and its template together in a folder of its own leaves
         # somewhere for those to go; a project that would rather have them side
         # by side in the components directory says so.
-        folder = component_name if config.live_components.own_folder else ""
+        folder = component_name if not config.live_components.flat else ""
 
         try:
             base = target_directory("components", kwargs.get("app"))

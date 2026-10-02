@@ -19,5 +19,5 @@ def render(template_name: str, **context) -> Response:
     return Response(base.render(engine(), template_name, context), mimetype="text/html")
 
 
-#: What a Flask application already calls it.
+#: What Flask developers are already familiar with.
 render_template = render

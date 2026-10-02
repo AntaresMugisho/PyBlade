@@ -6,38 +6,7 @@ from pyblade.cli import BaseCommand
 from pyblade.utils import get_project_root
 
 # Mapping of Django commands to PyBlade command aliases
-DJANGO_COMMAND_ALIASES = {
-    "check": [],
-    "compilemessages": [],
-    "changepassword": [],
-    "clearsessions": [],
-    "createcachetable": [],
-    "createsuperuser": [],
-    "collectstatic": [],
-    "dbshell": [],
-    "diffsettings": [],
-    "dumpdata": [],
-    "flush": [],
-    "findstatic": [],
-    "inspectdb": [],
-    "loaddata": [],
-    "makemessages": [],
-    "makemigrations": [],
-    "migrate": [],
-    "optimizemigration": [],
-    "runserver": [],
-    "sendtestemail": [],
-    "shell": [],
-    "showmigrations": [],
-    "sqlflush": [],
-    "sqlmigrate": [],
-    "sqlsequencereset": [],
-    "squashmigrations": [],
-    "startapp": [],
-    "startproject": [],
-    "test": [],
-    "testserver": [],
-}
+DJANGO_COMMAND_ALIASES = {}
 
 
 def run_django_command(command: list[str] | str, cwd: Path | None = None) -> None:

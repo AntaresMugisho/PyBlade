@@ -18,11 +18,7 @@ console = Console()
 
 # Default commands organized by category
 DEFAULT_COMMANDS = {
-    "Project commands": [
-        "init",
-        "dev",
-        # "deploy"
-    ],
+    "Project commands": ["init", "dev", "deploy"],
     "PyBlade commands": [
         "docs",
         # "login",

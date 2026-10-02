@@ -14,3 +14,4 @@ class Command(BaseCommand):
 
     def handle(self, **kwargs):
         """Execute the 'pyblade deploy' command"""
+        self.info("The cloud is still in building. Please wait.")

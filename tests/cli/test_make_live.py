@@ -31,8 +31,8 @@ class MakeLiveTestCase(unittest.TestCase):
 
         self.command = make_live.Command()
 
-    def make(self, name, own_folder=True, **options):
-        with config.override({"live_components.own_folder": own_folder}):
+    def make(self, name, flat=False, **options):
+        with config.override({"live_components.flat": flat}):
             self.command.handle(name=name, **options)
 
     def written(self):
@@ -58,12 +58,12 @@ class TestAFolderOfItsOwn(MakeLiveTestCase):
 
 class TestSideBySide(MakeLiveTestCase):
     def test_the_two_files_sit_in_the_components_directory(self):
-        self.make("Counter", own_folder=False)
+        self.make("Counter", flat=True)
 
         self.assertEqual(self.written(), ["components/counter.html", "components/counter.py"])
 
     def test_a_dotted_name_still_says_where(self):
-        self.make("shop.CartTotal", own_folder=False)
+        self.make("shop.CartTotal", flat=True)
 
         self.assertEqual(self.written(), ["components/shop/cart_total.html", "components/shop/cart_total.py"])
 
@@ -91,7 +91,7 @@ class TestWhatTheEngineWillMakeOfIt(MakeLiveTestCase):
         self.assertTrue((self.root / "components" / Path(*name.split("."))).with_suffix(".html").exists())
 
     def test_a_component_beside_its_template_is_found(self):
-        self.make("Counter", own_folder=False)
+        self.make("Counter", flat=True)
 
         name = self.located("components/counter.py")
 

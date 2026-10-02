@@ -43,7 +43,7 @@ DEFAULTS = {
         "commands": "management/commands",
     },
     "live_components": {
-        "own_folder": True,
+        "flat": False,
         "paginator": "",
         "default_layout": "layouts.app",
         "throttle": {
@@ -109,7 +109,7 @@ COMMENTS = {
     "project": "What this project is called.",
     "stack": "What it is built with.",
     "paths": "Where its parts are, relative to this file.",
-    "live_components": "Live components. own_folder puts each one's class and template in a folder of its own.",
+    "live_components": "Live components.flat puts each one's class and template in the same directory.",
     "live_components.throttle": "How much a single client may ask for. See the docs before relaxing these.",
     "i18n": "Languages and translations.",
 }

@@ -24,7 +24,7 @@ class Command(BaseCommand):
     # What it used to be called, kept so that muscle memory still works
     aliases = ["serve"]
 
-    _default_host = "localhost"
+    _default_host = "127.0.0.1"
     _default_port = 8000
 
     def config(self):
