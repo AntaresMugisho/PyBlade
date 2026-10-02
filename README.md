@@ -21,6 +21,7 @@
 
 PyBlade is a lightweight, reactive template engine for Python. It brings reusable UI components and server-driven interactivity to your web apps using Python and HTML, without requiring a frontend framework.
 
+>[!WARNING]
 > **Beta:** PyBlade is still experimental. APIs may change between releases and it is not yet recommended for production applications.
 
 ## Installation
