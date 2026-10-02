@@ -144,10 +144,10 @@ You can also contribute to the wider PyBlade ecosystem:
 
 - [PyBlade Documentation](https://github.com/AntaresMugisho/PyBladeDocs), the source for [docs.pyblade.com](https://docs.pyblade.com)
 
-- [PyBlade IntelliSense for VS Code](https://github.com/antaresmugisho/pybladeintellisense-vscode)
-- [PyBlade IntelliSense for Sublime Text](https://github.com/antaresmugisho/pybladeintellisense-sublime)
-- [PyBlade IntelliSense for JetBrains IDEs](https://github.com/antaresmugisho/pybladeintellisense-jetbrains)
-- [PyBlade IntelliSense for Atom](https://github.com/antaresmugisho/pybladeintellisense-atom)
+- [PyBlade IntelliSense for VS Code](https://github.com/antaresmugisho/pyblade-vscode)
+- [PyBlade IntelliSense for Sublime Text](https://github.com/antaresmugisho/pyblade-sublime)
+- [PyBlade IntelliSense for JetBrains IDEs](https://github.com/antaresmugisho/pyblade-jetbrains)
+- [PyBlade IntelliSense for Atom](https://github.com/antaresmugisho/pyblade-atom)
 
 
 If you discover a security vulnerability, please follow the [Security Policy](SECURITY.md) instead of opening a public issue.
