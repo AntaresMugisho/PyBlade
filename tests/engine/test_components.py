@@ -175,6 +175,58 @@ class TestBoundAttributes(ComponentTestCase):
             self._render("<pb-badge :count />")
 
 
+class TestDirectivesInAttributes(ComponentTestCase):
+    """A directive written in an attribute is rendered, where the attribute is written."""
+
+    def test_a_quoted_value_renders_the_directive_it_holds(self):
+        self._component("badge", "<span>{{ width }}</span>")
+
+        self.assertEqual(self._render('<pb-badge width="@ratio(3, 4, 100)" />'), "<span>75</span>")
+
+    def test_a_single_quoted_value_renders_the_directive_it_holds(self):
+        self._component("badge", "<span>{{ width }}</span>")
+
+        self.assertEqual(self._render("<pb-badge width='@ratio(3, 4, 100)' />"), "<span>75</span>")
+
+    def test_a_bound_value_renders_the_directive_it_holds(self):
+        self._component("badge", "<span>{{ width }}</span>")
+
+        self.assertEqual(self._render('<pb-badge :width="@ratio(3, 4, 100)" />'), "<span>75</span>")
+
+    def test_a_directive_is_rendered_in_the_context_of_the_caller(self):
+        self._component("badge", "<span>{{ width }}</span>")
+
+        result = self._render('<pb-badge width="@ratio(done, total, 100)" />', {"done": 1, "total": 4})
+
+        self.assertEqual(result, "<span>25</span>")
+
+    def test_a_value_may_hold_text_around_the_directive(self):
+        self._component("badge", "<span>{{ width }}</span>")
+
+        self.assertEqual(self._render('<pb-badge width="w-@ratio(3, 4, 100)%" />'), "<span>w-75%</span>")
+
+    def test_a_block_directive_may_be_written_in_a_value(self):
+        self._component("badge", "<span>{{ kind }}</span>")
+
+        template = '<pb-badge kind="@if(urgent)red@else gray@endif" />'
+
+        self.assertEqual(self._render(template, {"urgent": True}), "<span>red</span>")
+        self.assertEqual(self._render(template, {"urgent": False}), "<span> gray</span>")
+
+    def test_a_directive_in_an_attribute_reaches_the_attributes_bag(self):
+        self._component("badge", "<span{{ attributes }}>Badge</span>")
+
+        result = self._render('<pb-badge data-width="@ratio(3, 4, 100)" />')
+
+        self.assertEqual(result, '<span data-width="75">Badge</span>')
+
+    def test_a_value_with_no_directive_stays_what_it_was(self):
+        # An address holds an '@' that is not a directive
+        self._component("badge", "<span>{{ mail }}</span>")
+
+        self.assertEqual(self._render('<pb-badge mail="me@example.com" />'), "<span>me@example.com</span>")
+
+
 class TestComponentProps(ComponentTestCase):
     """@props inside component templates."""
 

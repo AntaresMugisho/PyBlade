@@ -894,6 +894,25 @@ class AutoescapeNode(Node):
         return "".join(output)
 
 
+class AttributeValue(Node):
+    """The value of a component attribute that holds directives, as in href="@url('home')".
+
+    It is kept as nodes and rendered to a string where the attribute is written,
+    like the rest of the tag's attributes, so the directives it holds see the
+    context of the template that calls the component.
+    """
+
+    def __init__(self, nodes, line=None, column=None):
+        super().__init__(line, column)
+        self.nodes = nodes
+
+    def __repr__(self):
+        return f"AttributeValue(nodes={self.nodes})"
+
+    def render(self, context):
+        return "".join(node.render(context) for node in self.nodes)
+
+
 class ComponentNode(Node):
     """Represents a component invocation.
 
@@ -949,7 +968,10 @@ class ComponentNode(Node):
                 attributes.update(data)
 
         for name, expression in self.attributes.items():
-            attributes[name] = self.eval(expression, context)
+            if isinstance(expression, AttributeValue):
+                attributes[name] = expression.render(context)
+            else:
+                attributes[name] = self.eval(expression, context)
 
         return attributes
 

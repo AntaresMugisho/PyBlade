@@ -7,6 +7,7 @@ from .lexer import Lexer
 from .nodes import (
     ActiveNode,
     AttributeNode,
+    AttributeValue,
     AuthNode,
     AutocompleteNode,
     AutoescapeNode,
@@ -1276,9 +1277,26 @@ class Parser:
         if not match:
             return attributes
 
-        return self._parse_attributes(match.group(1).strip().rstrip("/"), token)
+        return self._parse_attributes(match.group(1).strip().rstrip("/"), token, directives=True)
 
-    def _parse_attributes(self, attrs_str, token=None):
+    @staticmethod
+    def _attribute_template(value):
+        """The value of an attribute as nodes, if it holds directives; otherwise None.
+
+        A '@' is not always a directive: an address holds one, and so does a name the
+        engine does not know, which is plain text. A value made only of text is
+        therefore left to be read as it was written.
+        """
+        if "@" not in value:
+            return None
+
+        nodes = Parser(Lexer(value).tokenize()).parse()
+        if all(isinstance(node, TextNode) for node in nodes):
+            return None
+
+        return AttributeValue(nodes)
+
+    def _parse_attributes(self, attrs_str, token=None, directives=False):
         """Parses a list of HTML-like attributes into a name to expression mapping.
 
         Quoted values are strings, unquoted ones are expressions evaluated where the
@@ -1287,10 +1305,18 @@ class Parser:
         with ':' binds its value, which is then read as an expression even quoted,
         so that a component may be passed something other than a string.
 
+        With `directives`, a value holding directives, quoted or not, bound or not, is
+        kept as an AttributeValue instead, which renders to a string where the
+        attribute is written.
+
         Example: type="error" :count="1 + 1" dismissible class+="mt-2"
         Returns: {'type': "'error'", 'count': '1 + 1', 'dismissible': 'True', 'class+': "'mt-2'"}
         """
         attributes = {}
+
+        def value_of(value, expression):
+            template = self._attribute_template(value) if directives else None
+            return template if template is not None else expression
 
         # Attributes are matched in a single pass, so that what is inside a quoted
         # value is never mistaken for an attribute of its own.
@@ -1312,14 +1338,14 @@ class Parser:
                     )
 
                 # Quoted or not, a bound value is the expression it holds
-                attributes[name] = value
+                attributes[name] = value_of(value, value)
 
             elif double_quoted is not None:
-                attributes[name] = repr(double_quoted)
+                attributes[name] = value_of(double_quoted, repr(double_quoted))
             elif single_quoted is not None:
-                attributes[name] = repr(single_quoted)
+                attributes[name] = value_of(single_quoted, repr(single_quoted))
             elif unquoted is not None:
-                attributes[name] = unquoted
+                attributes[name] = value_of(unquoted, unquoted)
             else:
                 # An attribute with no value at all, as the 'disabled' of <pb-button disabled />
                 attributes[name] = "True"
