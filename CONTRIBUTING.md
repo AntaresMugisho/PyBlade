@@ -16,8 +16,7 @@ By taking part in PyBlade, you agree to follow our [Code of Conduct](CODE_OF_CON
   you expected, and what happened instead. Include your versions of PyBlade, Python and your web
   framework.
 - **Fix a bug.** Issues labeled `bug` and `good first issue` are good places to start. Comment on
-  the issue to say you're working on it, so that two people don't do the same work.dpoint that builds a component verifies the signed snapshot first and is wrapped in @throttled, as update_component and upload_file are. An endpoint that serves a file checks a signed note, as preview_upload does.
-In production, an error's message never reaches the browser, except a PermissionError, which is a refusal meant for the user.
+  the issue to say you're working on it, so that two people don't do the same work.
 - **Improve the documentation.** The docs live in their own repository,
   [PyBladeDocs](https://github.com/AntaresMugisho/PyBladeDocs), included here as the `docs`
   submodule. A fix for a confusing sentence is as welcome as a new page.
@@ -244,5 +243,4 @@ it to [PyPI](https://pypi.org/project/pyblade/).
 ## Questions
 
 If something in this guide is unclear, or you're stuck, open a discussion or an issue: asking is a
-contribution too, since it shows us what to explain better.dpoint that builds a component verifies the signed snapshot first and is wrapped in @throttled, as update_component and upload_file are. An endpoint that serves a file checks a signed note, as preview_upload does.
-In production, an error's message never reaches the browser, except a PermissionError, which is a refusal meant for the user.
+contribution too, since it shows us what to explain better.
