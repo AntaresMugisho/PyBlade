@@ -227,6 +227,66 @@ class TestDirectivesInAttributes(ComponentTestCase):
         self.assertEqual(self._render('<pb-badge mail="me@example.com" />'), "<span>me@example.com</span>")
 
 
+class TestExpressionsInAttributes(ComponentTestCase):
+    """{{ }} and {!! !!} written in an attribute are evaluated, where the attribute is written."""
+
+    def test_a_quoted_value_renders_the_variable_it_holds(self):
+        self._component("badge", "<span>{{ title }}</span>")
+
+        self.assertEqual(self._render('<pb-badge title="{{ name }}" />', {"name": "Bob"}), "<span>Bob</span>")
+
+    def test_a_value_may_hold_text_around_the_variable(self):
+        self._component("badge", "<span>{{ title }}</span>")
+
+        result = self._render('<pb-badge title="Hello {{ name }}!" />', {"name": "Bob"})
+
+        self.assertEqual(result, "<span>Hello Bob!</span>")
+
+    def test_an_unescaped_variable_is_rendered_too(self):
+        self._component("badge", "<span>{{ title }}</span>")
+
+        self.assertEqual(self._render("<pb-badge title='{!! name !!}' />", {"name": "Bob"}), "<span>Bob</span>")
+
+    def test_a_value_is_not_escaped_twice(self):
+        # The component escapes what it writes out, so the value it is handed must be the data itself
+        self._component("badge", "<span>{{ title }}</span>")
+
+        escaped = self._render('<pb-badge title="{{ name }}" />', {"name": "A & B"})
+        unescaped = self._render('<pb-badge title="{!! name !!}" />', {"name": "A & B"})
+
+        self.assertEqual(escaped, "<span>A &amp; B</span>")
+        self.assertEqual(unescaped, "<span>A &amp; B</span>")
+
+    def test_a_value_may_mix_variables_and_directives(self):
+        self._component("badge", "<span>{{ title }}</span>")
+
+        result = self._render('<pb-badge title="{{ name }}: @ratio(3, 4, 100)" />', {"name": "Bob"})
+
+        self.assertEqual(result, "<span>Bob: 75</span>")
+
+    def test_an_escaped_variable_is_left_untouched(self):
+        self._component("badge", "<span>{{ title }}</span>")
+
+        result = self._render('<pb-badge title="@{{ name }}" />', {"name": "Bob"})
+
+        self.assertEqual(result, "<span>@{{ name }}</span>")
+
+    def test_a_variable_reaches_the_attributes_bag(self):
+        self._component("badge", "<span{{ attributes }}>Badge</span>")
+
+        result = self._render('<pb-badge data-user="{{ name }}" />', {"name": "Bob"})
+
+        self.assertEqual(result, '<span data-user="Bob">Badge</span>')
+
+    def test_a_variable_in_the_attribute_of_a_component_in_a_slot(self):
+        self._component("card", "<div>{{ slot }}</div>")
+        self._component("badge", "<span>{{ title }}</span>")
+
+        result = self._render('<pb-card><pb-badge title="{{ name }}" /></pb-card>', {"name": "Bob"})
+
+        self.assertEqual(result, "<div><span>Bob</span></div>")
+
+
 class TestComponentProps(ComponentTestCase):
     """@props inside component templates."""
 
@@ -491,6 +551,28 @@ class TestInheritanceSlots(ComponentTestCase):
             result,
             '<html><h1>Dashboard</h1><main><div class="card">Antares</div></main></html>',
         )
+
+    def test_a_layout_may_hand_a_slot_to_a_component(self):
+        # The slot was written in the child, so it sees the child's variables
+        # wherever the layout passes it on, the component it is given to included
+        self._component("heading", "<h1>{{ text }}</h1>")
+        self._write("layouts.base", '<html><pb-heading :text="title" /></html>')
+
+        child = "@extends('layouts.base')<pb-slot name=\"title\">{{ post.title }}</pb-slot>"
+
+        result = self._render(child, {"post": {"title": "Hello"}})
+
+        self.assertEqual(result, "<html><h1>Hello</h1></html>")
+
+    def test_a_layout_may_hand_a_slot_to_the_component_directive(self):
+        self._component("heading", "<h1>{{ text }}</h1>")
+        self._write("layouts.base", "<html>@component('heading', {'text': title})</html>")
+
+        child = "@extends('layouts.base')<pb-slot name=\"title\">{{ post.title }}</pb-slot>"
+
+        result = self._render(child, {"post": {"title": "Hello"}})
+
+        self.assertEqual(result, "<html><h1>Hello</h1></html>")
 
 
 if __name__ == "__main__":

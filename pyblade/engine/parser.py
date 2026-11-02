@@ -1281,18 +1281,24 @@ class Parser:
 
     @staticmethod
     def _attribute_template(value):
-        """The value of an attribute as nodes, if it holds directives; otherwise None.
+        """The value of an attribute as nodes, if it holds directives or expressions; otherwise None.
 
         A '@' is not always a directive: an address holds one, and so does a name the
-        engine does not know, which is plain text. A value made only of text is
-        therefore left to be read as it was written.
+        engine does not know, which is plain text. An escaped @{{ }} is text too. A
+        value made only of text is therefore left to be read as it was written.
         """
-        if "@" not in value:
+        if "@" not in value and "{{" not in value and "{!!" not in value:
             return None
 
         nodes = Parser(Lexer(value).tokenize()).parse()
         if all(isinstance(node, TextNode) for node in nodes):
             return None
+
+        # What an expression gives is data, which the component escapes when it
+        # writes it out: escaping it here as well would show it escaped twice.
+        for node in nodes:
+            if isinstance(node, VarNode):
+                node.escaped = False
 
         return AttributeValue(nodes)
 
@@ -1305,9 +1311,9 @@ class Parser:
         with ':' binds its value, which is then read as an expression even quoted,
         so that a component may be passed something other than a string.
 
-        With `directives`, a value holding directives, quoted or not, bound or not, is
-        kept as an AttributeValue instead, which renders to a string where the
-        attribute is written.
+        With `directives`, a value holding directives or {{ }} and {!! !!} expressions,
+        quoted or not, bound or not, is kept as an AttributeValue instead, which
+        renders to a string where the attribute is written.
 
         Example: type="error" :count="1 + 1" dismissible class+="mt-2"
         Returns: {'type': "'error'", 'count': '1 + 1', 'dismissible': 'True', 'class+': "'mt-2'"}

@@ -30,6 +30,7 @@ from .contexts import (
     AttributesContext,
     CycleContext,
     LoopContext,
+    RenderableContent,
     SafeContent,
     SlotContent,
     SlotContext,
@@ -895,7 +896,7 @@ class AutoescapeNode(Node):
 
 
 class AttributeValue(Node):
-    """The value of a component attribute that holds directives, as in href="@url('home')".
+    """The value of a component attribute that holds directives or expressions, as in href="@url('home')".
 
     It is kept as nodes and rendered to a string where the attribute is written,
     like the rest of the tag's attributes, so the directives it holds see the
@@ -972,6 +973,13 @@ class ComponentNode(Node):
                 attributes[name] = expression.render(context)
             else:
                 attributes[name] = self.eval(expression, context)
+
+        # Content such as the slot a child hands to its layout is written in
+        # another template than the one passing it on. The component renders it
+        # in a context of its own, so it has to keep the one it was written in.
+        for name, value in attributes.items():
+            if isinstance(value, RenderableContent) and not value.bound:
+                attributes[name] = value.bind(context)
 
         return attributes
 

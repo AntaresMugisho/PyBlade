@@ -250,6 +250,11 @@ class RenderableContent(SafeContent):
     def nodes(self):
         return self._nodes
 
+    @property
+    def bound(self):
+        """Whether the content is tied to the context it was written in."""
+        return self._context is not None
+
     def bind(self, context):
         """Return the same content tied to the context it was written in.
 
