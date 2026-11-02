@@ -283,7 +283,7 @@ class TestContentBetweenTheTags(NestingTestCase):
         with self.assertRaises(TemplateRenderError) as refused:
             self.render_page()
 
-        self.assertIn("slot", str(refused.exception).lower())
+        self.assertIn("between its tags", str(refused.exception))
 
     def test_a_named_slot_is_refused(self):
         self.write_parent('<div id="parent"><pb-child><pb-slot:header>Hi</pb-slot:header></pb-child></div>')
@@ -292,10 +292,10 @@ class TestContentBetweenTheTags(NestingTestCase):
             self.render_page()
 
     def test_a_component_written_in_a_plain_template_is_refused_too(self):
-        from pyblade.engine.renderer import PyBlade
+        from pyblade.engine.processor import TemplateProcessor
 
         with self.assertRaises(TemplateRenderError):
-            PyBlade().render("<main><pb-child>Hi</pb-child></main>", {})
+            TemplateProcessor().render("<main><pb-child>Hi</pb-child></main>", {})
 
     def test_blank_space_between_the_tags_is_not_content(self):
         self.write_parent('<div id="parent"><pb-child>\n  </pb-child></div>')
