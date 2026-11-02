@@ -26,7 +26,7 @@ class Command(BaseCommand):
 
         # A live component is a class as well as a template, which make:live knows how to write
         if kwargs.get("live") or kwargs.get("inline"):
-            make_live = importlib.import_module("pyblade.cli.commands.make:live").Command()
+            make_live = importlib.import_module("pyblade.cli.commands.make_live").Command()
             return make_live.handle(
                 name=kwargs.get("name"),
                 app=kwargs.get("app"),

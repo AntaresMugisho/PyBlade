@@ -20,7 +20,9 @@ class Command(BaseCommand):
         commands_dir = config.root / config.paths.commands
         commands_dir.mkdir(parents=True, exist_ok=True)
 
-        cmd_path = commands_dir / f"{name}.py"
+        # The command keeps the name it is typed by, colon included. Its file does
+        # not: a colon is not welcome in a file name, and it is a module name too.
+        cmd_path = commands_dir / f"{name.replace(':', '_')}.py"
 
         if not (kwargs.get("force")):
             if cmd_path.exists():

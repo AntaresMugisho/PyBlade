@@ -17,7 +17,7 @@ from pathlib import Path
 from pyblade.config import config
 from pyblade.utils import pascal_to_snake
 
-make_live = importlib.import_module("pyblade.cli.commands.make:live")
+make_live = importlib.import_module("pyblade.cli.commands.make_live")
 
 
 class MakeLiveTestCase(unittest.TestCase):

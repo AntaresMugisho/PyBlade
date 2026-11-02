@@ -19,8 +19,8 @@ from click.testing import CliRunner
 from pyblade.cli import BaseCommand, main
 from pyblade.config import config
 
-make_command = importlib.import_module("pyblade.cli.commands.make:command")
-make_component = importlib.import_module("pyblade.cli.commands.make:component")
+make_command = importlib.import_module("pyblade.cli.commands.make_command")
+make_component = importlib.import_module("pyblade.cli.commands.make_component")
 
 
 class InADirectory(unittest.TestCase):
@@ -93,9 +93,30 @@ class TestMakingACommand(InADirectory):
         make_command.Command().handle(name=name, **options)
 
     def test_it_goes_in_the_commands_directory_of_the_project(self):
+        self.make("report")
+
+        self.assertEqual(self.written(), ["management/commands/report.py"])
+
+    def test_a_colon_in_the_name_is_an_underscore_in_the_file(self):
+        # A colon cannot be part of a file name every platform and tool accepts
         self.make("report:send")
 
-        self.assertEqual(self.written(), ["management/commands/report:send.py"])
+        self.assertEqual(self.written(), ["management/commands/report_send.py"])
+
+    def test_the_command_keeps_the_name_it_was_given(self):
+        self.make("report:send")
+
+        written = (self.root / "management/commands/report_send.py").read_text()
+
+        self.assertIn('name = "report:send"', written)
+        self.assertIn("pyblade report:send", written)
+
+    def test_the_same_command_is_not_written_twice_under_two_spellings(self):
+        self.make("report:send", description="First")
+        self.make("report_send", description="Second")
+
+        self.assertEqual(self.written(), ["management/commands/report_send.py"])
+        self.assertIn("First", (self.root / "management/commands/report_send.py").read_text())
 
     def test_the_directory_is_the_one_the_project_says(self):
         with config.override({"paths.commands": "tools/commands"}):
@@ -226,3 +247,29 @@ class TestMakingAComponent(InADirectory):
 
         self.make("counter", live=True, force=True)
         self.assertNotEqual((self.root / "components/counter/counter.py").read_text(), "mine")
+
+
+class TestTheCommandsPyBladeShips(unittest.TestCase):
+    """Their files are named with underscores; the commands are still typed with colons."""
+
+    typed = [
+        "make:command",
+        "make:component",
+        "make:live",
+        "make:livecomponent",
+        "make:template",
+        "live:stubs",
+        "messages:make",
+        "messages:compile",
+        "tailwind:config",
+    ]
+
+    def test_every_command_is_still_typed_with_its_colon(self):
+        for name in self.typed:
+            with self.subTest(command=name):
+                self.assertIn(name, main.cli.commands)
+
+    def test_no_file_of_a_command_has_a_colon_in_its_name(self):
+        commands = Path(main.__file__).parent / "commands"
+
+        self.assertEqual([path.name for path in commands.glob("*:*")], [])

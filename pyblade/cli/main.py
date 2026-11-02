@@ -16,21 +16,23 @@ from .django_base import DjangoCommand
 
 console = Console()
 
-# Default commands organized by category
+# Default commands organized by category, by the name of their module. A colon cannot be
+# part of a file name every platform accepts, so the module of `make:command` is
+# make_command; the name it is typed by is the `name` of its class.
 DEFAULT_COMMANDS = {
     "Project commands": ["init", "dev", "deploy"],
     "PyBlade commands": [
         "docs",
         # "login",
         # "logout",
-        "make:command",
-        "make:component",
-        "make:live",
-        "make:template",
-        "live:stubs",
-        "messages:make",
-        "messages:compile",
-        "tailwind:config",
+        "make_command",
+        "make_component",
+        "make_live",
+        "make_template",
+        "live_stubs",
+        "messages_make",
+        "messages_compile",
+        "tailwind_config",
         "upgrade",
     ],
 }

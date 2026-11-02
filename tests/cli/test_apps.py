@@ -18,9 +18,9 @@ from unittest import mock
 from pyblade.config import config
 from pyblade.engine.nodes import ComponentNode
 
-make_template = importlib.import_module("pyblade.cli.commands.make:template")
-make_component = importlib.import_module("pyblade.cli.commands.make:component")
-make_live = importlib.import_module("pyblade.cli.commands.make:live")
+make_template = importlib.import_module("pyblade.cli.commands.make_template")
+make_component = importlib.import_module("pyblade.cli.commands.make_component")
+make_live = importlib.import_module("pyblade.cli.commands.make_live")
 
 
 class AProjectWithAnApp(unittest.TestCase):
