@@ -20,6 +20,7 @@ from pathlib import Path
 
 from pyblade.config import config
 from pyblade.engine import loader
+from pyblade.engine.exceptions import TemplateRenderError
 from pyblade.live.registry import registry
 
 
@@ -271,3 +272,32 @@ class TestRequest(NestingTestCase):
         page = PyBlade().render("<main><pb-child /></main>", {"request": self.request()})
 
         self.assertIn("the request", page)
+
+
+class TestContentBetweenTheTags(NestingTestCase):
+    """A live component answers from its own state, so it is not handed content to hold."""
+
+    def test_content_between_the_tags_is_refused(self):
+        self.write_parent('<div id="parent"><pb-child>Hi {{ title }}</pb-child></div>')
+
+        with self.assertRaises(TemplateRenderError) as refused:
+            self.render_page()
+
+        self.assertIn("slot", str(refused.exception).lower())
+
+    def test_a_named_slot_is_refused(self):
+        self.write_parent('<div id="parent"><pb-child><pb-slot:header>Hi</pb-slot:header></pb-child></div>')
+
+        with self.assertRaises(TemplateRenderError):
+            self.render_page()
+
+    def test_a_component_written_in_a_plain_template_is_refused_too(self):
+        from pyblade.engine.renderer import PyBlade
+
+        with self.assertRaises(TemplateRenderError):
+            PyBlade().render("<main><pb-child>Hi</pb-child></main>", {})
+
+    def test_blank_space_between_the_tags_is_not_content(self):
+        self.write_parent('<div id="parent"><pb-child>\n  </pb-child></div>')
+
+        self.assertIn('<div id="child"', self.render_page())

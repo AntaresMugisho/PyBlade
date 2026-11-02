@@ -1155,6 +1155,19 @@ class ComponentNode(Node):
                 return self._render_static_component(component["name"], attributes, context, component["html"])
 
             elif component["type"] == "live":
+                # Re-rendering a live component starts from its snapshot, which holds
+                # its state and none of the variables of the template that wrote the
+                # tag. Content written between its tags could not be rendered again,
+                # so it is refused rather than dropped on the first update.
+                if any(self.slots.values()):
+                    raise TemplateRenderError(
+                        f"The live component '{name}' cannot be given content between its tags.",
+                        line=self.line,
+                        column=self.column,
+                        help="Live components do not accept slots. Pass what it needs as attributes, "
+                        'as in <pb-counter :start="5" />, or use a static component.',
+                    )
+
                 return self._render_live_component(
                     component["python"], component["name"], attributes, context, component.get("module")
                 )
