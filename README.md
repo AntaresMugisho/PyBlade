@@ -40,7 +40,7 @@ PyBlade includes a CLI for common development tasks:
 
 ```bash
 pyblade init
-pyblade serve
+pyblade dev
 pyblade make:template
 pyblade make:component
 pyblade make:livecomponent
