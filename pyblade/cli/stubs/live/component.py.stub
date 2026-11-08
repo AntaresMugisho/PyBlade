@@ -1,4 +1,4 @@
-from pyblade import LiveComponent
+from pyblade.live import LiveComponent
 
 class {class_name}(LiveComponent):
 

@@ -53,7 +53,9 @@ class LiveComponentRegistry:
             self._components[class_path] = cls
             return cls
         except (ValueError, ImportError, AttributeError) as err:
-            raise ComponentNotFound(f"PyBlade Live Component '{class_path}' could not be resolved.") from err
+            # Said here, not only chained: an import that fails inside the component
+            # looks like the component being missing, and this is what tells them apart
+            raise ComponentNotFound(f"PyBlade Live Component '{class_path}' could not be resolved: {err}") from err
 
 
 # Global singleton instance

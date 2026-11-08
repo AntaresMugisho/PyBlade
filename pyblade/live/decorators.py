@@ -12,6 +12,7 @@ without reaching into the internals of the engine.
     from pyblade.live.decorators import layout, renderless
 """
 
+import inspect
 from functools import wraps
 
 from .skeleton import check_skeleton
@@ -37,6 +38,87 @@ def renderless(fn):
         return fn(self, *args, **kwargs)
 
     return action
+
+
+class computed(property):
+    """A value worked out from what the component holds, and never sent to the page.
+
+        class Posts(LiveComponent):
+            search = ""
+
+            @computed
+            def posts(self):
+                return Post.objects.filter(title__icontains=self.search)
+
+    What a component holds travels to the page and back as JSON, and a queryset or
+    a form cannot. So they are not held: the page is sent `search`, and `posts` is
+    built again from it whenever it is needed. It is read as a property in Python
+    and by its name in the template, where it is built only if something reads it.
+
+    It is built once and kept for as long as the component lives, which is one
+    request. The template is always given a value built after the action has run;
+    within an action, `del self.posts` forgets it so the next read builds it again.
+
+    It is a property, which is why the machinery already leaves it alone: it is
+    not state, not an action, and not something the page may set. Nothing checks
+    who is asking for it, though -- a computed value that reads records scopes them
+    to the user itself.
+    """
+
+    def __get__(self, instance, owner=None):
+        if instance is None:
+            return self
+
+        # Under a private name, which is how it stays out of the state
+        values = instance.__dict__.setdefault("_computed_values", {})
+        name = self.fget.__name__
+
+        if name not in values:
+            values[name] = self.fget(instance)
+
+        return values[name]
+
+    def __delete__(self, instance):
+        instance.__dict__.get("_computed_values", {}).pop(self.fget.__name__, None)
+
+
+def lock(*names: str):
+    """Refuse the page the right to set these properties.
+
+        @lock("post_id", "owner_id")
+        class Editor(LiveComponent):
+            post_id: int
+            owner_id = 0
+
+    What a snapshot holds is signed, so the page cannot rewrite it. What the page
+    sends beside it, the fields it has filled in and `$set`, is not. A property
+    that points at something, the post being edited or the user it belongs to, is
+    not for the page to repoint: it is locked, and a request that sets it is
+    refused. The component sets it freely, in mount() or in an action.
+
+    A lock keeps the page from writing, not from reading: the property still
+    travels in the snapshot. What the page must not see belongs in a private name.
+
+    A property has to be declared on the component, by a value or by its type, so
+    that a name misspelled here is an error rather than a property left open.
+    """
+
+    def decorator(cls):
+        for name in names:
+            declared = hasattr(cls, name) or any(name in inspect.get_annotations(klass) for klass in cls.__mro__)
+
+            if not declared:
+                raise AttributeError(
+                    f"'{name}' is not a property of the {cls.__name__} component and cannot be locked. "
+                    f"Declare it on the component, as in `{name}: int` or `{name} = 0`."
+                )
+
+        # Added to rather than replaced, so that stacked decorators add up
+        cls._locked = frozenset(vars(cls).get("_locked", ())) | frozenset(names)
+
+        return cls
+
+    return decorator
 
 
 def layout(layout_name: str):

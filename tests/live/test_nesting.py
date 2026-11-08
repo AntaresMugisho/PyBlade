@@ -83,7 +83,7 @@ class NestingTestCase(unittest.TestCase):
     def write_child(self, body="count = 0", template='<div id="child">{{ count }}</div>'):
         self._write(
             "child.py",
-            f"from pyblade import LiveComponent\n\n\nclass Child(LiveComponent):\n"
+            f"from pyblade.live import LiveComponent\n\n\nclass Child(LiveComponent):\n"
             f"{textwrap.indent(textwrap.dedent(body).strip(), '    ')}\n",
         )
         self._write("child.html", template)
@@ -95,7 +95,7 @@ class NestingTestCase(unittest.TestCase):
     ):
         self._write(
             "parent.py",
-            f"from pyblade import LiveComponent\n\n\nclass Parent(LiveComponent):\n"
+            f"from pyblade.live import LiveComponent\n\n\nclass Parent(LiveComponent):\n"
             f"{textwrap.indent(textwrap.dedent(body).strip(), '    ')}\n",
         )
         self._write("parent.html", template)

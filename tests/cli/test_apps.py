@@ -167,7 +167,7 @@ class TestFindingWhatAnAppBrings(AProjectWithAnApp):
         self.component(
             self.app_dir,
             "counter/counter.py",
-            "from pyblade import LiveComponent\n\n\nclass Counter(LiveComponent):\n    count = 3\n",
+            "from pyblade.live import LiveComponent\n\n\nclass Counter(LiveComponent):\n    count = 3\n",
         )
         self.component(self.app_dir, "counter/counter.html", "<div>{{ count }}</div>")
 
@@ -187,7 +187,7 @@ class TestFindingWhatAnAppBrings(AProjectWithAnApp):
             self.component(
                 directory,
                 "card/card.py",
-                "from pyblade import LiveComponent\n\n\nclass Card(LiveComponent):\n    pass\n",
+                "from pyblade.live import LiveComponent\n\n\nclass Card(LiveComponent):\n    pass\n",
             )
             self.component(directory, "card/card.html", f"<div>{word}</div>")
 

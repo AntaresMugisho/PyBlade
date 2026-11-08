@@ -12,11 +12,13 @@ from django.utils.datastructures import MultiValueDict
 
 from pyblade.config import config
 from pyblade.engine import loader, stacks
+from pyblade.engine.contexts import LazyValue
 from pyblade.engine.exceptions import PyBladeException, TemplateNotFoundError
 from pyblade.engine.renderer import error_page
 from pyblade.engine.roots import component_roots, root_of
 from pyblade.engine.template import Template
 
+from .decorators import computed
 from .mixins import ComponentMixin
 from .security import generate_checksum
 from .skeleton import skeleton_markup
@@ -248,7 +250,13 @@ class LiveComponent:
         """Called at the initial component rendering. This is the equivalent of __init__() in python"""
 
     def boot(self):
-        """Called on every request, after the component is mounted."""
+        """Called on every request: after mount() on the first, after the state is restored on the others.
+
+        A component is built again for each request, and only what it holds
+        travels. What cannot, a client or a queryset kept under a private name,
+        is made here so that it is there whichever request the component is built
+        for. It is called before hydrate().
+        """
 
     def hydrate(self):
         """Called on every AJAX request, just after the state is deserialized."""
@@ -642,6 +650,30 @@ class LiveComponent:
 
         return {name for name in names if not cls._is_reserved(name)}
 
+    @classmethod
+    def _computed_names(cls):
+        """The values a component works out from what it holds, which the template reads by name."""
+        names = set()
+
+        for klass in cls.__mro__:
+            if klass is LiveComponent or klass is ComponentMixin:
+                continue
+
+            if issubclass(klass, (LiveComponent, ComponentMixin)):
+                names |= {name for name, value in vars(klass).items() if isinstance(value, computed)}
+
+        return names
+
+    @classmethod
+    def _locked_names(cls):
+        """The properties the page may read and never write, as @lock names them."""
+        names = set()
+
+        for klass in cls.__mro__:
+            names |= vars(klass).get("_locked", frozenset())
+
+        return names
+
     def _check_settable_from_client(self, name: str):
         """Refuse a name the page may not set.
 
@@ -650,10 +682,21 @@ class LiveComponent:
         yet -- and nothing else. Setting anything else is what nobody writing a
         component expects: a method set from the page is shadowed for the rest
         of the request, and a name the component never had becomes one.
+
+        A property that is locked is held by the component and still refused: it
+        is the component's to change, not the page's.
         """
         if self._is_reserved(name):
             raise AttributeError(
                 f"'{name}' is not a property of the {type(self).__name__} component and cannot be set."
+            )
+
+        # By the first part of a path, which is the property it reaches into
+        locked = name.split(".")[0]
+        if locked in self._locked_names():
+            raise PermissionError(
+                f"'{locked}' is a locked property of the {type(self).__name__} component "
+                "and cannot be set from the page."
             )
 
         if name in self._get_state():
@@ -693,6 +736,15 @@ class LiveComponent:
         token in it is a form whose every submission is refused.
         """
         context = self._get_state()
+
+        # What the component works out from its state is in the template without
+        # having travelled, each worked out when the template reads it. Whatever
+        # was worked out before is forgotten, so that a rendering is never given
+        # a value built before an action changed what it comes from.
+        self.__dict__.pop("_computed_values", None)
+
+        for name in self._computed_names():
+            context.setdefault(name, LazyValue(lambda name=name: getattr(self, name)))
 
         # A property holding a file renders as the file rather than as the note
         # that travels in its place, so that a template may write
@@ -1170,7 +1222,10 @@ class LiveComponent:
         # it was declared with, and half a component is no use to an action.
         if mount is not None:
             instance.mount(**mount)
-            instance.boot()
+
+        # Hook : boot(), as on the first rendering and on every request after
+        # it, once the component holds what it is to boot from
+        instance.boot()
 
         # 3. Hook : hydrate()
         instance.hydrate()

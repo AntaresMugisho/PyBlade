@@ -16,6 +16,33 @@ class SafeContent:
         return str(self)
 
 
+class LazyValue:
+    """A value that is worked out the first time a template reads it, and not before.
+
+    A template is rendered with a context holding every name it may use, and some
+    of them cost something to build. This stands in for one of them: the sandbox
+    asks it for the value when an expression names it, so a value nothing reads
+    is never built, and one read twice is built once.
+    """
+
+    _unset = object()
+
+    def __init__(self, getter):
+        self._getter = getter
+        self._value = self._unset
+
+    def __repr__(self):
+        # Never worked out to describe itself: a context is printed by @debug
+        return f"LazyValue({getattr(self._getter, '__name__', self._getter)!r})"
+
+    def resolve(self):
+        """The value, worked out on the first call."""
+        if self._value is self._unset:
+            self._value = self._getter()
+
+        return self._value
+
+
 class LoopContext:
     """Holds context information for loops."""
 

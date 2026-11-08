@@ -2,6 +2,7 @@ import ast
 import operator
 import re
 
+from .contexts import LazyValue
 from .filters import filters
 
 
@@ -114,7 +115,11 @@ class SafeEvaluator:
             # The context comes first: a variable or a component property may well
             # be named after a builtin, as in <pb-button type="primary" />
             if node.id in context:
-                return context[node.id]
+                value = context[node.id]
+
+                # A value the context only stands in for is worked out now that
+                # an expression asks for it
+                return value.resolve() if isinstance(value, LazyValue) else value
 
             if node.id in self._builtins:
                 return self._builtins[node.id]
